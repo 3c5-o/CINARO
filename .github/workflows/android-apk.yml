@@ -59,6 +59,22 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Publish CINARO v1.0.0 release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v1.0.0 >/dev/null 2>&1; then
+            echo "CINARO v1.0.0 already exists."
+            exit 0
+          fi
+          gh release create v1.0.0 \
+            dist/CINARO.apk \
+            dist/CINARO.apk.sha256 \
+            --target "$GITHUB_SHA" \
+            --title "CINARO v1.0.0" \
+            --notes "الإصدار الأول المستقر من تطبيق CINARO لنظام Android. حمّل CINARO.apk وثبّته مباشرة."
+
       - name: Publish tagged release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
