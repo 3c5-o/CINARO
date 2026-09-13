@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CINARO</string>
+    <string name="page_load_error">تعذّر تحميل الصفحة</string>
+    <string name="unsafe_link">تم منع رابط غير آمن</string>
+    <string name="no_app_for_link">لا يوجد تطبيق مناسب لفتح الرابط</string>
+</resources>

@@ -1,0 +1,69 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - "web/**"
+      - "android-app/**"
+      - ".github/workflows/android-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build installable debug APK
+        working-directory: android-app
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Prepare APK
+        run: |
+          mkdir -p dist
+          cp android-app/app/build/outputs/apk/debug/app-debug.apk dist/CINARO.apk
+          sha256sum dist/CINARO.apk > dist/CINARO.apk.sha256
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CINARO-Android-APK
+          path: |
+            dist/CINARO.apk
+            dist/CINARO.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/CINARO.apk
+            dist/CINARO.apk.sha256
+          generate_release_notes: true

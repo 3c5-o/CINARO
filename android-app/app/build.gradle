@@ -1,0 +1,47 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "com.cinaro.app"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.cinaro.app"
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    buildTypes {
+        debug {
+            versionNameSuffix "-debug"
+        }
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError true
+        checkReleaseBuilds true
+    }
+}
+
+tasks.register("syncWebAssets", Copy) {
+    from "${rootProject.projectDir}/../web"
+    into "${projectDir}/src/main/assets/www"
+    exclude ".nojekyll"
+}
+
+tasks.named("preBuild").configure {
+    dependsOn("syncWebAssets")
+}

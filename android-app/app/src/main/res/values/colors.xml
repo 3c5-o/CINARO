@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="cinaro_background">#08090D</color>
+    <color name="cinaro_black">#000000</color>
+    <color name="cinaro_accent">#EB1826</color>
+</resources>

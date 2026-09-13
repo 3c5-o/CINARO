@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+  <meta name="theme-color" content="#08090d">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="CINARO — تجربة سينمائية عربية سريعة ومصممة للهاتف.">
+  <meta name="application-name" content="CINARO">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CINARO">
+  <meta property="og:title" content="CINARO — كل قصة تبدأ هنا">
+  <meta property="og:description" content="أفلام ومسلسلات في تجربة مشاهدة سينمائية مصممة للهاتف.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="assets/images/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; media-src 'self' https: blob:; connect-src 'self' https:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <title>CINARO — كل قصة تبدأ هنا</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="booting">
+  <noscript>
+    <div class="noscript">يحتاج CINARO إلى تفعيل JavaScript حتى يعمل.</div>
+  </noscript>
+
+  <div id="splash" class="splash" aria-label="جاري تشغيل CINARO">
+    <div class="splash-glow"></div>
+    <img src="assets/icons/icon-192.png" alt="شعار CINARO" width="104" height="104">
+    <div class="splash-word">CINARO</div>
+    <div class="splash-tagline">كل قصة تبدأ هنا</div>
+    <div class="splash-loader" aria-hidden="true"><span></span></div>
+  </div>
+
+  <div id="offlineBanner" class="network-banner" role="status" hidden>
+    أنت غير متصل — المحتوى المحفوظ فقط متاح الآن
+  </div>
+
+  <header id="appHeader" class="app-header">
+    <button class="brand" type="button" data-route="home" aria-label="الذهاب إلى الرئيسية">
+      <img src="assets/icons/icon-192.png" alt="" width="38" height="38">
+      <span>CINARO</span>
+    </button>
+
+    <nav class="desktop-nav" aria-label="التنقل الرئيسي">
+      <button type="button" data-route="home">الرئيسية</button>
+      <button type="button" data-route="movies">الأفلام</button>
+      <button type="button" data-route="series">المسلسلات</button>
+      <button type="button" data-route="library">قائمتي</button>
+    </nav>
+
+    <div class="header-actions">
+      <button class="icon-button" type="button" data-route="search" aria-label="البحث">
+        <svg aria-hidden="true"><use href="#i-search"></use></svg>
+      </button>
+      <button class="icon-button" id="settingsButton" type="button" aria-label="الإعدادات">
+        <svg aria-hidden="true"><use href="#i-settings"></use></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="appMain" tabindex="-1">
+    <section id="homeView" class="view" data-view="home" aria-label="الرئيسية"></section>
+    <section id="moviesView" class="view" data-view="movies" aria-label="الأفلام"></section>
+    <section id="seriesView" class="view" data-view="series" aria-label="المسلسلات"></section>
+    <section id="libraryView" class="view" data-view="library" aria-label="قائمتي"></section>
+    <section id="searchView" class="view" data-view="search" aria-label="البحث"></section>
+    <section id="detailsView" class="view" data-view="details" aria-label="تفاصيل المحتوى"></section>
+  </main>
+
+  <nav id="bottomNav" class="bottom-nav" aria-label="التنقل السفلي">
+    <button type="button" data-route="home">
+      <svg aria-hidden="true"><use href="#i-home"></use></svg><span>الرئيسية</span>
+    </button>
+    <button type="button" data-route="movies">
+      <svg aria-hidden="true"><use href="#i-film"></use></svg><span>الأفلام</span>
+    </button>
+    <button type="button" data-route="series">
+      <svg aria-hidden="true"><use href="#i-tv"></use></svg><span>المسلسلات</span>
+    </button>
+    <button type="button" data-route="library">
+      <svg aria-hidden="true"><use href="#i-heart"></use></svg><span>قائمتي</span>
+    </button>
+  </nav>
+
+  <section id="playerView" class="player-view" aria-label="مشغل الفيديو" hidden>
+    <div id="playerStage" class="player-stage">
+      <video id="videoPlayer" playsinline preload="metadata"></video>
+      <div id="playerAmbient" class="player-ambient"></div>
+      <div id="playerLoading" class="player-loading" hidden><span></span><b>جاري التحميل</b></div>
+      <div id="playerError" class="player-error" hidden>
+        <svg aria-hidden="true"><use href="#i-alert"></use></svg>
+        <h2>تعذّر تشغيل الفيديو</h2>
+        <p id="playerErrorText">تحقق من الرابط أو اتصال الإنترنت.</p>
+        <button type="button" class="button primary" id="retryVideoButton">إعادة المحاولة</button>
+      </div>
+      <button id="centerPlayButton" class="center-play" type="button" aria-label="تشغيل">
+        <svg aria-hidden="true"><use href="#i-play"></use></svg>
+      </button>
+      <div id="seekFeedback" class="seek-feedback" aria-live="polite"></div>
+
+      <div id="playerChrome" class="player-chrome">
+        <div class="player-topbar">
+          <button id="closePlayerButton" class="round-control" type="button" aria-label="الرجوع">
+            <svg aria-hidden="true"><use href="#i-arrow-right"></use></svg>
+          </button>
+          <div class="player-heading">
+            <b id="playerTitle">CINARO</b>
+            <small id="playerSubtitle"></small>
+          </div>
+          <button id="playerMoreButton" class="round-control" type="button" aria-label="معلومات التشغيل">
+            <svg aria-hidden="true"><use href="#i-info"></use></svg>
+          </button>
+        </div>
+
+        <div class="player-controls">
+          <div class="timeline-wrap">
+            <span id="currentTime">00:00</span>
+            <input id="timeline" class="timeline" type="range" min="0" max="1000" value="0" aria-label="موضع الفيديو">
+            <span id="durationTime">00:00</span>
+          </div>
+          <div class="control-row">
+            <div class="control-cluster primary-cluster">
+              <button id="playPauseButton" class="control-button" type="button" aria-label="تشغيل">
+                <svg aria-hidden="true"><use href="#i-play"></use></svg>
+              </button>
+              <button id="backTenButton" class="control-button skip-control" type="button" aria-label="رجوع 10 ثوانٍ">
+                <svg aria-hidden="true"><use href="#i-replay-10"></use></svg>
+              </button>
+              <button id="forwardTenButton" class="control-button skip-control" type="button" aria-label="تقديم 10 ثوانٍ">
+                <svg aria-hidden="true"><use href="#i-forward-10"></use></svg>
+              </button>
+              <button id="nextEpisodeButton" class="control-button" type="button" aria-label="الحلقة التالية" hidden>
+                <svg aria-hidden="true"><use href="#i-next"></use></svg>
+              </button>
+            </div>
+            <div class="control-cluster">
+              <label class="select-control" aria-label="سرعة التشغيل">
+                <svg aria-hidden="true"><use href="#i-speed"></use></svg>
+                <select id="speedSelect" title="سرعة التشغيل">
+                  <option value="0.75">0.75×</option>
+                  <option value="1" selected>1×</option>
+                  <option value="1.25">1.25×</option>
+                  <option value="1.5">1.5×</option>
+                  <option value="2">2×</option>
+                </select>
+              </label>
+              <label class="select-control" id="qualityControl" aria-label="جودة الفيديو">
+                <svg aria-hidden="true"><use href="#i-quality"></use></svg>
+                <select id="qualitySelect" title="جودة الفيديو"></select>
+              </label>
+              <button id="captionsButton" class="control-button" type="button" aria-label="الترجمة" hidden>
+                <svg aria-hidden="true"><use href="#i-captions"></use></svg>
+              </button>
+              <button id="pipButton" class="control-button" type="button" aria-label="صورة داخل صورة">
+                <svg aria-hidden="true"><use href="#i-pip"></use></svg>
+              </button>
+              <button id="fullscreenButton" class="control-button" type="button" aria-label="ملء الشاشة">
+                <svg aria-hidden="true"><use href="#i-fullscreen"></use></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="endedCard" class="ended-card" hidden>
+        <span>اكتملت المشاهدة</span>
+        <h2 id="endedTitle"></h2>
+        <div>
+          <button id="replayButton" class="button secondary" type="button">
+            <svg aria-hidden="true"><use href="#i-replay"></use></svg> إعادة التشغيل
+          </button>
+          <button id="endedNextButton" class="button primary" type="button" hidden>
+            الحلقة التالية
+            <svg aria-hidden="true"><use href="#i-arrow-left"></use></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="sheetBackdrop" class="sheet-backdrop" hidden></div>
+  <aside id="settingsSheet" class="bottom-sheet" aria-labelledby="settingsTitle" hidden>
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">
+      <div><small>تخصيص التجربة</small><h2 id="settingsTitle">الإعدادات</h2></div>
+      <button class="icon-button" type="button" data-close-sheet aria-label="إغلاق">
+        <svg aria-hidden="true"><use href="#i-x"></use></svg>
+      </button>
+    </div>
+    <div class="settings-list">
+      <label class="setting-row">
+        <span><svg aria-hidden="true"><use href="#i-moon"></use></svg><span><b>الأسود الحقيقي</b><small>أنسب لشاشات AMOLED</small></span></span>
+        <input id="oledToggle" type="checkbox" class="switch">
+      </label>
+      <label class="setting-row">
+        <span><svg aria-hidden="true"><use href="#i-zap"></use></svg><span><b>تشغيل الحلقة التالية</b><small>تلقائيًا عند انتهاء الحلقة</small></span></span>
+        <input id="autoplayToggle" type="checkbox" class="switch">
+      </label>
+      <label class="setting-row">
+        <span><svg aria-hidden="true"><use href="#i-motion"></use></svg><span><b>تقليل الحركة</b><small>إيقاف الانتقالات والمؤثرات</small></span></span>
+        <input id="motionToggle" type="checkbox" class="switch">
+      </label>
+      <button id="installButton" class="setting-row action-row" type="button">
+        <span><svg aria-hidden="true"><use href="#i-download"></use></svg><span><b>تثبيت CINARO</b><small>إضافته كتطبيق على الهاتف</small></span></span>
+        <svg aria-hidden="true"><use href="#i-arrow-left"></use></svg>
+      </button>
+      <button id="clearHistoryButton" class="setting-row action-row danger-row" type="button">
+        <span><svg aria-hidden="true"><use href="#i-trash"></use></svg><span><b>مسح سجل المشاهدة</b><small>لا يحذف الأفلام من المفضلة</small></span></span>
+        <svg aria-hidden="true"><use href="#i-arrow-left"></use></svg>
+      </button>
+    </div>
+    <div class="about-app">
+      <img src="assets/icons/icon-192.png" alt="" width="48" height="48">
+      <div><b>CINARO</b><small>الإصدار 1.0.0 · كل قصة تبدأ هنا</small></div>
+    </div>
+  </aside>
+
+  <aside id="infoSheet" class="bottom-sheet compact-sheet" aria-labelledby="infoTitle" hidden>
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">
+      <div><small>تفاصيل التشغيل</small><h2 id="infoTitle">معلومات الفيديو</h2></div>
+      <button class="icon-button" type="button" data-close-sheet aria-label="إغلاق">
+        <svg aria-hidden="true"><use href="#i-x"></use></svg>
+      </button>
+    </div>
+    <div id="playerInfoContent" class="player-info-content"></div>
+  </aside>
+
+  <div id="confirmDialog" class="dialog-backdrop" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <div class="dialog-icon"><svg aria-hidden="true"><use href="#i-alert"></use></svg></div>
+      <h2 id="confirmTitle">هل أنت متأكد؟</h2>
+      <p id="confirmText"></p>
+      <div class="dialog-actions">
+        <button id="confirmCancel" class="button secondary" type="button">إلغاء</button>
+        <button id="confirmAccept" class="button danger" type="button">تأكيد</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+  <svg class="svg-sprite" aria-hidden="true">
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/></symbol>
+    <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M17 9h4M3 15h4M17 15h4"/></symbol>
+    <symbol id="i-tv" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="m8 2 4 4 4-4M8 22h8"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.7-7.5 1.1-1.1a5.5 5.5 0 0 0 0-7.8Z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7Z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 2.5 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3.1-5.8 3.1 1.1-6.5-4.7-4.6 6.5-.9Z"/></symbol>
+    <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5m7-7-7 7 7 7"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14m-7-7 7 7-7 7"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 15.5A8 8 0 0 1 8.5 4a8.5 8.5 0 1 0 11.5 11.5Z"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="m13 2-9 12h8l-1 8 9-12h-8Z"/></symbol>
+    <symbol id="i-motion" viewBox="0 0 24 24"><path d="M3 12h3M18 12h3M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19Z"/><path d="M12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-replay-10" viewBox="0 0 24 24"><path d="M4 8V3m0 0h5M4 3l3.5 3.5A8 8 0 1 1 4 13"/><path d="M10 11v4M14 11h2v4h-2Z"/></symbol>
+    <symbol id="i-forward-10" viewBox="0 0 24 24"><path d="M20 8V3m0 0h-5m5-0-3.5 3.5A8 8 0 1 0 20 13"/><path d="M8 11v4M12 11h2v4h-2Z"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="m5 5 10 7-10 7ZM19 5v14"/></symbol>
+    <symbol id="i-speed" viewBox="0 0 24 24"><path d="M4 15a8 8 0 1 1 16 0M12 15l4-5"/><circle cx="12" cy="15" r="1"/></symbol>
+    <symbol id="i-quality" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15v-4h3v4M14 15v-4h3v4M10 13h4"/></symbol>
+    <symbol id="i-captions" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 10H8a2 2 0 0 0 0 4h2M17 10h-2a2 2 0 0 0 0 4h2"/></symbol>
+    <symbol id="i-pip" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="11" width="6" height="5" rx="1"/></symbol>
+    <symbol id="i-fullscreen" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></symbol>
+    <symbol id="i-replay" viewBox="0 0 24 24"><path d="M4 8V3m0 0h5M4 3l3.5 3.5A8 8 0 1 1 4 13"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5h16M7 12h10M10 19h4"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="m2 2 20 20M8.5 8.5A8.8 8.8 0 0 1 20 9M5 12.5a11 11 0 0 1 3-2M9 16a4.3 4.3 0 0 1 6 0M12 20h.01M4 9a14 14 0 0 1 1.5-1"/></symbol>
+  </svg>
+
+  <script src="data.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>
