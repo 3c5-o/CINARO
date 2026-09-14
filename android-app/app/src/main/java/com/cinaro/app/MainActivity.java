@@ -20,6 +20,7 @@ import android.webkit.DownloadListener;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -27,13 +28,17 @@ import android.widget.FrameLayout;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
-    private static final String APP_URL = "file:///android_asset/www/index.html#home";
+    private static final String ONLINE_APP_URL = "https://3c5-o.github.io/CINARO/web/#home";
+    private static final String OFFLINE_APP_URL = "file:///android_asset/www/index.html#home";
+    private static final String APP_HOST = "3c5-o.github.io";
+    private static final String APP_PATH = "/CINARO/web/";
 
     private WebView webView;
     private FrameLayout rootView;
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenCallback;
     private int originalOrientation;
+    private boolean usingOfflineFallback;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,7 +56,7 @@ public class MainActivity extends Activity {
 
         configureWebView();
         if (savedInstanceState == null) {
-            webView.loadUrl(APP_URL);
+            webView.loadUrl(ONLINE_APP_URL);
         } else {
             webView.restoreState(savedInstanceState);
         }
@@ -92,7 +97,7 @@ public class MainActivity extends Activity {
         settings.setAllowUniversalAccessFromFileURLs(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setUserAgentString(settings.getUserAgentString() + " CINARO/1.0 AndroidApp");
+        settings.setUserAgentString(settings.getUserAgentString() + " CINARO/2.0 AndroidApp");
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.setSafeBrowsingEnabled(true);
@@ -112,7 +117,7 @@ public class MainActivity extends Activity {
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             Uri uri = request.getUrl();
             String scheme = uri.getScheme();
-            if ("file".equalsIgnoreCase(scheme) || "about".equalsIgnoreCase(scheme)) {
+            if ("file".equalsIgnoreCase(scheme) || "about".equalsIgnoreCase(scheme) || isCinaroWebUrl(uri)) {
                 return false;
             }
             openExternal(uri);
@@ -123,10 +128,34 @@ public class MainActivity extends Activity {
         public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
             super.onReceivedError(view, request, error);
             if (request.isForMainFrame()) {
-                Toast.makeText(MainActivity.this, R.string.page_load_error, Toast.LENGTH_SHORT).show();
+                fallBackToOffline(view, request.getUrl());
             }
         }
 
+        @Override
+        public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
+            super.onReceivedHttpError(view, request, errorResponse);
+            if (request.isForMainFrame() && errorResponse.getStatusCode() >= 400) {
+                fallBackToOffline(view, request.getUrl());
+            }
+        }
+    }
+
+    private boolean isCinaroWebUrl(Uri uri) {
+        return "https".equalsIgnoreCase(uri.getScheme())
+                && APP_HOST.equalsIgnoreCase(uri.getHost())
+                && uri.getPath() != null
+                && uri.getPath().startsWith(APP_PATH);
+    }
+
+    private void fallBackToOffline(WebView view, Uri failedUri) {
+        if (!usingOfflineFallback && isCinaroWebUrl(failedUri)) {
+            usingOfflineFallback = true;
+            Toast.makeText(this, R.string.offline_fallback, Toast.LENGTH_SHORT).show();
+            view.loadUrl(OFFLINE_APP_URL);
+            return;
+        }
+        Toast.makeText(this, R.string.page_load_error, Toast.LENGTH_SHORT).show();
     }
 
     private class CinaroChromeClient extends WebChromeClient {

@@ -2,7 +2,7 @@
   "id": "./",
   "name": "CINARO — سينارو",
   "short_name": "CINARO",
-  "description": "تجربة سينمائية عربية سريعة للأفلام والمسلسلات، مصممة للهاتف.",
+  "description": "تجربة سينمائية عربية للأفلام والمسلسلات مع حساب ومزامنة آمنة عبر Firebase.",
   "lang": "ar",
   "dir": "rtl",
   "start_url": "./#home",

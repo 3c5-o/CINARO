@@ -15,7 +15,7 @@
   <meta property="og:type" content="website">
   <meta property="og:image" content="assets/images/og-image.jpg">
   <meta name="twitter:card" content="summary_large_image">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; media-src 'self' https: blob:; connect-src 'self' https:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; media-src 'self' https: blob:; connect-src 'self' https: wss:; frame-src 'self' https://cinaro.firebaseapp.com; style-src 'self' 'unsafe-inline'; script-src 'self' https://www.gstatic.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>CINARO — كل قصة تبدأ هنا</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png">
@@ -38,6 +38,90 @@
   <div id="offlineBanner" class="network-banner" role="status" hidden>
     أنت غير متصل — المحتوى المحفوظ فقط متاح الآن
   </div>
+
+  <section id="authView" class="auth-view" role="dialog" aria-modal="true" aria-label="حساب CINARO" hidden>
+    <div class="auth-backdrop"></div>
+    <div class="auth-card">
+      <button id="closeAuthButton" class="auth-close icon-button" type="button" aria-label="المتابعة كضيف">
+        <svg aria-hidden="true"><use href="#i-x"></use></svg>
+      </button>
+
+      <div class="auth-brand">
+        <img src="assets/icons/icon-192.png" alt="شعار CINARO" width="76" height="76">
+        <div><b>CINARO</b><span>كل قصة تبدأ هنا</span></div>
+      </div>
+
+      <div id="authForms">
+        <div class="auth-intro">
+          <span>حسابك السينمائي</span>
+          <h1 id="authTitle">مرحباً بعودتك</h1>
+          <p>سجّل دخولك لمزامنة قائمتك وتقدّم المشاهدة بين أجهزتك.</p>
+        </div>
+
+        <div class="auth-tabs" role="tablist" aria-label="تسجيل الدخول أو إنشاء حساب">
+          <button class="auth-tab active" type="button" role="tab" data-auth-tab="login" aria-selected="true">تسجيل الدخول</button>
+          <button class="auth-tab" type="button" role="tab" data-auth-tab="register" aria-selected="false">حساب جديد</button>
+        </div>
+
+        <form id="loginForm" class="auth-form" autocomplete="on">
+          <label class="auth-field">
+            <span>البريد الإلكتروني</span>
+            <div><svg aria-hidden="true"><use href="#i-mail"></use></svg><input id="loginEmail" type="email" autocomplete="email" inputmode="email" required placeholder="name@example.com"></div>
+          </label>
+          <label class="auth-field">
+            <span>كلمة المرور</span>
+            <div><svg aria-hidden="true"><use href="#i-lock"></use></svg><input id="loginPassword" type="password" autocomplete="current-password" minlength="6" required placeholder="••••••••"></div>
+          </label>
+          <button class="button primary auth-submit" type="submit">دخول إلى CINARO</button>
+          <button id="resetPasswordButton" class="auth-link" type="button">نسيت كلمة المرور؟</button>
+        </form>
+
+        <form id="registerForm" class="auth-form" autocomplete="on" hidden>
+          <label class="auth-field">
+            <span>الاسم</span>
+            <div><svg aria-hidden="true"><use href="#i-user"></use></svg><input id="registerName" type="text" autocomplete="name" minlength="2" maxlength="30" required placeholder="اسمك"></div>
+          </label>
+          <label class="auth-field">
+            <span>البريد الإلكتروني</span>
+            <div><svg aria-hidden="true"><use href="#i-mail"></use></svg><input id="registerEmail" type="email" autocomplete="email" inputmode="email" required placeholder="name@example.com"></div>
+          </label>
+          <label class="auth-field">
+            <span>كلمة المرور</span>
+            <div><svg aria-hidden="true"><use href="#i-lock"></use></svg><input id="registerPassword" type="password" autocomplete="new-password" minlength="6" required placeholder="6 أحرف على الأقل"></div>
+          </label>
+          <label class="auth-field">
+            <span>تأكيد كلمة المرور</span>
+            <div><svg aria-hidden="true"><use href="#i-lock"></use></svg><input id="registerPasswordConfirm" type="password" autocomplete="new-password" minlength="6" required placeholder="أعد كتابة كلمة المرور"></div>
+          </label>
+          <button class="button primary auth-submit" type="submit">إنشاء الحساب</button>
+        </form>
+
+        <div class="auth-divider"><span>أو</span></div>
+        <button id="guestButton" class="button secondary guest-button" type="button">
+          <svg aria-hidden="true"><use href="#i-user"></use></svg>
+          المتابعة كضيف
+        </button>
+        <p class="guest-note">يمكنك المشاهدة كضيف، وستُحفظ بياناتك على هذا الجهاز فقط إذا تعذّر اتصال Firebase.</p>
+      </div>
+
+      <div id="accountPanel" class="account-panel" hidden>
+        <div class="account-avatar"><svg aria-hidden="true"><use href="#i-user"></use></svg></div>
+        <span>حساب CINARO</span>
+        <h2 id="accountPanelName">مستخدم CINARO</h2>
+        <p id="accountPanelEmail"></p>
+        <div class="account-sync-card">
+          <span id="accountSyncDot" class="sync-dot"></span>
+          <div><b>مزامنة Firebase</b><small id="accountSyncText">جاري الاتصال…</small></div>
+        </div>
+        <button id="logoutButton" class="button danger account-logout" type="button">
+          <svg aria-hidden="true"><use href="#i-log-out"></use></svg>
+          تسجيل الخروج
+        </button>
+      </div>
+
+      <p id="authMessage" class="auth-message" role="status" aria-live="polite"></p>
+    </div>
+  </section>
 
   <header id="appHeader" class="app-header">
     <button class="brand" type="button" data-route="home" aria-label="الذهاب إلى الرئيسية">
@@ -192,6 +276,14 @@
       </button>
     </div>
     <div class="settings-list">
+      <button id="accountButton" class="setting-row action-row account-row" type="button">
+        <span><svg aria-hidden="true"><use href="#i-user"></use></svg><span><b id="accountButtonLabel">حساب CINARO</b><small id="accountButtonMeta">تسجيل الدخول والمزامنة</small></span></span>
+        <svg aria-hidden="true"><use href="#i-arrow-left"></use></svg>
+      </button>
+      <div class="setting-row connection-row" aria-live="polite">
+        <span><svg aria-hidden="true"><use href="#i-cloud"></use></svg><span><b>اتصال البيانات</b><small id="firebaseStatusText">جاري الاتصال بـFirebase…</small></span></span>
+        <span id="firebaseStatusDot" class="sync-dot pending"></span>
+      </div>
       <label class="setting-row">
         <span><svg aria-hidden="true"><use href="#i-moon"></use></svg><span><b>الأسود الحقيقي</b><small>أنسب لشاشات AMOLED</small></span></span>
         <input id="oledToggle" type="checkbox" class="switch">
@@ -215,7 +307,7 @@
     </div>
     <div class="about-app">
       <img src="assets/icons/icon-192.png" alt="" width="48" height="48">
-      <div><b>CINARO</b><small>الإصدار 1.0.0 · كل قصة تبدأ هنا</small></div>
+      <div><b>CINARO</b><small>الإصدار 2.0.0 · نسخة المستخدم</small></div>
     </div>
   </aside>
 
@@ -283,9 +375,15 @@
     <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
     <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="m2 2 20 20M8.5 8.5A8.8 8.8 0 0 1 20 9M5 12.5a11 11 0 0 1 3-2M9 16a4.3 4.3 0 0 1 6 0M12 20h.01M4 9a14 14 0 0 1 1.5-1"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></symbol>
+    <symbol id="i-log-out" viewBox="0 0 24 24"><path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M6 19h12a4 4 0 0 0 .6-8A7 7 0 0 0 5.3 9.5 4.8 4.8 0 0 0 6 19Z"/></symbol>
   </svg>
 
   <script src="data.js" defer></script>
+  <script src="firebase.js" type="module"></script>
   <script src="app.js" defer></script>
 </body>
 </html>

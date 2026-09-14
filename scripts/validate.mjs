@@ -12,6 +12,7 @@ const requiredFiles = [
   "index.html",
   "styles.css",
   "data.js",
+  "firebase.js",
   "app.js",
   "sw.js",
   "manifest.webmanifest",
@@ -86,6 +87,16 @@ const duplicateIds = htmlIds.filter((id, index) => htmlIds.indexOf(id) !== index
 ok(duplicateIds.length === 0, `Duplicate HTML IDs: ${[...new Set(duplicateIds)].join(", ")}`);
 ok(html.includes('dir="rtl"'), "HTML must use RTL direction");
 ok(html.includes('rel="manifest"'), "HTML must link the web manifest");
+ok(html.includes('src="firebase.js" type="module"'), "HTML must load Firebase as a module");
+ok(html.includes('id="authView"'), "HTML must include the authentication view");
+
+const firebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
+ok(firebaseSource.includes('projectId: "cinaro"'), "Firebase project ID must be cinaro");
+ok(firebaseSource.includes('authDomain: "cinaro.firebaseapp.com"'), "Firebase auth domain is missing");
+ok(!firebaseSource.includes("\\\\_"), "Firebase config contains an escaped underscore");
+ok(!firebaseSource.includes("\\\\:"), "Firebase config contains an escaped colon");
+ok(fs.existsSync(path.join(root, "firestore.rules")), "Missing Firestore security rules");
+ok(fs.existsSync(path.join(root, "firebase.json")), "Missing Firebase deployment config");
 
 const serviceWorker = fs.readFileSync(path.join(webRoot, "sw.js"), "utf8");
 for (const requiredFile of requiredFiles.filter((file) => !["sw.js"].includes(file))) {
