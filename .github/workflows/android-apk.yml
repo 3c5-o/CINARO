@@ -87,7 +87,9 @@ jobs:
             cp android-app/app/build/outputs/apk/admin/debug/app-admin-debug.apk dist/CINARO-Admin-v2.0.0-beta.1.apk
           fi
           sha256sum dist/*.apk > dist/CINARO-Android.apk.sha256
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/*.apk
+          for apk in dist/*.apk; do
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
+          done
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
