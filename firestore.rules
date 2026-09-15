@@ -11,12 +11,74 @@ service cloud.firestore {
     }
 
     function admin() {
-      return signedIn() && request.auth.token.admin == true;
+      return signedIn() && (
+        request.auth.token.admin == true ||
+        request.auth.token.email == "ffkyyr@gmail.com"
+      );
+    }
+
+    function currentAssignment() {
+      return get(/databases/$(database)/documents/supervisorAssignments/$(request.auth.uid));
+    }
+
+    function supervisor() {
+      return signedIn()
+        && currentAssignment().data.active == true
+        && currentAssignment().data.sectionIds is list;
+    }
+
+    function supervisorCanCreate() {
+      return supervisor()
+        && currentAssignment().data.permissions is map
+        && currentAssignment().data.permissions.createContent == true;
+    }
+
+    function supervisorCanEdit() {
+      return supervisor()
+        && currentAssignment().data.permissions is map
+        && currentAssignment().data.permissions.editContent == true;
+    }
+
+    function supervisorCanDelete() {
+      return supervisor()
+        && currentAssignment().data.permissions is map
+        && currentAssignment().data.permissions.deleteContent == true;
+    }
+
+    function supervisorCanPublish() {
+      return supervisor()
+        && currentAssignment().data.permissions is map
+        && currentAssignment().data.permissions.publishContent == true;
+    }
+
+    function assignedContent(data) {
+      return supervisor()
+        && data.sectionIds is list
+        && data.sectionIds.size() > 0
+        && data.sectionIds.hasOnly(currentAssignment().data.sectionIds);
     }
 
     match /content/{contentId} {
-      allow get, list: if resource.data.published == true || admin();
-      allow create, update, delete: if admin();
+      allow get, list: if resource.data.published == true || admin() || assignedContent(resource.data);
+
+      allow create: if admin() || (
+        supervisorCanCreate()
+        && assignedContent(request.resource.data)
+      );
+
+      allow update: if admin() || (
+        supervisorCanEdit()
+        && assignedContent(resource.data)
+        && assignedContent(request.resource.data)
+        && (
+          request.resource.data.published == resource.data.published ||
+          supervisorCanPublish()
+        )
+      );
+
+      allow delete: if admin() || (
+        supervisorCanDelete() && assignedContent(resource.data)
+      );
     }
 
     match /appConfig/public {
@@ -44,6 +106,30 @@ service cloud.firestore {
       match /private/{documentId} {
         allow read, write: if owner(userId) || admin();
       }
+    }
+
+    match /sections/{sectionId} {
+      allow read: if true;
+      allow write: if admin();
+    }
+
+    match /supervisorAssignments/{uid} {
+      allow read: if admin() || owner(uid);
+      allow write: if admin();
+    }
+
+    match /auditLogs/{logId} {
+      allow read, write: if admin();
+    }
+
+    match /announcements/{announcementId} {
+      allow get, list: if resource.data.published == true || admin();
+      allow create, update, delete: if admin();
+    }
+
+    match /reports/{reportId} {
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if admin();
     }
 
     match /{document=**} {

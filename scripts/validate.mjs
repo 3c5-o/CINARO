@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const webRoot = path.join(root, "web");
+const adminRoot = path.join(root, "admin");
 const errors = [];
 const ok = (condition, message) => { if (!condition) errors.push(message); };
 
@@ -24,8 +25,22 @@ const requiredFiles = [
   "assets/images/poster-placeholder.webp"
 ];
 
+const requiredAdminFiles = [
+  "index.html",
+  "styles.css",
+  "firebase.js",
+  "app.js",
+  "sw.js",
+  "manifest.webmanifest",
+  "assets/admin-hero.svg"
+];
+
 for (const file of requiredFiles) {
   ok(fs.existsSync(path.join(webRoot, file)), `Missing required web file: ${file}`);
+}
+
+for (const file of requiredAdminFiles) {
+  ok(fs.existsSync(path.join(adminRoot, file)), `Missing required admin file: ${file}`);
 }
 
 const sandbox = { window: {} };
@@ -36,8 +51,7 @@ ok(data && Array.isArray(data.items), "CINARO_DATA.items must be an array");
 if (data?.items) {
   const ids = data.items.map((item) => item.id);
   ok(new Set(ids).size === ids.length, "Content IDs must be unique");
-  ok(data.items.some((item) => item.kind === "movie"), "At least one movie is required");
-  ok(data.items.some((item) => item.kind === "series"), "At least one series is required");
+  ok(data.version >= 2, "Production data version must be 2 or newer");
 
   for (const item of data.items) {
     ok(typeof item.id === "string" && /^[a-z0-9-]+$/.test(item.id), `Invalid item ID: ${item.id}`);
@@ -90,6 +104,15 @@ ok(html.includes('rel="manifest"'), "HTML must link the web manifest");
 ok(html.includes('src="firebase.js" type="module"'), "HTML must load Firebase as a module");
 ok(html.includes('id="authView"'), "HTML must include the authentication view");
 
+const adminHtml = fs.readFileSync(path.join(adminRoot, "index.html"), "utf8");
+const adminIds = [...adminHtml.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
+const duplicateAdminIds = adminIds.filter((id, index) => adminIds.indexOf(id) !== index);
+ok(duplicateAdminIds.length === 0, `Duplicate admin HTML IDs: ${[...new Set(duplicateAdminIds)].join(", ")}`);
+ok(adminHtml.includes('dir="rtl"'), "Admin HTML must use RTL direction");
+ok(adminHtml.includes('src="firebase.js" type="module"'), "Admin HTML must load Firebase as a module");
+ok(adminHtml.includes('id="adminLoginForm"'), "Admin HTML must include the admin login form");
+ok(adminHtml.includes('id="mobileNav"'), "Admin HTML must include mobile navigation");
+
 const firebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
 ok(firebaseSource.includes('projectId: "cinaro"'), "Firebase project ID must be cinaro");
 ok(firebaseSource.includes('authDomain: "cinaro.firebaseapp.com"'), "Firebase auth domain is missing");
@@ -97,6 +120,11 @@ ok(!firebaseSource.includes("\\\\_"), "Firebase config contains an escaped under
 ok(!firebaseSource.includes("\\\\:"), "Firebase config contains an escaped colon");
 ok(fs.existsSync(path.join(root, "firestore.rules")), "Missing Firestore security rules");
 ok(fs.existsSync(path.join(root, "firebase.json")), "Missing Firebase deployment config");
+
+const adminFirebaseSource = fs.readFileSync(path.join(adminRoot, "firebase.js"), "utf8");
+ok(adminFirebaseSource.includes('projectId: "cinaro"'), "Admin Firebase project ID must be cinaro");
+ok(adminFirebaseSource.includes('adminEmail: ADMIN_EMAIL'), "Admin Firebase client must expose the allowlisted email");
+ok(!adminFirebaseSource.match(/password\s*:\s*["']/i), "Admin Firebase client must not contain a password");
 
 const serviceWorker = fs.readFileSync(path.join(webRoot, "sw.js"), "utf8");
 for (const requiredFile of requiredFiles.filter((file) => !["sw.js"].includes(file))) {
@@ -111,4 +139,4 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log(`CINARO validation passed: ${data.items.length} titles, ${requiredFiles.length} core files.`);
+console.log(`CINARO validation passed: ${data.items.length} local titles, ${requiredFiles.length} web files and ${requiredAdminFiles.length} admin files.`);

@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/serve.mjs",
-    "test": "node --check web/data.js && node --check web/firebase.js && node --check web/app.js && node --check web/sw.js && node scripts/validate.mjs"
+    "test": "node --check web/data.js && node --check web/firebase.js && node --check web/app.js && node --check web/sw.js && node --check admin/firebase.js && node --check admin/app.js && node --check admin/sw.js && node scripts/validate.mjs"
   },
   "engines": {
     "node": ">=20"

@@ -1,0 +1,17 @@
+{
+  "name": "CINARO Admin",
+  "short_name": "CINARO Admin",
+  "description": "لوحة إدارة محتوى CINARO",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./#dashboard",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#090a0f",
+  "background_color": "#090a0f",
+  "icons": [
+    { "src": "../web/assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "../web/assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

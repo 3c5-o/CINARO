@@ -20,6 +20,29 @@ android {
         versionName "2.0.0"
     }
 
+    buildFeatures {
+        buildConfig true
+    }
+
+    flavorDimensions += "edition"
+    productFlavors {
+        user {
+            dimension "edition"
+            buildConfigField "String", "ONLINE_APP_URL", '"https://3c5-o.github.io/CINARO/web/#home"'
+            buildConfigField "String", "OFFLINE_APP_URL", '"file:///android_asset/www/index.html#home"'
+            buildConfigField "String", "APP_PATH", '"/CINARO/web/"'
+        }
+        admin {
+            dimension "edition"
+            applicationId "com.cinaro.admin"
+            versionName "2.0.0-admin"
+            resValue "string", "app_name", "CINARO Admin"
+            buildConfigField "String", "ONLINE_APP_URL", '"https://3c5-o.github.io/CINARO/admin/#dashboard"'
+            buildConfigField "String", "OFFLINE_APP_URL", '"file:///android_asset/admin/index.html#dashboard"'
+            buildConfigField "String", "APP_PATH", '"/CINARO/admin/"'
+        }
+    }
+
     signingConfigs {
         if (hasReleaseSigning) {
             release {
@@ -62,6 +85,11 @@ tasks.register("syncWebAssets", Copy) {
     exclude ".nojekyll"
 }
 
+tasks.register("syncAdminAssets", Copy) {
+    from "${rootProject.projectDir}/../admin"
+    into "${projectDir}/src/main/assets/admin"
+}
+
 tasks.named("preBuild").configure {
-    dependsOn("syncWebAssets")
+    dependsOn("syncWebAssets", "syncAdminAssets")
 }

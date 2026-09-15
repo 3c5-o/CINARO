@@ -238,6 +238,25 @@ svg {
   text-align: center;
 }
 
+.remote-notice {
+  position: sticky;
+  top: 0;
+  z-index: 35;
+  margin: 0 auto;
+  padding: .65rem 1rem;
+  border-bottom: 1px solid rgba(83, 165, 255, .25);
+  color: #c5e1ff;
+  background: rgba(23, 65, 104, .92);
+  text-align: center;
+  font-size: .8rem;
+}
+
+.remote-notice.maintenance {
+  border-color: rgba(255, 54, 87, .3);
+  color: #ffd4db;
+  background: rgba(86, 21, 37, .94);
+}
+
 .app-header {
   position: fixed;
   z-index: 1000;

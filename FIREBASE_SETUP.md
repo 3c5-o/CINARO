@@ -1,4 +1,4 @@
-# إعداد Firebase لنسخة مستخدم CINARO
+# إعداد Firebase لنسختي CINARO (المستخدم والإدارة)
 
 المشروع مربوط بمعرّف Firebase: `cinaro`.
 
@@ -10,6 +10,8 @@
 - Anonymous
 
 أضف `3c5-o.github.io` إلى **Authorized domains**.
+
+أنشئ حساب الإدارة من **Authentication → Users → Add user** بالبريد الإداري المخصص للمشروع. أدخل كلمة المرور يدوياً داخل Firebase Console فقط؛ لا تضعها في GitHub أو ملفات JavaScript. لوحة الإدارة تسمح بالدخول لهذا البريد أو لأي حساب يحمل Custom Claim باسم `admin: true`.
 
 ## 2. إنشاء Cloud Firestore
 
@@ -59,11 +61,15 @@ npx firebase-tools deploy --only firestore:rules
 
 المسلسل يستخدم الحقول نفسها، مع `seasons` بدل `sources`. كل موسم يحتوي `number` و`title` و`episodes`، وكل حلقة تحتوي رابطها داخل `sources`.
 
-يمكن ترتيب اختيارات الواجهة بوضع مصفوفة معرّفات داخل المستند `appConfig/public`:
+يمكن ترتيب اختيارات الواجهة ووضع التنبيهات من لوحة الإدارة أو بوضع مصفوفة معرّفات داخل المستند `appConfig/public`:
 
 ```json
 {
-  "featured": ["movie-example", "series-example"]
+  "featured": ["movie-example", "series-example"],
+  "announcement": "رسالة اختيارية للمستخدمين",
+  "minimumVersion": "2.0.0",
+  "maintenance": false,
+  "forceUpdate": false
 }
 ```
 
@@ -74,11 +80,17 @@ npx firebase-tools deploy --only firestore:rules
 - `users/{uid}` للملف الشخصي.
 - `users/{uid}/private/state` للمفضلة والسجل والإعدادات.
 
-نسخة المستخدم لا تملك صلاحية إضافة أو تعديل المحتوى. هذه العمليات ستكون محصورة بنسخة الإدارة وحساب يحمل Custom Claim باسم `admin: true`.
+نسخة المستخدم لا تملك صلاحية إضافة أو تعديل المحتوى. لوحة الإدارة متاحة من:
+
+```text
+https://3c5-o.github.io/CINARO/admin/
+```
+
+من لوحة الإدارة يمكنك إدارة المحتوى الحقيقي، المستخدمين، الأقسام، تعيينات المشرفين، الإعدادات وسجل التدقيق. المدير يحدد لكل مشرف `sectionIds` وصلاحيات `createContent` و`editContent` و`deleteContent` و`publishContent`.
 
 ## ملاحظات مهمة
 
 - إعدادات Firebase الموجودة في الويب تعرّف المشروع وليست بديلاً عن قواعد الحماية.
 - لا تضع مفاتيح خوادم أو Service Account داخل المستودع.
-- إذا لم تكن الخدمات مفعّلة، يستمر التطبيق بالعمل كضيف ويعرض الكتالوج المضمّن بدلاً من ظهور شاشة بيضاء.
+- لا يحتوي الإصدار المنشور على كتالوج وهمي أو بيانات تجريبية؛ ستظهر رسالة واضحة إلى أن تضيف محتوى منشوراً من لوحة الإدارة.
 - روابط MP4 يجب أن تكون HTTPS وأن تدعم Range Requests.

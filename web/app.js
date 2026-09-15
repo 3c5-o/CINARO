@@ -82,6 +82,8 @@
     firebaseContentUnsubscribe: null,
     firebaseAuthUnsubscribe: null,
     userStateUnsubscribe: null,
+    userProfileUnsubscribe: null,
+    remoteConfig: {},
     cloudHydrated: false,
     cloudSyncTimer: 0,
     cloudWritePromise: Promise.resolve(),
@@ -102,6 +104,7 @@
     search: byId("searchView"),
     details: byId("detailsView"),
     offlineBanner: byId("offlineBanner"),
+    remoteNotice: byId("remoteNotice"),
     settingsButton: byId("settingsButton"),
     sheetBackdrop: byId("sheetBackdrop"),
     settingsSheet: byId("settingsSheet"),
@@ -207,6 +210,15 @@
 
   function safePercent(value) {
     return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+  }
+
+  function compareVersions(first, second) {
+    const a = String(first || "0").split(".").map((part) => Number(part) || 0);
+    const b = String(second || "0").split(".").map((part) => Number(part) || 0);
+    for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+      if ((a[index] || 0) !== (b[index] || 0)) return (a[index] || 0) - (b[index] || 0);
+    }
+    return 0;
   }
 
   function mediaKey(item, seasonNumber, episodeNumber) {
@@ -446,6 +458,8 @@
   function subscribeUserState(user) {
     state.userStateUnsubscribe?.();
     state.userStateUnsubscribe = null;
+    state.userProfileUnsubscribe?.();
+    state.userProfileUnsubscribe = null;
     state.cloudHydrated = false;
     state.cloudRevision = 0;
     state.cloudSavedRevision = 0;
@@ -459,24 +473,50 @@
         setFirebaseStatus("error", "الحساب متصل لكن تعذّرت قراءة المزامنة");
       }
     );
+    state.userProfileUnsubscribe = state.firebase.listenUserProfile(
+      user.uid,
+      (profile) => {
+        if (profile?.status !== "blocked") return;
+        toast("تم إيقاف هذا الحساب من الإدارة", "error");
+        state.firebase.logout().catch(() => {});
+      },
+      (error) => console.warn("CINARO user profile listener failed", error)
+    );
   }
 
   function replaceCatalog(payload) {
-    if (!Array.isArray(payload?.items) || !payload.items.length) {
-      setFirebaseStatus("connected", "Firebase متصل — لم يُنشر محتوى بعد");
-      return;
+    state.remoteConfig = payload?.config && typeof payload.config === "object" ? payload.config : {};
+    if (elements.remoteNotice) {
+      const minimumVersion = String(state.remoteConfig.minimumVersion || "").trim();
+      const needsUpdate = minimumVersion && compareVersions(APP_VERSION, minimumVersion) < 0;
+      const updateMessage = needsUpdate
+        ? `يتوفر إصدار أحدث من CINARO (${minimumVersion}). حدّث التطبيق للحصول على آخر المميزات.`
+        : "";
+      const message = state.remoteConfig.maintenance
+        ? "CINARO تحت الصيانة حالياً. سيعود العرض قريباً."
+        : updateMessage || String(state.remoteConfig.announcement || "").trim();
+      elements.remoteNotice.hidden = !message;
+      elements.remoteNotice.textContent = message;
+      elements.remoteNotice.classList.toggle("maintenance", Boolean(state.remoteConfig.maintenance || (needsUpdate && state.remoteConfig.forceUpdate)));
     }
+    if (state.remoteConfig.maintenance) setFirebaseStatus("connected", "وضع الصيانة مفعل من الإدارة");
+    const incomingItems = Array.isArray(payload?.items) ? payload.items : [];
     DATA = {
       ...DATA,
-      items: payload.items,
-      featured: Array.isArray(payload.featured) && payload.featured.length
+      items: incomingItems,
+      featured: Array.isArray(payload?.featured) && payload.featured.length
         ? payload.featured
-        : payload.items.slice(0, 5).map((item) => item.id)
+        : incomingItems.slice(0, 5).map((item) => item.id)
     };
     itemMap = new Map(DATA.items.map((item) => [item.id, item]));
     movies = DATA.items.filter((item) => item.kind === "movie");
     series = DATA.items.filter((item) => item.kind === "series");
     state.heroIndex = 0;
+    if (!DATA.items.length) {
+      setFirebaseStatus("connected", state.remoteConfig.maintenance ? "وضع الصيانة مفعل من الإدارة" : "Firebase متصل — لم يُنشر محتوى بعد");
+      if (state.route?.name !== "watch") refreshCurrentView();
+      return;
+    }
     setFirebaseStatus(payload.fromCache ? "pending" : "connected", payload.fromCache ? "عرض محتوى Firebase المحفوظ" : "متصل بالمحتوى المباشر");
     if (state.route?.name !== "watch") refreshCurrentView();
   }
@@ -505,6 +545,8 @@
       } else {
         state.userStateUnsubscribe?.();
         state.userStateUnsubscribe = null;
+        state.userProfileUnsubscribe?.();
+        state.userProfileUnsubscribe = null;
         state.cloudHydrated = false;
         if (!state.localGuest) showAuth("login");
       }
@@ -757,6 +799,10 @@
   function renderHero() {
     const container = byId("homeHero");
     if (!container) return;
+    if (!DATA.items.length) {
+      container.innerHTML = `<div class="content-shell page-shell"><div class="empty-state remote-empty">${icon("cloud")}<h2>لا يوجد محتوى منشور بعد</h2><p>ستظهر الأفلام والمسلسلات هنا بعد إضافتها ونشرها من لوحة الإدارة.</p></div></div>`;
+      return;
+    }
     const featuredItems = DATA.featured.map((id) => itemMap.get(id)).filter(Boolean);
     const item = featuredItems[state.heroIndex % Math.max(1, featuredItems.length)] || DATA.items[0];
     const favorite = favorites.has(item.id);
@@ -789,6 +835,11 @@
   }
 
   function renderHome() {
+    if (!DATA.items.length) {
+      elements.home.innerHTML = `<div class="content-shell page-shell"><div class="page-heading"><div><span>المكتبة قيد التجهيز</span><h1>أهلاً بك في CINARO</h1><p>لا يوجد محتوى منشور حالياً. سيظهر المحتوى الحقيقي هنا بعد نشره من لوحة الإدارة.</p></div></div><div id="homeHero"></div></div>`;
+      renderHero();
+      return;
+    }
     const continueItems = recentEntries().slice(0, 8);
     const popular = sortItems(DATA.items, "popular").slice(0, 8);
     const latest = sortItems(DATA.items, "latest").slice(0, 10);

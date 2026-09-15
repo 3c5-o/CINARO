@@ -28,10 +28,7 @@ import android.widget.FrameLayout;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
-    private static final String ONLINE_APP_URL = "https://3c5-o.github.io/CINARO/web/#home";
-    private static final String OFFLINE_APP_URL = "file:///android_asset/www/index.html#home";
     private static final String APP_HOST = "3c5-o.github.io";
-    private static final String APP_PATH = "/CINARO/web/";
 
     private WebView webView;
     private FrameLayout rootView;
@@ -56,7 +53,7 @@ public class MainActivity extends Activity {
 
         configureWebView();
         if (savedInstanceState == null) {
-            webView.loadUrl(ONLINE_APP_URL);
+            webView.loadUrl(BuildConfig.ONLINE_APP_URL);
         } else {
             webView.restoreState(savedInstanceState);
         }
@@ -145,14 +142,14 @@ public class MainActivity extends Activity {
         return "https".equalsIgnoreCase(uri.getScheme())
                 && APP_HOST.equalsIgnoreCase(uri.getHost())
                 && uri.getPath() != null
-                && uri.getPath().startsWith(APP_PATH);
+                && uri.getPath().startsWith(BuildConfig.APP_PATH);
     }
 
     private void fallBackToOffline(WebView view, Uri failedUri) {
         if (!usingOfflineFallback && isCinaroWebUrl(failedUri)) {
             usingOfflineFallback = true;
             Toast.makeText(this, R.string.offline_fallback, Toast.LENGTH_SHORT).show();
-            view.loadUrl(OFFLINE_APP_URL);
+            view.loadUrl(BuildConfig.OFFLINE_APP_URL);
             return;
         }
         Toast.makeText(this, R.string.page_load_error, Toast.LENGTH_SHORT).show();

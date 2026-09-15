@@ -260,6 +260,7 @@ async function bootFirebase() {
     listenContent: function (callback, onError) {
       let items = [];
       let featured = [];
+      let config = {};
       let fromCache = false;
       let contentReady = false;
 
@@ -273,6 +274,7 @@ async function bootFirebase() {
           featured: selectedFeatured.length
             ? selectedFeatured
             : items.filter(function (item) { return item.featured; }).map(function (item) { return item.id; }).slice(0, 8),
+          config: config,
           fromCache: fromCache
         });
       }
@@ -298,6 +300,12 @@ async function bootFirebase() {
         function (snapshot) {
           const data = snapshot.exists() ? plainValue(snapshot.data()) : {};
           featured = Array.isArray(data.featured) ? data.featured.map(String).slice(0, 12) : [];
+          config = {
+            announcement: textValue(data.announcement, "", 500),
+            minimumVersion: textValue(data.minimumVersion, "2.0.0", 20),
+            maintenance: data.maintenance === true,
+            forceUpdate: data.forceUpdate === true
+          };
           emit();
         },
         function () { emit(); }
@@ -312,6 +320,18 @@ async function bootFirebase() {
     listenUserState: function (uid, callback, onError) {
       return firestoreSdk.onSnapshot(
         firestoreSdk.doc(db, "users", uid, "private", "state"),
+        function (snapshot) {
+          callback(snapshot.exists() ? plainValue(snapshot.data()) : null);
+        },
+        function (error) {
+          if (typeof onError === "function") onError(error);
+        }
+      );
+    },
+
+    listenUserProfile: function (uid, callback, onError) {
+      return firestoreSdk.onSnapshot(
+        firestoreSdk.doc(db, "users", uid),
         function (snapshot) {
           callback(snapshot.exists() ? plainValue(snapshot.data()) : null);
         },

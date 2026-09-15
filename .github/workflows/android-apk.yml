@@ -6,6 +6,7 @@ on:
     tags: ["v*"]
     paths:
       - "web/**"
+      - "admin/**"
       - "android-app/**"
       - ".github/workflows/android-apk.yml"
   workflow_dispatch:
@@ -68,9 +69,9 @@ jobs:
           HAS_RELEASE_SIGNING: ${{ steps.signing.outputs.signed }}
         run: |
           if [[ "$HAS_RELEASE_SIGNING" == "true" ]]; then
-            gradle --no-daemon --stacktrace :app:assembleRelease
+            gradle --no-daemon --stacktrace :app:assembleUserRelease :app:assembleAdminRelease
           else
-            gradle --no-daemon --stacktrace :app:assembleDebug
+            gradle --no-daemon --stacktrace :app:assembleUserDebug :app:assembleAdminDebug
           fi
 
       - name: Prepare APK
@@ -79,20 +80,22 @@ jobs:
         run: |
           mkdir -p dist
           if [[ "$HAS_RELEASE_SIGNING" == "true" ]]; then
-            cp android-app/app/build/outputs/apk/release/app-release.apk dist/CINARO-User-v2.0.0.apk
+            cp android-app/app/build/outputs/apk/user/release/app-user-release.apk dist/CINARO-User-v2.0.0.apk
+            cp android-app/app/build/outputs/apk/admin/release/app-admin-release.apk dist/CINARO-Admin-v2.0.0.apk
           else
-            cp android-app/app/build/outputs/apk/debug/app-debug.apk dist/CINARO-User-v2.0.0-beta.1.apk
+            cp android-app/app/build/outputs/apk/user/debug/app-user-debug.apk dist/CINARO-User-v2.0.0-beta.1.apk
+            cp android-app/app/build/outputs/apk/admin/debug/app-admin-debug.apk dist/CINARO-Admin-v2.0.0-beta.1.apk
           fi
-          sha256sum dist/*.apk > dist/CINARO-User.apk.sha256
+          sha256sum dist/*.apk > dist/CINARO-Android.apk.sha256
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/*.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CINARO-User-Android-APK
+          name: CINARO-Android-APKs
           path: |
             dist/*.apk
-            dist/CINARO-User.apk.sha256
+            dist/CINARO-Android.apk.sha256
           if-no-files-found: error
           retention-days: 30
 
@@ -103,16 +106,16 @@ jobs:
         run: |
           TAG="v2.0.0-beta.1"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/*.apk dist/CINARO-User.apk.sha256 --clobber
+            gh release upload "$TAG" dist/*.apk dist/CINARO-Android.apk.sha256 --clobber
             gh release edit "$TAG" --target "$GITHUB_SHA"
           else
             gh release create "$TAG" \
               dist/*.apk \
-              dist/CINARO-User.apk.sha256 \
+              dist/CINARO-Android.apk.sha256 \
               --target "$GITHUB_SHA" \
-              --title "CINARO User v2.0.0 Beta 1" \
+              --title "CINARO User + Admin v2.0.0 Beta 1" \
               --prerelease \
-              --notes "نسخة المستخدم: حساب Firebase، مزامنة المفضلة وسجل المشاهدة، محتوى مباشر من Firestore، ومعالجة محسّنة لمصادر الفيديو. إذا كانت أسرار توقيع Release غير مضافة فهذه نسخة اختبار موقعة وقابلة للتثبيت."
+              --notes "نسختا CINARO للمستخدم والإدارة: حساب Firebase، محتوى مباشر من Firestore، لوحة إدارة متجاوبة، ومشغّل فيديو محسّن. إذا كانت أسرار توقيع Release غير مضافة فهذه نسخ اختبار موقعة وقابلة للتثبيت."
           fi
 
       - name: Publish tagged release
@@ -121,5 +124,5 @@ jobs:
         with:
           files: |
             dist/*.apk
-            dist/CINARO-User.apk.sha256
+            dist/CINARO-Android.apk.sha256
           generate_release_notes: true
