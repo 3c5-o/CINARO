@@ -90,8 +90,8 @@ http://127.0.0.1:4173
 
 1. افتح تبويب **Actions** في المستودع.
 2. افتح آخر تشغيل باسم **Build Android APK**.
-3. من **Artifacts** نزّل `CINARO-User-Android-APK`.
-4. فك الضغط وثبّت ملف `CINARO-User-*.apk` على الهاتف.
+3. من **Artifacts** نزّل `CINARO-Android-APKs`.
+4. فك الضغط وثبّت `CINARO-User-*.apk` للمستخدم أو `CINARO-Admin-*.apk` للإدارة.
 
 إذا لم تُضف أسرار التوقيع، ينتج المسار نسخة Beta/Debug موقعة وقابلة للتثبيت والاختبار. لبناء Release ثابت أضف الأسرار التالية إلى GitHub Actions من دون رفع ملف المفتاح إلى المستودع:
 
