@@ -211,6 +211,15 @@
     $("adminUserAvatar").textContent = (name.trim()[0] || "A").toUpperCase();
   }
 
+  function setMobileNavigation(open) {
+    const sidebar = $("adminSidebar");
+    const menuButton = $("menuButton");
+    const shouldOpen = Boolean(open);
+    sidebar?.classList.toggle("open", shouldOpen);
+    document.body.classList.toggle("nav-open", shouldOpen);
+    menuButton?.setAttribute("aria-expanded", String(shouldOpen));
+  }
+
   function setView(view) {
     const next = views.includes(view) ? view : "dashboard";
     state.view = next;
@@ -218,8 +227,7 @@
     $$('[data-view]').forEach((button) => button.classList.toggle("active", button.dataset.view === next));
     const activeView = $("view-" + next);
     $("viewTitle").textContent = activeView?.dataset.title || "نظرة عامة";
-    $("adminSidebar")?.classList.remove("open");
-    document.body.classList.remove("nav-open");
+    setMobileNavigation(false);
     if (next === "content") renderContent();
     if (next === "users") renderUsers();
     if (next === "supervisors") renderSupervisors();
@@ -303,7 +311,7 @@
   function fillSettings() {
     $("settingFeatured").value = toArray(state.config.featured).join(", ");
     $("settingAnnouncement").value = asString(state.config.announcement);
-    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.0.0");
+    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.0.1");
     $("settingMaintenance").checked = state.config.maintenance === true;
     $("settingForceUpdate").checked = state.config.forceUpdate === true;
   }
@@ -574,7 +582,7 @@
       const payload = {
         featured: parseCsv($("settingFeatured").value),
         announcement: asString($("settingAnnouncement").value).slice(0, 500),
-        minimumVersion: asString($("settingMinVersion").value, "2.0.0").slice(0, 20),
+        minimumVersion: asString($("settingMinVersion").value, "2.0.1").slice(0, 20),
         maintenance: $("settingMaintenance").checked,
         forceUpdate: $("settingForceUpdate").checked,
         updatedBy: state.authUser.uid
@@ -670,10 +678,7 @@
       } finally { setBusy(form, false); }
     });
     $("logoutButton")?.addEventListener("click", () => state.firebase?.logout().catch((error) => toast(errorMessage(error), "error")));
-    $("menuButton")?.addEventListener("click", () => {
-      $("adminSidebar")?.classList.toggle("open");
-      document.body.classList.toggle("nav-open");
-    });
+    $("menuButton")?.addEventListener("click", () => setMobileNavigation(!$("adminSidebar")?.classList.contains("open")));
     $("newContentButton")?.addEventListener("click", () => { resetContentForm(); setView("editor"); });
     $("contentKind")?.addEventListener("change", toggleKindFields);
     $("contentForm")?.addEventListener("submit", saveContent);
@@ -688,10 +693,19 @@
     $("userSearch")?.addEventListener("input", (event) => { state.filters.userSearch = event.target.value; renderUsers(); });
     $("userStatusFilter")?.addEventListener("change", (event) => { state.filters.userStatus = event.target.value; renderUsers(); });
     document.addEventListener("click", (event) => {
+      if (document.body.classList.contains("nav-open") && !event.target.closest?.("#adminSidebar, #menuButton")) {
+        setMobileNavigation(false);
+      }
       const action = event.target.closest?.("[data-action]");
       if (action) { event.preventDefault(); handleAction(action); return; }
       const view = event.target.closest?.("[data-view]");
       if (view) { event.preventDefault(); setView(view.dataset.view); }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") setMobileNavigation(false);
+    });
+    window.addEventListener("resize", () => {
+      if (window.innerWidth > 760) setMobileNavigation(false);
     });
   }
 

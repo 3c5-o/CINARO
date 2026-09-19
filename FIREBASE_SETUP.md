@@ -67,7 +67,7 @@ npx firebase-tools deploy --only firestore:rules
 {
   "featured": ["movie-example", "series-example"],
   "announcement": "رسالة اختيارية للمستخدمين",
-  "minimumVersion": "2.0.0",
+  "minimumVersion": "2.0.1",
   "maintenance": false,
   "forceUpdate": false
 }

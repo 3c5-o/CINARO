@@ -83,8 +83,9 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setLoadWithOverviewMode(true);
+        settings.setLoadWithOverviewMode(false);
         settings.setUseWideViewPort(true);
+        settings.setTextZoom(100);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         settings.setSupportZoom(false);
@@ -94,7 +95,7 @@ public class MainActivity extends Activity {
         settings.setAllowUniversalAccessFromFileURLs(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setUserAgentString(settings.getUserAgentString() + " CINARO/2.0 AndroidApp");
+        settings.setUserAgentString(settings.getUserAgentString() + " CINARO/2.0.1 AndroidApp");
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.setSafeBrowsingEnabled(true);
@@ -104,6 +105,7 @@ public class MainActivity extends Activity {
         WebView.setWebContentsDebuggingEnabled(debuggable);
         webView.setBackgroundColor(Color.BLACK);
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        webView.setHorizontalScrollBarEnabled(false);
         webView.setWebViewClient(new CinaroWebViewClient());
         webView.setWebChromeClient(new CinaroChromeClient());
         webView.setDownloadListener(new CinaroDownloadListener());

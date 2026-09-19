@@ -113,6 +113,15 @@ ok(adminHtml.includes('src="firebase.js" type="module"'), "Admin HTML must load 
 ok(adminHtml.includes('id="adminLoginForm"'), "Admin HTML must include the admin login form");
 ok(adminHtml.includes('id="mobileNav"'), "Admin HTML must include mobile navigation");
 
+const adminStyles = fs.readFileSync(path.join(adminRoot, "styles.css"), "utf8");
+ok(adminStyles.includes('inset-inline-start: 0'), "Admin sidebar must use logical RTL positioning");
+ok(!adminStyles.includes('inset: 0 auto 0 0'), "Admin mobile sidebar must not mix physical and logical positioning");
+ok(adminStyles.includes('visibility: hidden'), "Closed admin sidebar must be visually hidden on mobile");
+ok(adminStyles.includes('@media (max-width: 520px)'), "Admin dashboard must include a narrow-phone layout");
+
+const androidActivity = fs.readFileSync(path.join(root, "android-app", "app", "src", "main", "java", "com", "cinaro", "app", "MainActivity.java"), "utf8");
+ok(androidActivity.includes('settings.setLoadWithOverviewMode(false)'), "Android WebView must not shrink the app into a wide overview");
+
 const firebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
 ok(firebaseSource.includes('projectId: "cinaro"'), "Firebase project ID must be cinaro");
 ok(firebaseSource.includes('authDomain: "cinaro.firebaseapp.com"'), "Firebase auth domain is missing");
