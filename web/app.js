@@ -2,7 +2,7 @@
   "use strict";
 
   let DATA = window.CINARO_DATA;
-  const APP_VERSION = "2.0.1";
+  const APP_VERSION = "2.1.0";
   const IMAGE_FALLBACK = "assets/images/poster-placeholder.webp";
 
   if (!DATA || !Array.isArray(DATA.items)) {
@@ -84,6 +84,8 @@
     userStateUnsubscribe: null,
     userProfileUnsubscribe: null,
     remoteConfig: {},
+    sections: [],
+    serviceLocked: false,
     cloudHydrated: false,
     cloudSyncTimer: 0,
     cloudWritePromise: Promise.resolve(),
@@ -105,10 +107,12 @@
     details: byId("detailsView"),
     offlineBanner: byId("offlineBanner"),
     remoteNotice: byId("remoteNotice"),
+    serviceGate: byId("serviceGate"),
     settingsButton: byId("settingsButton"),
     sheetBackdrop: byId("sheetBackdrop"),
     settingsSheet: byId("settingsSheet"),
     infoSheet: byId("infoSheet"),
+    reportSheet: byId("reportSheet"),
     toastRegion: byId("toastRegion"),
     confirmDialog: byId("confirmDialog"),
     authView: byId("authView"),
@@ -304,6 +308,8 @@
       "auth/unauthorized-domain": "هذا النطاق غير مضاف إلى النطاقات المسموحة في Firebase.",
       "auth/web-storage-unsupported": "هذا الجهاز يمنع التخزين المطلوب لتسجيل الدخول.",
       "auth/operation-not-allowed": "طريقة الدخول غير مفعّلة من Firebase Console.",
+      "auth/requires-login": "سجّل الدخول بحسابك لإكمال هذه العملية.",
+      "auth/requires-recent-login": "لحماية حسابك، سجّل الخروج ثم ادخل مجددًا وأعد المحاولة.",
       "cinaro/name-too-short": "الاسم يجب أن يحتوي حرفين على الأقل."
     };
     return messages[code] || "تعذّر إكمال العملية. تحقق من البيانات والاتصال.";
@@ -373,6 +379,13 @@
     }
     if (byId("accountPanelName")) byId("accountPanelName").textContent = name;
     if (byId("accountPanelEmail")) byId("accountPanelEmail").textContent = email || (isGuest ? "بياناتك محفوظة على هذا الجهاز" : "");
+    if (byId("profileName") && document.activeElement !== byId("profileName")) byId("profileName").value = user?.displayName || "";
+    const verification = byId("emailVerificationStatus")?.closest(".account-verification");
+    if (byId("emailVerificationStatus")) {
+      byId("emailVerificationStatus").textContent = user?.emailVerified ? "البريد الإلكتروني موثّق" : "البريد الإلكتروني غير موثّق";
+    }
+    verification?.classList.toggle("verified", Boolean(user?.emailVerified));
+    if (byId("verifyEmailButton")) byId("verifyEmailButton").hidden = Boolean(user?.emailVerified || !user || user.isAnonymous);
   }
 
   function mergeHistory(localHistory, remoteHistory) {
@@ -484,8 +497,36 @@
     );
   }
 
+  function updateServiceGate() {
+    const minimumVersion = String(state.remoteConfig.minimumVersion || "").trim();
+    const needsUpdate = Boolean(minimumVersion && compareVersions(APP_VERSION, minimumVersion) < 0);
+    const maintenance = state.remoteConfig.maintenance === true;
+    const forcedUpdate = needsUpdate && state.remoteConfig.forceUpdate === true;
+    state.serviceLocked = maintenance || forcedUpdate;
+
+    if (!elements.serviceGate) return;
+    elements.serviceGate.hidden = !state.serviceLocked;
+    document.body.classList.toggle("service-locked", state.serviceLocked);
+    if (!state.serviceLocked) return;
+
+    if (maintenance) {
+      byId("serviceGateKicker").textContent = "صيانة مجدولة";
+      byId("serviceGateTitle").textContent = "CINARO تحت الصيانة";
+      byId("serviceGateText").textContent = String(state.remoteConfig.announcement || "نعمل الآن على تحسين الخدمة. أعد فتح التطبيق بعد قليل.").trim();
+      byId("serviceGateAction").hidden = true;
+    } else {
+      byId("serviceGateKicker").textContent = "تحديث ضروري";
+      byId("serviceGateTitle").textContent = `حدّث CINARO إلى ${minimumVersion}`;
+      byId("serviceGateText").textContent = "هذه النسخة لم تعد مدعومة. نزّل الإصدار الجديد حتى تواصل المشاهدة بأمان.";
+      byId("serviceGateAction").href = safeMediaUrl(state.remoteConfig.updateUrl, "https://github.com/3c5-o/CINARO/releases");
+      byId("serviceGateAction").hidden = false;
+    }
+    if (!player.root.hidden) hidePlayer();
+  }
+
   function replaceCatalog(payload) {
     state.remoteConfig = payload?.config && typeof payload.config === "object" ? payload.config : {};
+    state.sections = Array.isArray(payload?.sections) ? payload.sections : [];
     if (elements.remoteNotice) {
       const minimumVersion = String(state.remoteConfig.minimumVersion || "").trim();
       const needsUpdate = minimumVersion && compareVersions(APP_VERSION, minimumVersion) < 0;
@@ -499,6 +540,7 @@
       elements.remoteNotice.textContent = message;
       elements.remoteNotice.classList.toggle("maintenance", Boolean(state.remoteConfig.maintenance || (needsUpdate && state.remoteConfig.forceUpdate)));
     }
+    updateServiceGate();
     if (state.remoteConfig.maintenance) setFirebaseStatus("connected", "وضع الصيانة مفعل من الإدارة");
     const incomingItems = Array.isArray(payload?.items) ? payload.items : [];
     DATA = {
@@ -662,6 +704,47 @@
       else {
         showAuth("login");
         setAuthMessage("أنت تستخدم وضع الضيف. سجّل دخولك لتفعيل المزامنة.");
+      }
+    });
+    byId("profileForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!state.firebase || state.authBusy) return;
+      setAuthBusy(true);
+      setAuthMessage("جاري حفظ الاسم…");
+      try {
+        state.authUser = await state.firebase.updateAccount(byId("profileName").value);
+        updateAccountUI();
+        setAuthMessage("تم تحديث الاسم بنجاح.", "success");
+        toast("تم حفظ معلومات الحساب");
+      } catch (error) {
+        setAuthMessage(authErrorMessage(error), "error");
+      } finally {
+        setAuthBusy(false);
+      }
+    });
+    byId("verifyEmailButton").addEventListener("click", async () => {
+      if (!state.firebase || state.authBusy) return;
+      setAuthBusy(true);
+      try {
+        await state.firebase.sendVerification();
+        setAuthMessage("تم إرسال رابط التحقق. افتح بريدك ثم أعد تشغيل التطبيق.", "success");
+      } catch (error) {
+        setAuthMessage(authErrorMessage(error), "error");
+      } finally {
+        setAuthBusy(false);
+      }
+    });
+    byId("accountPasswordResetButton").addEventListener("click", async () => {
+      const email = state.authUser?.email || "";
+      if (!email || !state.firebase || state.authBusy) return;
+      setAuthBusy(true);
+      try {
+        await state.firebase.resetPassword(email);
+        setAuthMessage("تم إرسال رابط تغيير كلمة المرور إلى بريدك.", "success");
+      } catch (error) {
+        setAuthMessage(authErrorMessage(error), "error");
+      } finally {
+        setAuthBusy(false);
       }
     });
     byId("logoutButton").addEventListener("click", async () => {
@@ -845,6 +928,10 @@
     const latest = sortItems(DATA.items, "latest").slice(0, 10);
     const topRated = sortItems(DATA.items, "rating").slice(0, 8);
     const featuredSeries = sortItems(series, "popular").slice(0, 8);
+    const customSections = state.sections.map((section) => ({
+      ...section,
+      items: sortItems(DATA.items.filter((item) => item.sectionIds?.includes(section.id)), "latest").slice(0, 12)
+    })).filter((section) => section.items.length);
 
     elements.home.innerHTML = `
       <div id="homeHero"></div>
@@ -870,6 +957,11 @@
           ${sectionHeading("حلقات ومواسم", "مسلسلات مميزة", "series")}
           <div class="media-rail">${featuredSeries.map(mediaCard).join("")}</div>
         </section>
+        ${customSections.map((section) => `
+          <section class="content-section" data-section-id="${escapeAttribute(section.id)}">
+            ${sectionHeading(section.description || "مختارات CINARO", section.name, "")}
+            <div class="media-rail">${section.items.map(mediaCard).join("")}</div>
+          </section>`).join("")}
       </div>`;
     renderHero();
     startHeroRotation();
@@ -1254,7 +1346,7 @@
 
   function closeSheets() {
     if (elements.sheetBackdrop) elements.sheetBackdrop.hidden = true;
-    [elements.settingsSheet, elements.infoSheet].forEach((sheet) => {
+    [elements.settingsSheet, elements.infoSheet, elements.reportSheet].forEach((sheet) => {
       if (sheet) sheet.hidden = true;
     });
     if (state.activeSheet) {
@@ -1330,7 +1422,8 @@
     lastTap: { time: 0, x: 0 },
     failedSources: new Set(),
     requestedPlay: false,
-    switchingSource: false
+    switchingSource: false,
+    viewRecorded: false
   };
 
   function playerMediaFromRoute(route) {
@@ -1401,6 +1494,7 @@
     player.media = media;
     player.sourceIndex = 0;
     player.failedSources.clear();
+    player.viewRecorded = false;
     player.requestedPlay = true;
     player.restoreTime = Number(watchHistory[media.key]?.time || 0);
     player.restorePlaying = true;
@@ -1744,6 +1838,13 @@
     player.video.addEventListener("timeupdate", () => {
       updateTimeline();
       persistPlayerProgress(false);
+      if (!player.viewRecorded && player.media && player.video.currentTime >= 10 && state.firebase && state.authUser) {
+        player.viewRecorded = true;
+        state.firebase.recordView(player.media.item.id).catch((error) => {
+          console.warn("CINARO view counter failed", error);
+          window.setTimeout(() => { player.viewRecorded = false; }, 30000);
+        });
+      }
     });
     player.video.addEventListener("durationchange", updateTimeline);
     player.video.addEventListener("ratechange", updatePlayerInfo);
@@ -1772,6 +1873,45 @@
     player.pip.addEventListener("click", togglePictureInPicture);
     player.captions.addEventListener("click", toggleCaptions);
     byId("playerMoreButton").addEventListener("click", () => { updatePlayerInfo(); openSheet(elements.infoSheet); });
+    byId("openReportButton").addEventListener("click", () => {
+      if (!player.media) return;
+      if (!state.firebase || !state.authUser) {
+        closeSheets();
+        toast("اتصل بالإنترنت وسجّل الدخول لإرسال البلاغ", "error");
+        return;
+      }
+      byId("reportForm").reset();
+      byId("reportMessage").textContent = "";
+      byId("reportMessage").className = "auth-message";
+      openSheet(elements.reportSheet);
+    });
+    byId("reportForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!player.media || !state.firebase || !state.authUser) return;
+      const submit = event.currentTarget.querySelector('button[type="submit"]');
+      submit.disabled = true;
+      byId("reportMessage").textContent = "جاري إرسال البلاغ…";
+      byId("reportMessage").className = "auth-message";
+      try {
+        await state.firebase.submitReport({
+          contentId: player.media.item.id,
+          contentTitle: player.media.item.title,
+          kind: player.media.kind,
+          season: player.media.season?.number || 0,
+          episode: player.media.episode?.number || 0,
+          category: byId("reportCategory").value,
+          details: byId("reportDetails").value,
+          sourceUrl: player.media.sources[player.sourceIndex]?.url || ""
+        });
+        closeSheets();
+        toast("وصل البلاغ إلى الإدارة — شكراً لك");
+      } catch (error) {
+        byId("reportMessage").textContent = authErrorMessage(error);
+        byId("reportMessage").className = "auth-message error";
+      } finally {
+        submit.disabled = false;
+      }
+    });
 
     player.timeline.addEventListener("input", () => {
       player.seeking = true;

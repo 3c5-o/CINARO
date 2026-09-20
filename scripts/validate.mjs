@@ -32,7 +32,12 @@ const requiredAdminFiles = [
   "app.js",
   "sw.js",
   "manifest.webmanifest",
-  "assets/admin-hero.svg"
+  "assets/admin-hero.svg",
+  "assets/icons/favicon-32.png",
+  "assets/icons/apple-touch-icon.png",
+  "assets/icons/icon-192.png",
+  "assets/icons/icon-512.png",
+  "assets/icons/icon-maskable-512.png"
 ];
 
 for (const file of requiredFiles) {
@@ -103,6 +108,8 @@ ok(html.includes('dir="rtl"'), "HTML must use RTL direction");
 ok(html.includes('rel="manifest"'), "HTML must link the web manifest");
 ok(html.includes('src="firebase.js" type="module"'), "HTML must load Firebase as a module");
 ok(html.includes('id="authView"'), "HTML must include the authentication view");
+ok(html.includes('id="serviceGate"'), "User app must include the maintenance/update gate");
+ok(html.includes('id="reportForm"'), "User app must include playback reports");
 
 const adminHtml = fs.readFileSync(path.join(adminRoot, "index.html"), "utf8");
 const adminIds = [...adminHtml.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
@@ -112,6 +119,9 @@ ok(adminHtml.includes('dir="rtl"'), "Admin HTML must use RTL direction");
 ok(adminHtml.includes('src="firebase.js" type="module"'), "Admin HTML must load Firebase as a module");
 ok(adminHtml.includes('id="adminLoginForm"'), "Admin HTML must include the admin login form");
 ok(adminHtml.includes('id="mobileNav"'), "Admin HTML must include mobile navigation");
+ok(adminHtml.includes('id="seasonBuilder"'), "Admin must include the visual season builder");
+ok(adminHtml.includes('id="reportsTable"'), "Admin must include reports management");
+ok(!adminHtml.includes('id="contentSeasons"'), "Admin must not require JSON season editing");
 
 const adminStyles = fs.readFileSync(path.join(adminRoot, "styles.css"), "utf8");
 ok(adminStyles.includes('inset-inline-start: 0'), "Admin sidebar must use logical RTL positioning");
@@ -119,8 +129,15 @@ ok(!adminStyles.includes('inset: 0 auto 0 0'), "Admin mobile sidebar must not mi
 ok(adminStyles.includes('visibility: hidden'), "Closed admin sidebar must be visually hidden on mobile");
 ok(adminStyles.includes('@media (max-width: 520px)'), "Admin dashboard must include a narrow-phone layout");
 
+const adminManifest = JSON.parse(fs.readFileSync(path.join(adminRoot, "manifest.webmanifest"), "utf8"));
+for (const icon of adminManifest.icons || []) {
+  ok(fs.existsSync(path.join(adminRoot, icon.src)), `Admin manifest icon missing: ${icon.src}`);
+}
+ok(adminHtml.includes('assets/icons/icon-192.png'), "Admin interface must use its dedicated icon");
+
 const androidActivity = fs.readFileSync(path.join(root, "android-app", "app", "src", "main", "java", "com", "cinaro", "app", "MainActivity.java"), "utf8");
 ok(androidActivity.includes('settings.setLoadWithOverviewMode(false)'), "Android WebView must not shrink the app into a wide overview");
+ok(fs.existsSync(path.join(root, "android-app", "app", "src", "admin", "res", "mipmap-xxxhdpi", "ic_launcher.png")), "Admin Android flavor must have a dedicated launcher icon");
 
 const firebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
 ok(firebaseSource.includes('projectId: "cinaro"'), "Firebase project ID must be cinaro");
@@ -129,11 +146,20 @@ ok(!firebaseSource.includes("\\\\_"), "Firebase config contains an escaped under
 ok(!firebaseSource.includes("\\\\:"), "Firebase config contains an escaped colon");
 ok(fs.existsSync(path.join(root, "firestore.rules")), "Missing Firestore security rules");
 ok(fs.existsSync(path.join(root, "firebase.json")), "Missing Firebase deployment config");
+const firestoreRules = fs.readFileSync(path.join(root, "firestore.rules"), "utf8");
+ok(firestoreRules.includes("uniqueViewIncrement"), "Firestore rules must protect unique view increments");
+ok(firestoreRules.includes("supervisorCanPublish"), "Firestore rules must enforce supervisor publishing permissions");
+ok(firestoreRules.includes("match /reports/{reportId}"), "Firestore rules must protect user reports");
 
 const adminFirebaseSource = fs.readFileSync(path.join(adminRoot, "firebase.js"), "utf8");
 ok(adminFirebaseSource.includes('projectId: "cinaro"'), "Admin Firebase project ID must be cinaro");
 ok(adminFirebaseSource.includes('adminEmail: ADMIN_EMAIL'), "Admin Firebase client must expose the allowlisted email");
 ok(!adminFirebaseSource.match(/password\s*:\s*["']/i), "Admin Firebase client must not contain a password");
+ok(adminFirebaseSource.includes('role = "supervisor"'), "Admin Firebase must support assigned supervisors");
+
+const androidWorkflow = fs.readFileSync(path.join(root, ".github", "workflows", "android-apk.yml"), "utf8");
+ok(androidWorkflow.includes("CINARO_KEYSTORE_BASE64"), "Android workflow must support the stable signing keystore");
+ok(androidWorkflow.includes("apksigner\" verify --verbose --print-certs"), "Android workflow must verify and print APK certificates");
 
 const serviceWorker = fs.readFileSync(path.join(webRoot, "sw.js"), "utf8");
 for (const requiredFile of requiredFiles.filter((file) => !["sw.js"].includes(file))) {

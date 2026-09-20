@@ -163,6 +163,7 @@ label small, .field-help { color: var(--dim); font-size: .73rem; line-height: 1.
 .supervisors-data-table .data-head, .supervisors-data-table .data-row { grid-template-columns: minmax(250px, 1.3fr) 1.1fr 1fr .65fr .6fr; }
 .sections-data-table .data-head, .sections-data-table .data-row { grid-template-columns: minmax(230px, 1.5fr) .8fr .6fr .7fr .6fr; }
 .activity-data-table .data-head, .activity-data-table .data-row { grid-template-columns: 1fr .9fr 1.15fr 1.25fr 1fr; }
+.reports-data-table .data-head, .reports-data-table .data-row { grid-template-columns: minmax(230px, 1.35fr) .8fr 1.35fr .75fr .75fr; }
 .data-row { min-height: 4.4rem; border-bottom: 1px solid rgba(255,255,255,.055); color: var(--muted); font-size: .75rem; }
 .data-row:last-child { border-bottom: 0; }
 .data-row:hover { background: rgba(255,255,255,.025); }
@@ -216,6 +217,40 @@ code { color: #a8bad0; font-family: ui-monospace, SFMono-Regular, Menlo, monospa
 .permission-list > span { color: var(--text); font-size: .8rem; font-weight: 700; }
 .permission-list .check-field { border: 0; min-height: unset; padding: .25rem 0; background: transparent; }
 .settings-form { max-width: 800px; }
+.supervisor-mode .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.supervisor-mode .dashboard-columns { grid-template-columns: minmax(0, 1fr); }
+
+.media-preview-grid { display: grid; grid-template-columns: minmax(110px, .55fr) minmax(220px, 1.45fr); gap: 1rem; margin-top: 1rem; }
+.media-preview-grid figure { min-width: 0; margin: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: rgba(7,9,14,.52); }
+.media-preview-grid img { display: block; width: 100%; height: 190px; object-fit: cover; background: var(--surface); }
+.media-preview-grid figure:not(.wide) img { object-position: center 18%; }
+.media-preview-grid figcaption { padding: .55rem .7rem; color: var(--dim); font-size: .68rem; }
+.media-preview-button, .add-builder-button { width: 100%; margin-top: 1rem; }
+
+.season-builder { display: grid; gap: 1rem; }
+.season-builder-empty { display: grid; place-items: center; min-height: 120px; padding: 1rem; border: 1px dashed var(--line-strong); border-radius: 14px; color: var(--dim); text-align: center; }
+.season-card { overflow: hidden; border: 1px solid var(--line); border-radius: 15px; background: rgba(7,9,14,.45); }
+.season-card-head { display: flex; align-items: end; gap: .65rem; padding: .85rem; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.025); }
+.season-card-head label:first-child { width: 7rem; flex: 0 0 auto; }
+.season-card-head label:nth-child(2) { flex: 1; }
+.season-card-head .table-action { margin-bottom: .1rem; }
+.episode-builder-list { display: grid; gap: .7rem; padding: .85rem; }
+.episode-builder-row { display: grid; grid-template-columns: 5.5rem minmax(130px, .7fr) minmax(220px, 1.4fr) 5.5rem 2.2rem; gap: .55rem; align-items: end; padding: .7rem; border: 1px solid rgba(255,255,255,.065); border-radius: 12px; background: rgba(255,255,255,.018); }
+.episode-builder-row label { min-width: 0; }
+.episode-builder-row input { min-width: 0; }
+.episode-builder-row .table-action { margin-bottom: .25rem; }
+.season-builder-actions { display: flex; padding: 0 .85rem .85rem; }
+.season-builder-actions .admin-button { width: 100%; }
+
+.report-content small, .report-content b { display: block; }
+.report-content small { margin-top: .25rem; color: var(--dim); }
+.report-details { overflow-wrap: anywhere; line-height: 1.65; }
+.report-source { display: block; max-width: 15rem; overflow: hidden; color: var(--blue); text-overflow: ellipsis; white-space: nowrap; }
+
+.preview-dialog { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 1rem; background: rgba(0,0,0,.78); backdrop-filter: blur(8px); }
+.preview-dialog-card { width: min(100%, 760px); max-height: 92dvh; overflow-y: auto; border: 1px solid var(--line-strong); border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); }
+.preview-dialog-card video { display: block; width: calc(100% - 2rem); max-height: 62dvh; margin: 0 1rem; border-radius: 13px; background: #000; }
+.preview-dialog-card .form-message { padding: 0 1rem 1rem; }
 
 .mobile-nav { display: none; }
 .toast-region { position: fixed; inset-inline-end: 1.2rem; bottom: 1.2rem; z-index: 100; display: grid; gap: .5rem; width: min(360px, calc(100vw - 2.4rem)); }
@@ -266,6 +301,12 @@ code { color: #a8bad0; font-family: ui-monospace, SFMono-Regular, Menlo, monospa
   .admin-search { flex-basis: 100%; }
   .filter-bar > select { flex: 1; min-width: 0; }
   .form-grid.two, .form-grid.three { grid-template-columns: 1fr; }
+  .media-preview-grid { grid-template-columns: minmax(0, 1fr); }
+  .media-preview-grid img { height: 210px; }
+  .episode-builder-row { grid-template-columns: minmax(0, 1fr); }
+  .episode-builder-row .table-action { width: 100%; }
+  .season-card-head { align-items: stretch; flex-wrap: wrap; }
+  .season-card-head label:first-child, .season-card-head label:nth-child(2) { width: 100%; flex: 1 1 100%; }
   .editor-form > .form-section { padding: 1rem; }
   .form-actions { padding-inline: 1rem; }
   .form-message { padding-inline: 1rem; }
@@ -273,6 +314,7 @@ code { color: #a8bad0; font-family: ui-monospace, SFMono-Regular, Menlo, monospa
   .mobile-nav button { display: grid; place-content: center; gap: .25rem; border: 0; color: var(--dim); background: transparent; font-size: .58rem; }
   .mobile-nav button svg { width: 1.15rem; margin: auto; }
   .mobile-nav button.active { color: var(--red); }
+  .supervisor-mode .mobile-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .toast-region { inset-inline: .9rem; bottom: 5.3rem; width: auto; }
 }
 
@@ -281,6 +323,7 @@ code { color: #a8bad0; font-family: ui-monospace, SFMono-Regular, Menlo, monospa
   .dashboard-hero h2, .dashboard-hero p { max-width: 100%; overflow-wrap: anywhere; }
   .hero-orbit { align-self: center; margin-block: .35rem; }
   .stats-grid { grid-template-columns: minmax(0, 1fr); }
+  .supervisor-mode .stats-grid { grid-template-columns: minmax(0, 1fr); }
   .stat-card { min-height: 94px; }
   .panel-heading { flex-wrap: wrap; align-items: flex-start; }
   .panel-heading > div { min-width: 0; }

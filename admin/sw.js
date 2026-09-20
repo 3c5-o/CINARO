@@ -1,4 +1,4 @@
-const CACHE = "cinaro-admin-v2";
+const CACHE = "cinaro-admin-v2.1.0";
 const SHELL = [
   "./",
   "./index.html",
@@ -7,8 +7,11 @@ const SHELL = [
   "./app.js",
   "./manifest.webmanifest",
   "./assets/admin-hero.svg",
-  "../web/assets/icons/icon-192.png",
-  "../web/assets/icons/icon-512.png"
+  "./assets/icons/favicon-32.png",
+  "./assets/icons/apple-touch-icon.png",
+  "./assets/icons/icon-192.png",
+  "./assets/icons/icon-512.png",
+  "./assets/icons/icon-maskable-512.png"
 ];
 
 self.addEventListener("install", (event) => {

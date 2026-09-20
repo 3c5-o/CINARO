@@ -6,6 +6,8 @@
     firebase: null,
     authUser: null,
     authResolved: false,
+    role: "none",
+    assignment: null,
     view: "dashboard",
     editingContentId: "",
     editingSupervisorUid: "",
@@ -15,14 +17,17 @@
     supervisors: [],
     sections: [],
     logs: [],
+    reports: [],
+    seasonDraft: [],
     config: {},
     unsubscribers: [],
-    filters: { contentSearch: "", contentKind: "all", contentStatus: "all", userSearch: "", userStatus: "all" }
+    dataListenersStarted: false,
+    filters: { contentSearch: "", contentKind: "all", contentStatus: "all", userSearch: "", userStatus: "all", reportStatus: "open" }
   };
 
   const $ = (id) => document.getElementById(id);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
-  const views = ["dashboard", "content", "editor", "users", "supervisors", "sections", "settings", "activity"];
+  const views = ["dashboard", "content", "editor", "reports", "users", "supervisors", "sections", "settings", "activity"];
 
   function escapeHTML(value) {
     return String(value == null ? "" : value).replace(/[&<>'"]/g, (character) => ({
@@ -108,6 +113,43 @@
     notice.textContent = message || "";
   }
 
+  function isAdmin() {
+    return state.role === "admin";
+  }
+
+  function hasPermission(name) {
+    if (isAdmin()) return true;
+    return state.role === "supervisor" && state.assignment?.permissions?.[name] === true;
+  }
+
+  function assignedSectionIds() {
+    return isAdmin() ? state.sections.map((section) => section.id) : toArray(state.assignment?.sectionIds);
+  }
+
+  function canManageContent(item) {
+    if (isAdmin()) return true;
+    const allowed = assignedSectionIds();
+    const ids = toArray(item?.sectionIds);
+    return ids.length > 0 && ids.every((id) => allowed.includes(id));
+  }
+
+  function allowedView(view) {
+    if (isAdmin()) return views.includes(view);
+    return ["dashboard", "content", "editor"].includes(view);
+  }
+
+  function applyAccessControl() {
+    const admin = isAdmin();
+    document.body.classList.toggle("supervisor-mode", !admin);
+    $$('[data-admin-only]').forEach((element) => { element.hidden = !admin; });
+    if ($("newContentButton")) $("newContentButton").hidden = !hasPermission("createContent");
+    if ($("contentPublished")) $("contentPublished").disabled = !hasPermission("publishContent");
+    if ($("contentSections")) {
+      const allowed = assignedSectionIds();
+      $("contentSections").placeholder = admin ? "action, featured" : allowed.join(", ");
+    }
+  }
+
   function sectionName(id) {
     const section = state.sections.find((item) => item.id === id);
     return section ? section.name : id;
@@ -124,7 +166,7 @@
   }
 
   function parseCsv(value) {
-    return [...new Set(String(value || "").split(",").map((entry) => entry.trim()).filter(Boolean))].slice(0, 30);
+    return [...new Set(String(value || "").split(/[,،]/).map((entry) => entry.trim()).filter(Boolean))].slice(0, 30);
   }
 
   function parseJsonField(id, fallback, label) {
@@ -204,10 +246,10 @@
   function updateUserLabels() {
     const user = state.authUser;
     const email = user && user.email || ADMIN_EMAIL;
-    const name = user && user.displayName || "مدير CINARO";
+    const name = user && user.displayName || (isAdmin() ? "مدير CINARO" : "مشرف CINARO");
     $("adminUserName").textContent = name;
     $("adminUserEmail").textContent = email;
-    $("adminEmail").value = email;
+    $("adminEmail").value = email || ADMIN_EMAIL;
     $("adminUserAvatar").textContent = (name.trim()[0] || "A").toUpperCase();
   }
 
@@ -221,7 +263,12 @@
   }
 
   function setView(view) {
-    const next = views.includes(view) ? view : "dashboard";
+    const requested = views.includes(view) ? view : "dashboard";
+    const next = allowedView(requested) ? requested : "dashboard";
+    if (next === "editor" && !state.editingContentId && !hasPermission("createContent")) {
+      toast("لا تملك صلاحية إضافة محتوى", "error");
+      return setView("content");
+    }
     state.view = next;
     views.forEach((name) => $("view-" + name)?.classList.toggle("active", name === next));
     $$('[data-view]').forEach((button) => button.classList.toggle("active", button.dataset.view === next));
@@ -229,6 +276,7 @@
     $("viewTitle").textContent = activeView?.dataset.title || "نظرة عامة";
     setMobileNavigation(false);
     if (next === "content") renderContent();
+    if (next === "reports") renderReports();
     if (next === "users") renderUsers();
     if (next === "supervisors") renderSupervisors();
     if (next === "sections") renderSections();
@@ -247,6 +295,7 @@
     $("statSupervisors").textContent = formatNumber(state.supervisors.filter((item) => item.active !== false).length);
     $("navContentCount").textContent = formatNumber(state.content.length);
     $("navUsersCount").textContent = formatNumber(state.users.length);
+    if ($("navReportsCount")) $("navReportsCount").textContent = formatNumber(state.reports.filter((item) => item.status !== "resolved").length);
 
     const recent = [...state.content].sort((a, b) => asNumber(b.updatedAt || b.createdAt) - asNumber(a.updatedAt || a.createdAt)).slice(0, 5);
     $("recentContent").innerHTML = recent.length ? recent.map((item) => `
@@ -262,6 +311,7 @@
   function renderContent() {
     const search = state.filters.contentSearch.toLocaleLowerCase("ar");
     const rows = state.content.filter((item) => {
+      if (!canManageContent(item)) return false;
       const matchesSearch = !search || [item.id, item.title, item.englishTitle].some((value) => asString(value).toLocaleLowerCase("ar").includes(search));
       const matchesKind = state.filters.contentKind === "all" || item.kind === state.filters.contentKind;
       const matchesStatus = state.filters.contentStatus === "all" || (state.filters.contentStatus === "published" ? item.published === true : item.published !== true);
@@ -271,8 +321,12 @@
       $("contentTable").innerHTML = emptyTable(state.content.length ? "لا توجد نتائج مطابقة" : "لا يوجد محتوى حقيقي بعد", state.content.length ? "غيّر خيارات البحث أو التصفية." : "استخدم زر إضافة محتوى لإنشاء أول عنصر.");
       return;
     }
-    $("contentTable").innerHTML = `<div class="data-table content-data-table"><div class="data-head"><span>العنوان</span><span>النوع</span><span>الأقسام</span><span>الحالة</span><span>إجراءات</span></div>${rows.map((item) => `
-      <div class="data-row"><div class="title-cell"><span class="table-cover" style="background-image:url('${escapeHTML(item.poster || "../web/assets/images/poster-placeholder.webp")}')"></span><span><b>${escapeHTML(item.title)}</b><small>${escapeHTML(item.id)} · ${escapeHTML(String(item.year || "—"))}</small></span></div><span class="kind-chip">${item.kind === "series" ? "مسلسل" : "فيلم"}</span><span class="tag-list">${toArray(item.sectionIds).length ? item.sectionIds.slice(0, 3).map((id) => `<em>${escapeHTML(sectionName(id))}</em>`).join("") : "<em>عام</em>"}</span><span>${contentStatus(item)}</span><span class="row-actions"><button class="table-action" type="button" data-action="edit-content" data-id="${escapeHTML(item.id)}" title="تعديل"><svg><use href="#i-edit"></use></svg></button><button class="table-action" type="button" data-action="toggle-published" data-id="${escapeHTML(item.id)}" title="${item.published ? "إلغاء النشر" : "نشر"}"><svg><use href="#i-${item.published ? "x" : "check"}"></use></svg></button><button class="table-action danger" type="button" data-action="delete-content" data-id="${escapeHTML(item.id)}" title="حذف"><svg><use href="#i-trash"></use></svg></button></span></div>`).join("")}</div>`;
+    $("contentTable").innerHTML = `<div class="data-table content-data-table"><div class="data-head"><span>العنوان</span><span>النوع</span><span>الأقسام</span><span>الحالة</span><span>إجراءات</span></div>${rows.map((item) => {
+      const editButton = hasPermission("editContent") ? `<button class="table-action" type="button" data-action="edit-content" data-id="${escapeHTML(item.id)}" title="تعديل"><svg><use href="#i-edit"></use></svg></button>` : "";
+      const publishButton = hasPermission("publishContent") ? `<button class="table-action" type="button" data-action="toggle-published" data-id="${escapeHTML(item.id)}" title="${item.published ? "إلغاء النشر" : "نشر"}"><svg><use href="#i-${item.published ? "x" : "check"}"></use></svg></button>` : "";
+      const deleteButton = hasPermission("deleteContent") ? `<button class="table-action danger" type="button" data-action="delete-content" data-id="${escapeHTML(item.id)}" title="حذف"><svg><use href="#i-trash"></use></svg></button>` : "";
+      return `<div class="data-row"><div class="title-cell"><span class="table-cover" style="background-image:url('${escapeHTML(item.poster || "../web/assets/images/poster-placeholder.webp")}')"></span><span><b>${escapeHTML(item.title)}</b><small>${escapeHTML(item.id)} · ${escapeHTML(String(item.year || "—"))}</small></span></div><span class="kind-chip">${item.kind === "series" ? "مسلسل" : "فيلم"}</span><span class="tag-list">${toArray(item.sectionIds).length ? item.sectionIds.slice(0, 3).map((id) => `<em>${escapeHTML(sectionName(id))}</em>`).join("") : "<em>عام</em>"}</span><span>${contentStatus(item)}</span><span class="row-actions">${editButton}${publishButton}${deleteButton || (!editButton && !publishButton ? '<small class="protected-label">عرض فقط</small>' : "")}</span></div>`;
+    }).join("")}</div>`;
   }
 
   function renderUsers() {
@@ -303,6 +357,30 @@
     $("sectionsTable").innerHTML = rows.length ? `<div class="data-table sections-data-table"><div class="data-head"><span>القسم</span><span>المعرّف</span><span>المحتوى</span><span>الحالة</span><span>إجراءات</span></div>${rows.map((item) => `<div class="data-row"><div class="title-cell"><span class="section-mark"><svg><use href="#i-layers"></use></svg></span><span><b>${escapeHTML(item.name)}</b><small>${escapeHTML(item.description || "بدون وصف")}</small></span></div><code>${escapeHTML(item.id)}</code><span>${formatNumber(state.content.filter((content) => toArray(content.sectionIds).includes(item.id)).length)}</span><span>${item.active === false ? '<span class="status-chip blocked">متوقف</span>' : '<span class="status-chip published">فعال</span>'}</span><span class="row-actions"><button class="table-action" type="button" data-action="edit-section" data-id="${escapeHTML(item.id)}" title="تعديل"><svg><use href="#i-edit"></use></svg></button><button class="table-action danger" type="button" data-action="delete-section" data-id="${escapeHTML(item.id)}" title="حذف"><svg><use href="#i-trash"></use></svg></button></span></div>`).join("")}</div>` : emptyTable("لا توجد أقسام بعد", "أنشئ قسماً لاستخدامه في المحتوى وتعيينات المشرفين.");
   }
 
+  function renderReports() {
+    const categoryNames = {
+      playback: "الفيديو لا يعمل",
+      "wrong-content": "محتوى غير صحيح",
+      audio: "مشكلة صوت",
+      subtitles: "مشكلة ترجمة",
+      other: "أخرى"
+    };
+    const rows = [...state.reports].filter((report) => (
+      state.filters.reportStatus === "all" ||
+      (state.filters.reportStatus === "resolved" ? report.status === "resolved" : report.status !== "resolved")
+    )).sort((a, b) => asNumber(b.createdAt) - asNumber(a.createdAt));
+    if (!rows.length) {
+      $("reportsTable").innerHTML = emptyTable("لا توجد بلاغات ضمن هذه الحالة", "ستظهر هنا بلاغات المستخدمين من مشغل الفيديو.");
+      return;
+    }
+    $("reportsTable").innerHTML = `<div class="data-table reports-data-table"><div class="data-head"><span>المحتوى</span><span>المشكلة</span><span>التفاصيل والمستخدم</span><span>الحالة</span><span>إجراءات</span></div>${rows.map((report) => {
+      const resolved = report.status === "resolved";
+      const episode = report.kind === "series" ? ` · م${asNumber(report.season)} ح${asNumber(report.episode)}` : "";
+      const preview = report.sourceUrl ? `<button class="table-action" type="button" data-action="preview-url" data-url="${escapeHTML(report.sourceUrl)}" title="معاينة المصدر"><svg><use href="#i-eye"></use></svg></button>` : "";
+      return `<div class="data-row"><span class="report-content"><b>${escapeHTML(report.contentTitle || report.contentId || "محتوى محذوف")}</b><small>${escapeHTML(report.contentId || "—")}${escapeHTML(episode)}</small></span><span class="kind-chip">${escapeHTML(categoryNames[report.category] || report.category || "أخرى")}</span><span class="report-details">${escapeHTML(report.details || "بلا تفاصيل")}<small>${escapeHTML(report.userEmail || report.userId || "مستخدم")}</small></span><span>${resolved ? '<span class="status-chip published">تمت المعالجة</span>' : '<span class="status-chip blocked">مفتوح</span>'}</span><span class="row-actions">${preview}<button class="table-action ${resolved ? "" : "success-action"}" type="button" data-action="toggle-report" data-id="${escapeHTML(report.id)}" data-status="${resolved ? "open" : "resolved"}" title="${resolved ? "إعادة فتح" : "وضع كمعالج"}"><svg><use href="#i-${resolved ? "activity" : "check"}"></use></svg></button></span></div>`;
+    }).join("")}</div>`;
+  }
+
   function renderActivity() {
     const rows = [...state.logs].sort((a, b) => asNumber(b.createdAt) - asNumber(a.createdAt));
     $("activityTable").innerHTML = rows.length ? `<div class="data-table activity-data-table"><div class="data-head"><span>العملية</span><span>الهدف</span><span>المنفذ</span><span>التفاصيل</span><span>الوقت</span></div>${rows.map((item) => `<div class="data-row"><span class="activity-action"><span class="log-dot"></span><b>${escapeHTML(item.action || "عملية")}</b></span><code>${escapeHTML(item.target || "—")}</code><span>${escapeHTML(item.actorEmail || item.actorUid || "—")}</span><span>${escapeHTML(item.details || "—")}</span><span>${escapeHTML(formatDate(item.createdAt))}</span></div>`).join("")}</div>` : emptyTable("سجل العمليات فارغ", "تُحفظ هنا عمليات المحتوى والأقسام والحسابات.");
@@ -311,15 +389,70 @@
   function fillSettings() {
     $("settingFeatured").value = toArray(state.config.featured).join(", ");
     $("settingAnnouncement").value = asString(state.config.announcement);
-    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.0.1");
+    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.1.0");
+    $("settingUpdateUrl").value = asString(state.config.updateUrl, "https://github.com/3c5-o/CINARO/releases");
     $("settingMaintenance").checked = state.config.maintenance === true;
     $("settingForceUpdate").checked = state.config.forceUpdate === true;
   }
 
+  function newEpisode(number = 1) {
+    return { number, title: `الحلقة ${number}`, duration: 0, url: "" };
+  }
+
+  function newSeason(number = 1) {
+    return { number, title: `الموسم ${number}`, episodes: [newEpisode(1)] };
+  }
+
+  function renderSeasonBuilder() {
+    const root = $("seasonBuilder");
+    if (!root) return;
+    if (!state.seasonDraft.length) {
+      root.innerHTML = '<div class="season-builder-empty">لا توجد مواسم بعد. اضغط «إضافة موسم» للبدء.</div>';
+      return;
+    }
+    root.innerHTML = state.seasonDraft.map((season, seasonIndex) => `
+      <article class="season-card">
+        <div class="season-card-head">
+          <label><span>رقم الموسم</span><input type="number" min="1" value="${escapeHTML(season.number)}" data-season-index="${seasonIndex}" data-season-field="number"></label>
+          <label><span>اسم الموسم</span><input value="${escapeHTML(season.title)}" maxlength="120" data-season-index="${seasonIndex}" data-season-field="title"></label>
+          <button class="table-action danger" type="button" data-action="remove-season" data-season-index="${seasonIndex}" title="حذف الموسم"><svg><use href="#i-trash"></use></svg></button>
+        </div>
+        <div class="episode-builder-list">${season.episodes.map((episode, episodeIndex) => `
+          <div class="episode-builder-row">
+            <label><span>رقم الحلقة</span><input type="number" min="1" value="${escapeHTML(episode.number)}" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="number"></label>
+            <label><span>اسم الحلقة</span><input value="${escapeHTML(episode.title)}" maxlength="150" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="title"></label>
+            <label><span>رابط الحلقة</span><input type="url" inputmode="url" value="${escapeHTML(episode.url)}" placeholder="https://…/video.mp4" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="url"></label>
+            <label><span>المدة</span><input type="number" min="0" value="${escapeHTML(episode.duration)}" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="duration"></label>
+            <button class="table-action danger" type="button" data-action="remove-episode" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" title="حذف الحلقة"><svg><use href="#i-x"></use></svg></button>
+          </div>`).join("")}</div>
+        <div class="season-builder-actions"><button class="admin-button ghost" type="button" data-action="add-episode" data-season-index="${seasonIndex}"><svg><use href="#i-plus"></use></svg> إضافة حلقة</button></div>
+      </article>`).join("");
+  }
+
+  function seasonsFromEditor() {
+    return state.seasonDraft.map((season, seasonIndex) => ({
+      number: Math.max(1, Math.round(asNumber(season.number, seasonIndex + 1))),
+      title: asString(season.title, `الموسم ${seasonIndex + 1}`),
+      episodes: toArray(season.episodes).map((episode, episodeIndex) => ({
+        id: `e${Math.max(1, Math.round(asNumber(episode.number, episodeIndex + 1)))}`,
+        number: Math.max(1, Math.round(asNumber(episode.number, episodeIndex + 1))),
+        title: asString(episode.title, `الحلقة ${episodeIndex + 1}`),
+        duration: Math.max(0, Math.round(asNumber(episode.duration))),
+        thumbnail: "",
+        sources: [{ label: "تلقائي", url: episode.url, type: "video/mp4" }],
+        subtitles: []
+      }))
+    }));
+  }
+
   function toggleKindFields() {
     const series = $("contentKind").value === "series";
-    $("seasonsField")?.classList.toggle("is-hidden", !series);
-    $("contentSources").closest("label")?.classList.toggle("is-muted", series);
+    $("movieMediaFields")?.classList.toggle("is-hidden", series);
+    $("seriesMediaFields")?.classList.toggle("is-hidden", !series);
+    if (series && !state.seasonDraft.length) {
+      state.seasonDraft = [newSeason(1)];
+      renderSeasonBuilder();
+    }
   }
 
   function resetContentForm() {
@@ -329,6 +462,9 @@
     $("contentAgeRating").value = "عام";
     $("contentKind").value = "movie";
     $("contentPublished").checked = false;
+    $("posterPreview").src = "../web/assets/images/poster-placeholder.webp";
+    $("backdropPreview").src = "../web/assets/images/poster-placeholder.webp";
+    state.seasonDraft = [];
     $("editorKicker").textContent = "محتوى جديد";
     $("editorTitle").textContent = "إضافة محتوى";
     setMessage("contentFormMessage", "");
@@ -338,8 +474,16 @@
   function openContentEditor(id) {
     const item = state.content.find((entry) => entry.id === id);
     if (!item) {
+      if (!hasPermission("createContent")) {
+        toast("لا تملك صلاحية إضافة محتوى", "error");
+        return;
+      }
       resetContentForm();
       setView("editor");
+      return;
+    }
+    if (!hasPermission("editContent") || !canManageContent(item)) {
+      toast("لا تملك صلاحية تعديل هذا المحتوى", "error");
       return;
     }
     state.editingContentId = item.id;
@@ -356,9 +500,21 @@
     $("contentDescription").value = item.description || "";
     $("contentPoster").value = item.poster || "";
     $("contentBackdrop").value = item.backdrop || "";
-    $("contentSources").value = item.kind === "movie" ? JSON.stringify(toArray(item.sources), null, 2) : "";
-    $("contentSubtitles").value = item.kind === "movie" ? JSON.stringify(toArray(item.subtitles), null, 2) : "";
-    $("contentSeasons").value = item.kind === "series" ? JSON.stringify(toArray(item.seasons), null, 2) : "";
+    $("posterPreview").src = item.poster || "../web/assets/images/poster-placeholder.webp";
+    $("backdropPreview").src = item.backdrop || item.poster || "../web/assets/images/poster-placeholder.webp";
+    $("movieSourceUrl").value = item.kind === "movie" ? asString(item.sources?.[0]?.url) : "";
+    $("movieBackupUrl").value = item.kind === "movie" ? asString(item.sources?.[1]?.url) : "";
+    $("movieSubtitleUrl").value = item.kind === "movie" ? asString(item.subtitles?.[0]?.src) : "";
+    state.seasonDraft = item.kind === "series" ? toArray(item.seasons).map((season, seasonIndex) => ({
+      number: asNumber(season.number, seasonIndex + 1),
+      title: asString(season.title, `الموسم ${seasonIndex + 1}`),
+      episodes: toArray(season.episodes).map((episode, episodeIndex) => ({
+        number: asNumber(episode.number, episodeIndex + 1),
+        title: asString(episode.title, `الحلقة ${episodeIndex + 1}`),
+        duration: asNumber(episode.duration),
+        url: asString(episode.sources?.[0]?.url)
+      }))
+    })) : [];
     $("contentViews").value = item.views || 0;
     $("contentOrder").value = item.order || 0;
     $("contentFeatured").checked = item.featured === true;
@@ -366,6 +522,7 @@
     $("editorKicker").textContent = "تعديل محتوى";
     $("editorTitle").textContent = item.title || "تعديل محتوى";
     setMessage("contentFormMessage", "");
+    renderSeasonBuilder();
     toggleKindFields();
     setView("editor");
   }
@@ -377,18 +534,33 @@
     setBusy(form, true);
     setMessage("contentFormMessage", "جاري حفظ المحتوى…", "pending");
     try {
+      const existing = state.content.find((item) => item.id === state.editingContentId);
+      if (existing && (!hasPermission("editContent") || !canManageContent(existing))) throw new Error("لا تملك صلاحية تعديل هذا المحتوى.");
+      if (!existing && !hasPermission("createContent")) throw new Error("لا تملك صلاحية إضافة محتوى.");
       const id = asString($("contentId").value).toLowerCase();
       if (!/^[a-z0-9-]+$/.test(id)) throw new Error("المعرّف يجب أن يحتوي أحرفاً إنجليزية صغيرة وأرقاماً وشرطة فقط.");
+      if (!isAdmin() && existing && id !== existing.id) throw new Error("لا يستطيع المشرف تغيير معرّف المحتوى.");
       const kind = $("contentKind").value === "series" ? "series" : "movie";
       const poster = validMediaUrl($("contentPoster").value);
-      const backdrop = validMediaUrl($("contentBackdrop").value);
-      if (!poster || !backdrop) throw new Error("روابط البوستر والخلفية يجب أن تكون HTTPS.");
-      const sources = normalizeSources(parseJsonField("contentSources", [], "مصادر الفيديو"));
-      const subtitles = normalizeSubtitles(parseJsonField("contentSubtitles", [], "الترجمات"));
-      const seasons = kind === "series" ? normalizeSeasons(parseJsonField("contentSeasons", [], "المواسم")) : [];
+      const backdrop = validMediaUrl($("contentBackdrop").value) || poster;
+      if (!poster) throw new Error("رابط البوستر يجب أن يكون HTTPS.");
+      const movieSourceCandidates = [
+        { label: "تلقائي", url: $("movieSourceUrl").value, type: "video/mp4" },
+        { label: "احتياطي", url: $("movieBackupUrl").value, type: "video/mp4" }
+      ].filter((source) => asString(source.url));
+      const sources = kind === "movie" ? normalizeSources(movieSourceCandidates) : [];
+      const subtitleUrl = asString($("movieSubtitleUrl").value);
+      const subtitles = kind === "movie" && subtitleUrl ? normalizeSubtitles([{ label: "العربية", srclang: "ar", src: subtitleUrl }]) : [];
+      const seasons = kind === "series" ? normalizeSeasons(seasonsFromEditor()) : [];
       if (kind === "movie" && !sources.length) throw new Error("أضف مصدراً واحداً على الأقل للفيلم.");
       if (kind === "series" && !seasons.length) throw new Error("أضف موسماً واحداً على الأقل للمسلسل.");
-      const existing = state.content.find((item) => item.id === state.editingContentId);
+      const sectionIds = parseCsv($("contentSections").value);
+      if (!isAdmin()) {
+        const allowed = assignedSectionIds();
+        if (!sectionIds.length || sectionIds.some((sectionId) => !allowed.includes(sectionId))) {
+          throw new Error(`اختر فقط من أقسامك المسموحة: ${allowed.join("، ")}`);
+        }
+      }
       const payload = {
         id,
         kind,
@@ -399,17 +571,17 @@
         ageRating: asString($("contentAgeRating").value, "عام").slice(0, 20),
         duration: Math.max(0, Math.round(asNumber($("contentDuration").value))),
         genres: parseCsv($("contentGenres").value),
-        sectionIds: parseCsv($("contentSections").value),
+        sectionIds,
         description: asString($("contentDescription").value).slice(0, 3000),
         poster,
         backdrop,
         sources: kind === "movie" ? sources : [],
         subtitles: kind === "movie" ? subtitles : [],
         seasons,
-        views: Math.max(0, Math.round(asNumber($("contentViews").value))),
+        views: isAdmin() ? Math.max(0, Math.round(asNumber($("contentViews").value))) : Math.max(0, Math.round(asNumber(existing?.views, 0))),
         order: asNumber($("contentOrder").value),
         featured: $("contentFeatured").checked,
-        published: $("contentPublished").checked,
+        published: hasPermission("publishContent") ? $("contentPublished").checked : existing?.published === true,
         addedAt: existing?.addedAt || today(),
         updatedBy: state.authUser.uid
       };
@@ -431,6 +603,10 @@
   async function togglePublished(id) {
     const item = state.content.find((entry) => entry.id === id);
     if (!item || !state.firebase) return;
+    if (!hasPermission("publishContent") || !canManageContent(item)) {
+      toast("لا تملك صلاحية النشر لهذا المحتوى", "error");
+      return;
+    }
     try {
       await state.firebase.saveDocument("content", id, { published: item.published !== true, updatedBy: state.authUser.uid });
       await state.firebase.logAudit(item.published ? "إلغاء نشر" : "نشر محتوى", id, item.title, state.authUser);
@@ -440,7 +616,12 @@
 
   async function deleteContent(id) {
     const item = state.content.find((entry) => entry.id === id);
-    if (!item || !state.firebase || !window.confirm(`حذف «${item.title}» نهائياً؟`)) return;
+    if (!item || !state.firebase) return;
+    if (!hasPermission("deleteContent") || !canManageContent(item)) {
+      toast("لا تملك صلاحية حذف هذا المحتوى", "error");
+      return;
+    }
+    if (!window.confirm(`حذف «${item.title}» نهائياً؟`)) return;
     try {
       await state.firebase.deleteDocument("content", id);
       await state.firebase.logAudit("حذف محتوى", id, item.title, state.authUser);
@@ -582,7 +763,8 @@
       const payload = {
         featured: parseCsv($("settingFeatured").value),
         announcement: asString($("settingAnnouncement").value).slice(0, 500),
-        minimumVersion: asString($("settingMinVersion").value, "2.0.1").slice(0, 20),
+        minimumVersion: asString($("settingMinVersion").value, "2.1.0").slice(0, 20),
+        updateUrl: validMediaUrl($("settingUpdateUrl").value) || "https://github.com/3c5-o/CINARO/releases",
         maintenance: $("settingMaintenance").checked,
         forceUpdate: $("settingForceUpdate").checked,
         updatedBy: state.authUser.uid
@@ -592,6 +774,42 @@
       toast("تم حفظ إعدادات التطبيق");
     } catch (error) { setMessage("settingsMessage", errorMessage(error), "error"); }
     finally { setBusy(form, false); }
+  }
+
+  function openMediaPreview(url, title = "معاينة الفيديو") {
+    const safeUrl = validMediaUrl(url);
+    if (!safeUrl) {
+      toast("أدخل رابط فيديو HTTPS صالحاً أولاً", "error");
+      return;
+    }
+    const dialog = $("mediaPreviewDialog");
+    const video = $("mediaPreviewVideo");
+    $("mediaPreviewTitle").textContent = title;
+    $("mediaPreviewMessage").textContent = "إذا لم يبدأ الفيديو، فتحقق أن الرابط مباشر ويسمح بالتشغيل من التطبيق.";
+    dialog.hidden = false;
+    video.src = safeUrl;
+    video.load();
+    video.play().catch(() => {});
+  }
+
+  function closeMediaPreview() {
+    const video = $("mediaPreviewVideo");
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+    $("mediaPreviewDialog").hidden = true;
+  }
+
+  async function toggleReport(id, status) {
+    if (!isAdmin() || !state.firebase || !id) return;
+    try {
+      await state.firebase.saveDocument("reports", id, {
+        status: status === "resolved" ? "resolved" : "open",
+        resolvedBy: status === "resolved" ? state.authUser.uid : ""
+      });
+      await state.firebase.logAudit(status === "resolved" ? "معالجة بلاغ" : "إعادة فتح بلاغ", id, "", state.authUser);
+      toast(status === "resolved" ? "تمت معالجة البلاغ" : "تمت إعادة فتح البلاغ");
+    } catch (error) { toast(errorMessage(error), "error"); }
   }
 
   function handleAction(button) {
@@ -605,62 +823,112 @@
     else if (action === "delete-supervisor") deleteSupervisor(id);
     else if (action === "edit-section") editSection(id);
     else if (action === "delete-section") deleteSection(id);
+    else if (action === "toggle-report") toggleReport(id, button.dataset.status);
+    else if (action === "preview-url") openMediaPreview(button.dataset.url, "معاينة مصدر البلاغ");
+    else if (action === "preview-movie") openMediaPreview($("movieSourceUrl").value, "معاينة الفيلم");
+    else if (action === "add-episode") {
+      const seasonIndex = asNumber(button.dataset.seasonIndex, -1);
+      const season = state.seasonDraft[seasonIndex];
+      if (!season) return;
+      season.episodes.push(newEpisode(season.episodes.length + 1));
+      renderSeasonBuilder();
+    } else if (action === "remove-episode") {
+      const season = state.seasonDraft[asNumber(button.dataset.seasonIndex, -1)];
+      if (!season) return;
+      season.episodes.splice(asNumber(button.dataset.episodeIndex, -1), 1);
+      renderSeasonBuilder();
+    } else if (action === "remove-season") {
+      state.seasonDraft.splice(asNumber(button.dataset.seasonIndex, -1), 1);
+      renderSeasonBuilder();
+    }
+  }
+
+  function stopDataListeners() {
+    state.unsubscribers.splice(0).forEach((stop) => {
+      try { stop?.(); } catch (_) {}
+    });
+    state.dataListenersStarted = false;
+  }
+
+  function startDataListeners(client) {
+    stopDataListeners();
+    const refresh = () => {
+      renderDashboard();
+      if (state.view === "content") renderContent();
+      if (state.view === "reports") renderReports();
+      if (state.view === "users") renderUsers();
+      if (state.view === "supervisors") renderSupervisors();
+      if (state.view === "sections") renderSections();
+      if (state.view === "activity") renderActivity();
+    };
+    const listen = (name, setter, label) => {
+      const stop = client.listenCollection(name, (rows) => {
+        state[setter] = setter === "content" && !isAdmin() ? rows.filter(canManageContent) : rows;
+        setConnection("connected", "متصل بـ Firestore المباشر");
+        refresh();
+      }, (error) => {
+        console.warn("CINARO admin listener failed", label, error);
+        setConnection("error", "توجد مشكلة في صلاحيات Firestore");
+        showNotice(`تعذّر تحميل ${label}. راجع قواعد Firestore وصلاحيات الحساب.`, "error");
+      });
+      state.unsubscribers.push(stop);
+    };
+
+    listen("content", "content", "المحتوى");
+    listen("sections", "sections", "الأقسام");
+    if (isAdmin()) {
+      listen("users", "users", "المستخدمين");
+      listen("supervisorAssignments", "supervisors", "تعيينات المشرفين");
+      listen("reports", "reports", "البلاغات");
+      listen("auditLogs", "logs", "سجل العمليات");
+    } else {
+      state.users = [];
+      state.supervisors = [];
+      state.reports = [];
+      state.logs = [];
+    }
+    state.unsubscribers.push(client.listenDoc("appConfig", "public", (config) => {
+      state.config = config || {};
+      fillSettings();
+    }, (error) => console.warn("CINARO admin config listener failed", error)));
+    state.dataListenersStarted = true;
   }
 
   function connectFirebase(client) {
     if (!client || state.firebase === client) return;
     state.firebase = client;
     setConnection("pending", "جاري الاتصال…");
-    const listen = (name, setter, label) => {
-      const stop = client.listenCollection(name, (rows) => {
-        state[setter] = rows;
-        setConnection("connected", "متصل بـ Firestore المباشر");
-        renderDashboard();
-        if (state.view === "content") renderContent();
-        if (state.view === "users") renderUsers();
-        if (state.view === "supervisors") renderSupervisors();
-        if (state.view === "sections") renderSections();
-        if (state.view === "activity") renderActivity();
-      }, (error) => {
-        console.warn("CINARO admin listener failed", label, error);
-        setConnection("error", "توجد مشكلة في صلاحيات Firestore");
-        showNotice(`تعذّر تحميل ${label}. راجع قواعد Firestore وتأكد من تسجيل الدخول بحساب الإدارة.`, "error");
-      });
-      state.unsubscribers.push(stop);
-    };
-    listen("content", "content", "المحتوى");
-    listen("users", "users", "المستخدمين");
-    listen("supervisorAssignments", "supervisors", "تعيينات المشرفين");
-    listen("sections", "sections", "الأقسام");
-    listen("auditLogs", "logs", "سجل العمليات");
-    state.unsubscribers.push(client.listenDoc("appConfig", "public", (config) => {
-      state.config = config || {};
-      fillSettings();
-    }, (error) => console.warn("CINARO admin config listener failed", error)));
-    state.unsubscribers.push(client.onAuth((user) => {
+    state.authUnsubscribe = client.onAuth((user) => {
       state.authResolved = true;
       if (!user) {
+        stopDataListeners();
         state.authUser = null;
+        state.role = "none";
+        state.assignment = null;
         $("loginView").hidden = false;
         $("adminApp").hidden = true;
         document.body.classList.add("admin-booting");
         return;
       }
-      if (!user.isAdmin) {
+      if (!user.canAccessAdmin) {
         state.authUser = null;
-        setMessage("loginMessage", "هذا الحساب ليس ضمن حسابات الإدارة المصرّح بها.", "error");
+        setMessage("loginMessage", "هذا الحساب ليس مديراً ولا يملك تعيين مشرف فعالاً.", "error");
         client.logout().catch(() => {});
         return;
       }
       state.authUser = user;
+      state.role = user.role;
+      state.assignment = user.assignment || null;
       $("loginView").hidden = true;
       $("adminApp").hidden = false;
       document.body.classList.remove("admin-booting");
       showNotice("");
+      applyAccessControl();
       updateUserLabels();
+      startDataListeners(client);
       renderDashboard();
       setView(state.view);
-    }));
+    });
   }
 
   function bindEvents() {
@@ -679,8 +947,17 @@
     });
     $("logoutButton")?.addEventListener("click", () => state.firebase?.logout().catch((error) => toast(errorMessage(error), "error")));
     $("menuButton")?.addEventListener("click", () => setMobileNavigation(!$("adminSidebar")?.classList.contains("open")));
-    $("newContentButton")?.addEventListener("click", () => { resetContentForm(); setView("editor"); });
+    $("newContentButton")?.addEventListener("click", () => {
+      if (!hasPermission("createContent")) return toast("لا تملك صلاحية إضافة محتوى", "error");
+      resetContentForm();
+      if (!isAdmin()) $("contentSections").value = assignedSectionIds()[0] || "";
+      setView("editor");
+    });
     $("contentKind")?.addEventListener("change", toggleKindFields);
+    $("addSeasonButton")?.addEventListener("click", () => {
+      state.seasonDraft.push(newSeason(state.seasonDraft.length + 1));
+      renderSeasonBuilder();
+    });
     $("contentForm")?.addEventListener("submit", saveContent);
     $("supervisorForm")?.addEventListener("submit", saveSupervisor);
     $("sectionForm")?.addEventListener("submit", saveSection);
@@ -692,6 +969,31 @@
     $("contentStatusFilter")?.addEventListener("change", (event) => { state.filters.contentStatus = event.target.value; renderContent(); });
     $("userSearch")?.addEventListener("input", (event) => { state.filters.userSearch = event.target.value; renderUsers(); });
     $("userStatusFilter")?.addEventListener("change", (event) => { state.filters.userStatus = event.target.value; renderUsers(); });
+    $("reportStatusFilter")?.addEventListener("change", (event) => { state.filters.reportStatus = event.target.value; renderReports(); });
+    $("closeMediaPreview")?.addEventListener("click", closeMediaPreview);
+    $("mediaPreviewDialog")?.addEventListener("click", (event) => {
+      if (event.target === event.currentTarget) closeMediaPreview();
+    });
+    $("mediaPreviewVideo")?.addEventListener("error", () => {
+      $("mediaPreviewMessage").textContent = "تعذّر تشغيل الرابط. تأكد أنه رابط مباشر وأن الخادم يسمح بالتشغيل الخارجي.";
+      $("mediaPreviewMessage").className = "form-message error";
+    });
+    ["contentPoster", "contentBackdrop"].forEach((id) => $(id)?.addEventListener("input", () => {
+      const poster = validMediaUrl($("contentPoster").value) || "../web/assets/images/poster-placeholder.webp";
+      $("posterPreview").src = poster;
+      $("backdropPreview").src = validMediaUrl($("contentBackdrop").value) || poster;
+    }));
+    document.addEventListener("input", (event) => {
+      const target = event.target;
+      if (target.dataset.seasonField) {
+        const season = state.seasonDraft[asNumber(target.dataset.seasonIndex, -1)];
+        if (season) season[target.dataset.seasonField] = target.dataset.seasonField === "number" ? asNumber(target.value, 1) : target.value;
+      }
+      if (target.dataset.episodeField) {
+        const episode = state.seasonDraft[asNumber(target.dataset.seasonIndex, -1)]?.episodes?.[asNumber(target.dataset.episodeIndex, -1)];
+        if (episode) episode[target.dataset.episodeField] = ["number", "duration"].includes(target.dataset.episodeField) ? asNumber(target.value, 0) : target.value;
+      }
+    });
     document.addEventListener("click", (event) => {
       if (document.body.classList.contains("nav-open") && !event.target.closest?.("#adminSidebar, #menuButton")) {
         setMobileNavigation(false);
@@ -702,7 +1004,10 @@
       if (view) { event.preventDefault(); setView(view.dataset.view); }
     });
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") setMobileNavigation(false);
+      if (event.key === "Escape") {
+        setMobileNavigation(false);
+        if (!$("mediaPreviewDialog").hidden) closeMediaPreview();
+      }
     });
     window.addEventListener("resize", () => {
       if (window.innerWidth > 760) setMobileNavigation(false);

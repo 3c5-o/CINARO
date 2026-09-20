@@ -67,7 +67,8 @@ npx firebase-tools deploy --only firestore:rules
 {
   "featured": ["movie-example", "series-example"],
   "announcement": "رسالة اختيارية للمستخدمين",
-  "minimumVersion": "2.0.1",
+  "minimumVersion": "2.1.0",
+  "updateUrl": "https://github.com/3c5-o/CINARO/releases/latest",
   "maintenance": false,
   "forceUpdate": false
 }
@@ -79,6 +80,8 @@ npx firebase-tools deploy --only firestore:rules
 
 - `users/{uid}` للملف الشخصي.
 - `users/{uid}/private/state` للمفضلة والسجل والإعدادات.
+- `content/{contentId}/viewers/{uid}` عند احتساب أول مشاهدة فعلية للحساب.
+- `reports/{reportId}` عند إرسال المستخدم بلاغًا عن مشكلة تشغيل.
 
 نسخة المستخدم لا تملك صلاحية إضافة أو تعديل المحتوى. لوحة الإدارة متاحة من:
 
@@ -87,6 +90,8 @@ https://3c5-o.github.io/CINARO/admin/
 ```
 
 من لوحة الإدارة يمكنك إدارة المحتوى الحقيقي، المستخدمين، الأقسام، تعيينات المشرفين، الإعدادات وسجل التدقيق. المدير يحدد لكل مشرف `sectionIds` وصلاحيات `createContent` و`editContent` و`deleteContent` و`publishContent`.
+
+يدخل المشرف من صفحة الإدارة نفسها. يقبل النظام الحساب عندما يكون له مستند نشط في `supervisorAssignments/{uid}`، وتعرض له اللوحة المحتوى والأقسام المسموح بها فقط. إدارة المستخدمين والمشرفين والإعدادات والبلاغات وسجل التدقيق تبقى للمدير العام.
 
 ## ملاحظات مهمة
 

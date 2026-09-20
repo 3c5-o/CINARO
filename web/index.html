@@ -41,6 +41,16 @@
 
   <div id="remoteNotice" class="remote-notice" role="status" aria-live="polite" hidden></div>
 
+  <section id="serviceGate" class="service-gate" role="dialog" aria-modal="true" aria-labelledby="serviceGateTitle" hidden>
+    <div class="service-gate-card">
+      <img src="assets/icons/icon-192.png" alt="" width="76" height="76">
+      <span id="serviceGateKicker">تنبيه CINARO</span>
+      <h1 id="serviceGateTitle">الخدمة غير متاحة مؤقتاً</h1>
+      <p id="serviceGateText"></p>
+      <a id="serviceGateAction" class="button primary" href="https://github.com/3c5-o/CINARO/releases" target="_blank" rel="noopener" hidden>تنزيل آخر إصدار</a>
+    </div>
+  </section>
+
   <section id="authView" class="auth-view" role="dialog" aria-modal="true" aria-label="حساب CINARO" hidden>
     <div class="auth-backdrop"></div>
     <div class="auth-card">
@@ -115,6 +125,12 @@
           <span id="accountSyncDot" class="sync-dot"></span>
           <div><b>مزامنة Firebase</b><small id="accountSyncText">جاري الاتصال…</small></div>
         </div>
+        <form id="profileForm" class="profile-form">
+          <label class="auth-field"><span>الاسم الظاهر</span><div><svg aria-hidden="true"><use href="#i-user"></use></svg><input id="profileName" type="text" minlength="2" maxlength="30" autocomplete="name" required></div></label>
+          <div class="account-verification"><span id="emailVerificationStatus">حالة البريد غير معروفة</span><button id="verifyEmailButton" class="auth-link" type="button">إرسال رابط التحقق</button></div>
+          <button class="button secondary" type="submit"><svg aria-hidden="true"><use href="#i-check"></use></svg> حفظ الاسم</button>
+          <button id="accountPasswordResetButton" class="button secondary" type="button"><svg aria-hidden="true"><use href="#i-mail"></use></svg> تغيير كلمة المرور بالبريد</button>
+        </form>
         <button id="logoutButton" class="button danger account-logout" type="button">
           <svg aria-hidden="true"><use href="#i-log-out"></use></svg>
           تسجيل الخروج
@@ -309,7 +325,7 @@
     </div>
     <div class="about-app">
       <img src="assets/icons/icon-192.png" alt="" width="48" height="48">
-      <div><b>CINARO</b><small>الإصدار 2.0.1 · نسخة المستخدم</small></div>
+      <div><b>CINARO</b><small>الإصدار 2.1.0 · نسخة المستخدم</small></div>
     </div>
   </aside>
 
@@ -322,6 +338,21 @@
       </button>
     </div>
     <div id="playerInfoContent" class="player-info-content"></div>
+    <button id="openReportButton" class="button danger report-open-button" type="button"><svg aria-hidden="true"><use href="#i-alert"></use></svg> الإبلاغ عن مشكلة تشغيل</button>
+  </aside>
+
+  <aside id="reportSheet" class="bottom-sheet compact-sheet" aria-labelledby="reportTitle" hidden>
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">
+      <div><small>ساعدنا على الإصلاح</small><h2 id="reportTitle">الإبلاغ عن مشكلة</h2></div>
+      <button class="icon-button" type="button" data-close-sheet aria-label="إغلاق"><svg aria-hidden="true"><use href="#i-x"></use></svg></button>
+    </div>
+    <form id="reportForm" class="report-form">
+      <label><span>نوع المشكلة</span><select id="reportCategory" required><option value="playback">الفيديو لا يعمل</option><option value="wrong-content">الفيلم أو الحلقة غير صحيحة</option><option value="audio">مشكلة في الصوت</option><option value="subtitles">مشكلة في الترجمة</option><option value="other">مشكلة أخرى</option></select></label>
+      <label><span>تفاصيل إضافية</span><textarea id="reportDetails" rows="4" maxlength="600" placeholder="اكتب ما حدث باختصار…"></textarea></label>
+      <button class="button primary" type="submit"><svg aria-hidden="true"><use href="#i-check"></use></svg> إرسال البلاغ</button>
+      <p id="reportMessage" class="auth-message" role="status"></p>
+    </form>
   </aside>
 
   <div id="confirmDialog" class="dialog-backdrop" hidden>

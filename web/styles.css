@@ -257,6 +257,63 @@ svg {
   background: rgba(86, 21, 37, .94);
 }
 
+.service-gate {
+  position: fixed;
+  z-index: 15000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: max(1.25rem, env(safe-area-inset-top)) 1rem max(1.25rem, env(safe-area-inset-bottom));
+  background:
+    radial-gradient(circle at 50% 15%, rgba(235, 24, 38, .18), transparent 34rem),
+    rgba(4, 5, 8, .97);
+  overflow-y: auto;
+}
+
+.service-gate[hidden] {
+  display: none;
+}
+
+.service-gate-card {
+  display: grid;
+  justify-items: center;
+  width: min(100%, 30rem);
+  padding: clamp(1.5rem, 6vw, 2.5rem);
+  border: 1px solid var(--line-strong);
+  border-radius: 28px;
+  background: linear-gradient(145deg, rgba(30, 31, 39, .98), rgba(11, 12, 17, .98));
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .58);
+  text-align: center;
+}
+
+.service-gate-card img {
+  margin-bottom: 1rem;
+  border-radius: 22px;
+  box-shadow: 0 14px 36px rgba(235, 24, 38, .2);
+}
+
+.service-gate-card > span {
+  color: var(--accent-strong);
+  font-size: .75rem;
+  font-weight: 850;
+}
+
+.service-gate-card h1 {
+  margin: .45rem 0 .65rem;
+  font-size: clamp(1.6rem, 7vw, 2.3rem);
+}
+
+.service-gate-card p {
+  max-width: 38ch;
+  margin: 0 0 1.25rem;
+  color: var(--text-soft);
+  line-height: 1.85;
+}
+
+body.service-locked {
+  overflow: hidden;
+}
+
 .app-header {
   position: fixed;
   z-index: 1000;
@@ -1835,6 +1892,52 @@ main {
   max-height: 65vh;
 }
 
+.report-open-button {
+  width: 100%;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.report-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.report-form label {
+  display: grid;
+  gap: .45rem;
+  color: var(--text-soft);
+  font-size: .78rem;
+  font-weight: 750;
+}
+
+.report-form select,
+.report-form textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  outline: 0;
+  background: rgba(255, 255, 255, .04);
+  color: var(--text);
+  padding: .8rem .9rem;
+}
+
+.report-form textarea {
+  resize: vertical;
+  min-height: 7rem;
+  line-height: 1.7;
+}
+
+.report-form select:focus,
+.report-form textarea:focus {
+  border-color: rgba(255, 41, 55, .65);
+  box-shadow: 0 0 0 3px rgba(235, 24, 38, .1);
+}
+
+.report-form .button {
+  justify-content: center;
+}
+
 @keyframes fadeIn { from { opacity: 0; } }
 @keyframes sheetUp { from { transform: translateY(105%); } }
 
@@ -2826,6 +2929,42 @@ body.auth-open {
 
 .account-sync-card small {
   color: var(--muted);
+}
+
+.profile-form {
+  display: grid;
+  gap: .7rem;
+  width: 100%;
+  margin-bottom: .9rem;
+}
+
+.profile-form .button {
+  width: 100%;
+  justify-content: center;
+}
+
+.account-verification {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .7rem;
+  padding: .65rem .8rem;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  color: var(--muted);
+  font-size: .76rem;
+  text-align: right;
+}
+
+.account-verification.verified {
+  border-color: rgba(54, 214, 155, .24);
+  color: var(--green);
+}
+
+.account-verification .auth-link {
+  flex: 0 0 auto;
+  justify-self: auto;
+  color: var(--accent-strong);
 }
 
 .sync-dot {

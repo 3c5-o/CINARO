@@ -40,7 +40,10 @@ function asUser(user) {
     displayName: user.displayName || "",
     isAnonymous: Boolean(user.isAnonymous),
     emailVerified: Boolean(user.emailVerified),
-    isAdmin: false
+    isAdmin: false,
+    canAccessAdmin: false,
+    role: "none",
+    assignment: null
   };
 }
 
@@ -84,6 +87,24 @@ async function boot() {
         } catch (error) {
           console.warn("CINARO admin token inspection failed", error);
           current.isAdmin = current.email.toLowerCase() === ADMIN_EMAIL;
+        }
+        if (current.isAdmin) {
+          current.canAccessAdmin = true;
+          current.role = "admin";
+        } else {
+          try {
+            const assignmentSnapshot = await firestoreSdk.getDoc(
+              firestoreSdk.doc(db, "supervisorAssignments", user.uid)
+            );
+            const assignment = assignmentSnapshot.exists() ? plainValue(assignmentSnapshot.data()) : null;
+            if (assignment && assignment.active === true && Array.isArray(assignment.sectionIds) && assignment.sectionIds.length) {
+              current.canAccessAdmin = true;
+              current.role = "supervisor";
+              current.assignment = Object.assign({ uid: user.uid }, assignment);
+            }
+          } catch (error) {
+            console.warn("CINARO supervisor assignment inspection failed", error);
+          }
         }
         callback(current);
       });

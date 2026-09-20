@@ -58,8 +58,18 @@ service cloud.firestore {
         && data.sectionIds.hasOnly(currentAssignment().data.sectionIds);
     }
 
+    function uniqueViewIncrement(contentId) {
+      return signedIn()
+        && resource.data.published == true
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views'])
+        && request.resource.data.views is int
+        && request.resource.data.views == resource.data.views + 1
+        && !exists(/databases/$(database)/documents/content/$(contentId)/viewers/$(request.auth.uid))
+        && existsAfter(/databases/$(database)/documents/content/$(contentId)/viewers/$(request.auth.uid));
+    }
+
     match /content/{contentId} {
-      allow get, list: if resource.data.published == true || admin() || assignedContent(resource.data);
+      allow get, list: if resource.data.published == true || admin() || supervisor();
 
       allow create: if admin() || (
         supervisorCanCreate()
@@ -74,11 +84,21 @@ service cloud.firestore {
           request.resource.data.published == resource.data.published ||
           supervisorCanPublish()
         )
-      );
+      ) || uniqueViewIncrement(contentId);
 
       allow delete: if admin() || (
         supervisorCanDelete() && assignedContent(resource.data)
       );
+
+      match /viewers/{userId} {
+        allow get: if owner(userId) || admin();
+        allow list: if admin();
+        allow create: if owner(userId)
+          && request.resource.data.keys().hasOnly(['userId', 'contentId', 'createdAt'])
+          && request.resource.data.userId == userId
+          && request.resource.data.contentId == contentId;
+        allow update, delete: if false;
+      }
     }
 
     match /appConfig/public {
@@ -101,7 +121,7 @@ service cloud.firestore {
         ])
       );
 
-      allow delete: if admin();
+      allow delete: if owner(userId) || admin();
 
       match /private/{documentId} {
         allow read, write: if owner(userId) || admin();
@@ -119,7 +139,12 @@ service cloud.firestore {
     }
 
     match /auditLogs/{logId} {
-      allow read, write: if admin();
+      allow read: if admin();
+      allow create: if admin() || (
+        supervisor()
+        && request.resource.data.actorUid == request.auth.uid
+      );
+      allow update, delete: if false;
     }
 
     match /announcements/{announcementId} {
@@ -128,7 +153,14 @@ service cloud.firestore {
     }
 
     match /reports/{reportId} {
-      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'userId', 'userEmail', 'contentId', 'contentTitle', 'kind',
+          'season', 'episode', 'category', 'details', 'sourceUrl',
+          'status', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.status == 'open';
       allow read, update, delete: if admin();
     }
 

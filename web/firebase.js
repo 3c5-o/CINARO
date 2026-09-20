@@ -133,6 +133,9 @@ function normalizeContent(snapshot) {
     description: textValue(raw.description, "", 3000),
     poster: poster,
     backdrop: mediaUrl(raw.backdrop, poster),
+    sectionIds: (Array.isArray(raw.sectionIds) ? raw.sectionIds : []).map(function (sectionId) {
+      return textValue(sectionId, "", 80);
+    }).filter(Boolean).slice(0, 30),
     featured: raw.featured === true,
     order: numberValue(raw.order, 0, -100000, 100000)
   };
@@ -156,7 +159,8 @@ function publicUser(user) {
     uid: user.uid,
     displayName: user.displayName || "",
     email: user.email || "",
-    isAnonymous: Boolean(user.isAnonymous)
+    isAnonymous: Boolean(user.isAnonymous),
+    emailVerified: Boolean(user.emailVerified)
   };
 }
 
@@ -186,7 +190,7 @@ async function bootFirebase() {
     analyticsSdk.isSupported().then(function (supported) {
       if (!supported) return;
       analytics = analyticsSdk.getAnalytics(app);
-      analyticsSdk.logEvent(analytics, "app_open", { app_version: "2.0.1" });
+      analyticsSdk.logEvent(analytics, "app_open", { app_version: "2.1.0" });
     }).catch(function () {});
   }
 
@@ -257,9 +261,76 @@ async function bootFirebase() {
       return authSdk.sendPasswordResetEmail(auth, textValue(email, "", 180).toLowerCase());
     },
 
+    updateAccount: async function (displayName) {
+      const user = auth.currentUser;
+      if (!user || user.isAnonymous) throw new Error("auth/requires-login");
+      const name = textValue(displayName, "", 30);
+      if (name.length < 2) throw new Error("cinaro/name-too-short");
+      await authSdk.updateProfile(user, { displayName: name });
+      await firestoreSdk.setDoc(firestoreSdk.doc(db, "users", user.uid), {
+        displayName: name,
+        email: user.email || "",
+        isAnonymous: false,
+        updatedAt: firestoreSdk.serverTimestamp()
+      }, { merge: true });
+      return publicUser(user);
+    },
+
+    sendVerification: async function () {
+      const user = auth.currentUser;
+      if (!user || user.isAnonymous) throw new Error("auth/requires-login");
+      if (user.emailVerified) return true;
+      await authSdk.sendEmailVerification(user);
+      return true;
+    },
+
+    recordView: async function (contentId) {
+      const user = auth.currentUser;
+      const safeContentId = textValue(contentId, "", 120).toLowerCase();
+      if (!user || !safeContentId) return false;
+      const contentRef = firestoreSdk.doc(db, "content", safeContentId);
+      const viewerRef = firestoreSdk.doc(db, "content", safeContentId, "viewers", user.uid);
+      const batch = firestoreSdk.writeBatch(db);
+      batch.set(viewerRef, {
+        userId: user.uid,
+        contentId: safeContentId,
+        createdAt: firestoreSdk.serverTimestamp()
+      });
+      batch.update(contentRef, { views: firestoreSdk.increment(1) });
+      try {
+        await batch.commit();
+        return true;
+      } catch (error) {
+        if (String(error && error.code || "").includes("permission-denied")) return false;
+        throw error;
+      }
+    },
+
+    submitReport: async function (payload) {
+      const user = auth.currentUser;
+      if (!user) throw new Error("auth/requires-login");
+      const report = payload && typeof payload === "object" ? payload : {};
+      return firestoreSdk.addDoc(firestoreSdk.collection(db, "reports"), {
+        userId: user.uid,
+        userEmail: textValue(user.email, "", 180),
+        contentId: textValue(report.contentId, "", 120),
+        contentTitle: textValue(report.contentTitle, "", 180),
+        kind: report.kind === "series" ? "series" : "movie",
+        season: Math.max(0, Math.round(numberValue(report.season, 0, 0, 1000))),
+        episode: Math.max(0, Math.round(numberValue(report.episode, 0, 0, 10000))),
+        category: textValue(report.category, "playback", 40),
+        details: textValue(report.details, "", 600),
+        sourceUrl: mediaUrl(report.sourceUrl, ""),
+        status: "open",
+        createdAt: firestoreSdk.serverTimestamp(),
+        updatedAt: firestoreSdk.serverTimestamp()
+      });
+    },
+
     listenContent: function (callback, onError) {
       let items = [];
       let featured = [];
+      let sections = [];
       let config = {};
       let fromCache = false;
       let contentReady = false;
@@ -275,6 +346,7 @@ async function bootFirebase() {
             ? selectedFeatured
             : items.filter(function (item) { return item.featured; }).map(function (item) { return item.id; }).slice(0, 8),
           config: config,
+          sections: sections,
           fromCache: fromCache
         });
       }
@@ -302,10 +374,31 @@ async function bootFirebase() {
           featured = Array.isArray(data.featured) ? data.featured.map(String).slice(0, 12) : [];
           config = {
             announcement: textValue(data.announcement, "", 500),
-            minimumVersion: textValue(data.minimumVersion, "2.0.1", 20),
+            minimumVersion: textValue(data.minimumVersion, "2.1.0", 20),
             maintenance: data.maintenance === true,
-            forceUpdate: data.forceUpdate === true
+            forceUpdate: data.forceUpdate === true,
+            updateUrl: mediaUrl(data.updateUrl, "https://github.com/3c5-o/CINARO/releases")
           };
+          emit();
+        },
+        function () { emit(); }
+      );
+
+      const stopSections = firestoreSdk.onSnapshot(
+        firestoreSdk.collection(db, "sections"),
+        function (snapshot) {
+          sections = snapshot.docs.map(function (sectionSnapshot) {
+            const data = plainValue(sectionSnapshot.data()) || {};
+            return {
+              id: textValue(data.id, sectionSnapshot.id, 80),
+              name: textValue(data.name, sectionSnapshot.id, 100),
+              description: textValue(data.description, "", 300),
+              active: data.active !== false,
+              order: numberValue(data.order, 0, -100000, 100000)
+            };
+          }).filter(function (section) { return section.active; }).sort(function (a, b) {
+            return (b.order - a.order) || a.name.localeCompare(b.name, "ar");
+          });
           emit();
         },
         function () { emit(); }
@@ -314,6 +407,7 @@ async function bootFirebase() {
       return function () {
         stopContent();
         stopConfig();
+        stopSections();
       };
     },
 
