@@ -10,6 +10,13 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == userId;
     }
 
+    function activeUser() {
+      return signedIn() && (
+        !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status != 'blocked'
+      );
+    }
+
     function admin() {
       return signedIn() && (
         request.auth.token.admin == true ||
@@ -59,7 +66,7 @@ service cloud.firestore {
     }
 
     function uniqueViewIncrement(contentId) {
-      return signedIn()
+      return activeUser()
         && resource.data.published == true
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views'])
         && request.resource.data.views is int
@@ -94,6 +101,7 @@ service cloud.firestore {
         allow get: if owner(userId) || admin();
         allow list: if admin();
         allow create: if owner(userId)
+          && activeUser()
           && request.resource.data.keys().hasOnly(['userId', 'contentId', 'createdAt'])
           && request.resource.data.userId == userId
           && request.resource.data.contentId == contentId;
@@ -153,7 +161,7 @@ service cloud.firestore {
     }
 
     match /contentRequests/{requestId} {
-      allow create: if signedIn()
+      allow create: if activeUser()
         && request.auth.token.email is string
         && request.auth.token.email.size() > 0
         && request.resource.data.userId == request.auth.uid
@@ -181,7 +189,7 @@ service cloud.firestore {
     }
 
     match /reports/{reportId} {
-      allow create: if signedIn()
+      allow create: if activeUser()
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.keys().hasOnly([
           'userId', 'userEmail', 'contentId', 'contentTitle', 'kind',
