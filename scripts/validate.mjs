@@ -139,6 +139,8 @@ ok(adminHtml.includes('assets/icons/icon-192.png'), "Admin interface must use it
 const androidActivity = fs.readFileSync(path.join(root, "android-app", "app", "src", "main", "java", "com", "cinaro", "app", "MainActivity.java"), "utf8");
 ok(androidActivity.includes('settings.setLoadWithOverviewMode(false)'), "Android WebView must not shrink the app into a wide overview");
 ok(androidActivity.includes('WindowManager.LayoutParams.FLAG_SECURE'), "Android user edition must support secure-screen protection");
+const androidManifest = fs.readFileSync(path.join(root, "android-app", "app", "src", "main", "AndroidManifest.xml"), "utf8");
+ok(androidManifest.includes('android:allowBackup="false"'), "Android app data backups must be disabled");
 const androidBuild = fs.readFileSync(path.join(root, "android-app", "app", "build.gradle"), "utf8");
 ok(androidBuild.includes('buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "true"'), "User Android flavor must block screen capture");
 ok(androidBuild.includes('buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "false"'), "Admin Android flavor must keep normal screen capture behavior");
