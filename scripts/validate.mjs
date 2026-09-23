@@ -131,8 +131,11 @@ ok(!adminHtml.includes('id="contentSeasons"'), "Admin must not require JSON seas
 ok(adminHtml.includes('id="view-requests"'), "Admin must include the content request view");
 ok(adminHtml.includes('id="requestStatusFilter"'), "Admin must include request status filtering");
 ok(adminHtml.includes('id="requestsTable"'), "Admin must include the request management table");
+ok(adminHtml.includes('hls.js@1.7.3/dist/hls.min.js'), "Admin must load the pinned HLS.js runtime");
 
 const adminAppSource = fs.readFileSync(path.join(adminRoot, "app.js"), "utf8");
+ok(adminAppSource.includes("function destroyPreviewHls("), "Admin must tear down HLS previews");
+ok(adminAppSource.includes("HlsRuntime?.isSupported?.()"), "Admin must explicitly preview HLS sources");
 ok(adminAppSource.includes("function renderRequests("), "Admin must render content requests");
 ok(adminAppSource.includes('listen("contentRequests", "requests"'), "Admin must listen to content requests");
 ok(adminAppSource.includes("function saveContentRequest("), "Admin must update request statuses");
@@ -173,6 +176,7 @@ ok(!firebaseSource.includes("\\\\:"), "Firebase config contains an escaped colon
 ok(fs.existsSync(path.join(root, "firestore.rules")), "Missing Firestore security rules");
 ok(fs.existsSync(path.join(root, "firebase.json")), "Missing Firebase deployment config");
 const firestoreRules = fs.readFileSync(path.join(root, "firestore.rules"), "utf8");
+ok(firestoreRules.includes("function activeUser()"), "Firestore rules must define blocked-account enforcement");
 ok(firestoreRules.includes("uniqueViewIncrement"), "Firestore rules must protect unique view increments");
 ok(firestoreRules.includes("supervisorCanPublish"), "Firestore rules must enforce supervisor publishing permissions");
 ok(firestoreRules.includes("match /contentRequests/{requestId}"), "Firestore rules must protect content requests");
