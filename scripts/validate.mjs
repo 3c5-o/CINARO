@@ -193,7 +193,7 @@ ok(appSource.includes("function renderRequestList("), "User app must render requ
 ok(appSource.includes("state.firebase.submitContentRequest"), "User app must submit content requests through Firebase");
 ok(appSource.includes("state.firebase.listenMyRequests"), "User app must listen to the signed-in user's requests");
 ok(appSource.includes("function releasePlayerMedia("), "Player must release video resources when leaving playback");
-ok(appSource.includes("\$\$('track[data-cinaro-track=\"true\"]', player.video).forEach".replace(/\\\$/g, "$")), "Player teardown must remove all dynamic subtitle tracks");
+ok(appSource.includes("player.video.querySelectorAll('track[data-cinaro-track=\"true\"]').forEach"), "Player teardown must remove all dynamic subtitle tracks");
 ok(appSource.includes("function isHlsSource("), "Player must detect HLS sources");
 ok(appSource.includes("HlsRuntime?.isSupported?.()"), "Player must use HLS.js when MediaSource playback is available");
 ok(appSource.includes("hls.recoverMediaError()"), "Player must attempt HLS media recovery");
