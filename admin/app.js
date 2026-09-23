@@ -192,6 +192,18 @@
     }
   }
 
+  function inferMediaType(url, fallback = "video/mp4") {
+    const input = asString(url).toLowerCase();
+    try {
+      const pathname = new URL(input).pathname.toLowerCase();
+      if (pathname.endsWith(".m3u8")) return "application/vnd.apple.mpegurl";
+      if (pathname.endsWith(".mp4")) return "video/mp4";
+    } catch (_) {}
+    if (/\.m3u8(?:$|[?#])/i.test(input)) return "application/vnd.apple.mpegurl";
+    if (/\.mp4(?:$|[?#])/i.test(input)) return "video/mp4";
+    return asString(fallback, "video/mp4").slice(0, 80);
+  }
+
   function normalizeSources(value) {
     return toArray(value).slice(0, 8).map((source, index) => {
       const url = validMediaUrl(source && source.url);
@@ -396,7 +408,21 @@
   }
 
   function newEpisode(number = 1) {
-    return { number, title: `الحلقة ${number}`, duration: 0, url: "" };
+    return {
+      id: `e${number}`,
+      number,
+      title: `الحلقة ${number}`,
+      duration: 0,
+      thumbnail: "",
+      url: "",
+      backupUrl: "",
+      subtitleUrl: "",
+      primarySource: null,
+      backupSource: null,
+      extraSources: [],
+      primarySubtitle: null,
+      extraSubtitles: []
+    };
   }
 
   function newSeason(number = 1) {
@@ -421,7 +447,10 @@
           <div class="episode-builder-row">
             <label><span>رقم الحلقة</span><input type="number" min="1" value="${escapeHTML(episode.number)}" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="number"></label>
             <label><span>اسم الحلقة</span><input value="${escapeHTML(episode.title)}" maxlength="150" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="title"></label>
-            <label><span>رابط الحلقة</span><input type="url" inputmode="url" value="${escapeHTML(episode.url)}" placeholder="https://…/video.mp4" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="url"></label>
+            <label><span>رابط الحلقة الأساسي</span><input type="url" inputmode="url" value="${escapeHTML(episode.url || "")}" placeholder="https://…/video.mp4 أو stream.m3u8" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="url"></label>
+            <label><span>رابط احتياطي</span><input type="url" inputmode="url" value="${escapeHTML(episode.backupUrl || "")}" placeholder="اختياري" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="backupUrl"></label>
+            <label><span>صورة الحلقة</span><input type="url" inputmode="url" value="${escapeHTML(episode.thumbnail || "")}" placeholder="https://…/episode.webp" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="thumbnail"></label>
+            <label><span>ترجمة عربية VTT</span><input type="url" inputmode="url" value="${escapeHTML(episode.subtitleUrl || "")}" placeholder="اختياري" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="subtitleUrl"></label>
             <label><span>المدة</span><input type="number" min="0" value="${escapeHTML(episode.duration)}" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="duration"></label>
             <button class="table-action danger" type="button" data-action="remove-episode" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" title="حذف الحلقة"><svg><use href="#i-x"></use></svg></button>
           </div>`).join("")}</div>
@@ -433,15 +462,48 @@
     return state.seasonDraft.map((season, seasonIndex) => ({
       number: Math.max(1, Math.round(asNumber(season.number, seasonIndex + 1))),
       title: asString(season.title, `الموسم ${seasonIndex + 1}`),
-      episodes: toArray(season.episodes).map((episode, episodeIndex) => ({
-        id: `e${Math.max(1, Math.round(asNumber(episode.number, episodeIndex + 1)))}`,
-        number: Math.max(1, Math.round(asNumber(episode.number, episodeIndex + 1))),
-        title: asString(episode.title, `الحلقة ${episodeIndex + 1}`),
-        duration: Math.max(0, Math.round(asNumber(episode.duration))),
-        thumbnail: "",
-        sources: [{ label: "تلقائي", url: episode.url, type: "video/mp4" }],
-        subtitles: []
-      }))
+      episodes: toArray(season.episodes).map((episode, episodeIndex) => {
+        const number = Math.max(1, Math.round(asNumber(episode.number, episodeIndex + 1)));
+        const primaryUrl = asString(episode.url);
+        const backupUrl = asString(episode.backupUrl);
+        const sourceCandidates = [];
+        if (primaryUrl) {
+          sourceCandidates.push({
+            label: asString(episode.primarySource?.label, "تلقائي"),
+            url: primaryUrl,
+            type: inferMediaType(primaryUrl, episode.primarySource?.type)
+          });
+        }
+        if (backupUrl) {
+          sourceCandidates.push({
+            label: asString(episode.backupSource?.label, "احتياطي"),
+            url: backupUrl,
+            type: inferMediaType(backupUrl, episode.backupSource?.type)
+          });
+        }
+        sourceCandidates.push(...toArray(episode.extraSources));
+
+        const subtitleCandidates = [];
+        const subtitleUrl = asString(episode.subtitleUrl);
+        if (subtitleUrl) {
+          subtitleCandidates.push({
+            label: asString(episode.primarySubtitle?.label, "العربية"),
+            srclang: asString(episode.primarySubtitle?.srclang, "ar"),
+            src: subtitleUrl
+          });
+        }
+        subtitleCandidates.push(...toArray(episode.extraSubtitles));
+
+        return {
+          id: asString(episode.id, `e${number}`).slice(0, 80),
+          number,
+          title: asString(episode.title, `الحلقة ${episodeIndex + 1}`),
+          duration: Math.max(0, Math.round(asNumber(episode.duration))),
+          thumbnail: validMediaUrl(episode.thumbnail || ""),
+          sources: normalizeSources(sourceCandidates),
+          subtitles: normalizeSubtitles(subtitleCandidates)
+        };
+      })
     }));
   }
 
@@ -508,12 +570,25 @@
     state.seasonDraft = item.kind === "series" ? toArray(item.seasons).map((season, seasonIndex) => ({
       number: asNumber(season.number, seasonIndex + 1),
       title: asString(season.title, `الموسم ${seasonIndex + 1}`),
-      episodes: toArray(season.episodes).map((episode, episodeIndex) => ({
-        number: asNumber(episode.number, episodeIndex + 1),
-        title: asString(episode.title, `الحلقة ${episodeIndex + 1}`),
-        duration: asNumber(episode.duration),
-        url: asString(episode.sources?.[0]?.url)
-      }))
+      episodes: toArray(season.episodes).map((episode, episodeIndex) => {
+        const sources = toArray(episode.sources);
+        const subtitles = toArray(episode.subtitles);
+        return {
+          id: asString(episode.id, `e${episode.number || episodeIndex + 1}`),
+          number: asNumber(episode.number, episodeIndex + 1),
+          title: asString(episode.title, `الحلقة ${episodeIndex + 1}`),
+          duration: asNumber(episode.duration),
+          thumbnail: asString(episode.thumbnail),
+          url: asString(sources[0]?.url),
+          backupUrl: asString(sources[1]?.url),
+          subtitleUrl: asString(subtitles[0]?.src),
+          primarySource: sources[0] || null,
+          backupSource: sources[1] || null,
+          extraSources: sources.slice(2),
+          primarySubtitle: subtitles[0] || null,
+          extraSubtitles: subtitles.slice(1)
+        };
+      })
     })) : [];
     $("contentViews").value = item.views || 0;
     $("contentOrder").value = item.order || 0;
@@ -545,8 +620,8 @@
       const backdrop = validMediaUrl($("contentBackdrop").value) || poster;
       if (!poster) throw new Error("رابط البوستر يجب أن يكون HTTPS.");
       const movieSourceCandidates = [
-        { label: "تلقائي", url: $("movieSourceUrl").value, type: "video/mp4" },
-        { label: "احتياطي", url: $("movieBackupUrl").value, type: "video/mp4" }
+        { label: "تلقائي", url: $("movieSourceUrl").value, type: inferMediaType($("movieSourceUrl").value) },
+        { label: "احتياطي", url: $("movieBackupUrl").value, type: inferMediaType($("movieBackupUrl").value) }
       ].filter((source) => asString(source.url));
       const sources = kind === "movie" ? normalizeSources(movieSourceCandidates) : [];
       const subtitleUrl = asString($("movieSubtitleUrl").value);
