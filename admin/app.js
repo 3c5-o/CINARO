@@ -23,6 +23,7 @@
     config: {},
     unsubscribers: [],
     dataListenersStarted: false,
+    previewHls: null,
     filters: { contentSearch: "", contentKind: "all", contentStatus: "all", userSearch: "", userStatus: "all", reportStatus: "open", requestStatus: "pending" }
   };
 
@@ -906,6 +907,12 @@
     finally { setBusy(form, false); }
   }
 
+  function destroyPreviewHls() {
+    if (!state.previewHls) return;
+    try { state.previewHls.destroy(); } catch (_) {}
+    state.previewHls = null;
+  }
+
   function openMediaPreview(url, title = "معاينة الفيديو") {
     const safeUrl = validMediaUrl(url);
     if (!safeUrl) {
@@ -917,6 +924,35 @@
     $("mediaPreviewTitle").textContent = title;
     $("mediaPreviewMessage").textContent = "إذا لم يبدأ الفيديو، فتحقق أن الرابط مباشر ويسمح بالتشغيل من التطبيق.";
     dialog.hidden = false;
+    video.pause();
+    destroyPreviewHls();
+    video.removeAttribute("src");
+    video.load();
+
+    if (inferMediaType(safeUrl) === "application/vnd.apple.mpegurl") {
+      const HlsRuntime = window.Hls;
+      if (HlsRuntime?.isSupported?.()) {
+        const hls = new HlsRuntime({ enableWorker: true, backBufferLength: 60 });
+        state.previewHls = hls;
+        hls.on(HlsRuntime.Events.MEDIA_ATTACHED, () => {
+          if (state.previewHls === hls) hls.loadSource(safeUrl);
+        });
+        hls.on(HlsRuntime.Events.ERROR, (_event, data) => {
+          if (!data?.fatal || state.previewHls !== hls) return;
+          $("mediaPreviewMessage").textContent = "تعذّر تشغيل مصدر HLS. تحقق من CORS وصلاحية الرابط.";
+          $("mediaPreviewMessage").className = "form-message error";
+        });
+        hls.attachMedia(video);
+        video.play().catch(() => {});
+        return;
+      }
+      if (!video.canPlayType("application/vnd.apple.mpegurl")) {
+        $("mediaPreviewMessage").textContent = "هذا الجهاز لا يدعم معاينة HLS.";
+        $("mediaPreviewMessage").className = "form-message error";
+        return;
+      }
+    }
+
     video.src = safeUrl;
     video.load();
     video.play().catch(() => {});
@@ -925,6 +961,7 @@
   function closeMediaPreview() {
     const video = $("mediaPreviewVideo");
     video.pause();
+    destroyPreviewHls();
     video.removeAttribute("src");
     video.load();
     $("mediaPreviewDialog").hidden = true;
