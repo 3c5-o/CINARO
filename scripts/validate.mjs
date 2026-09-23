@@ -111,6 +111,8 @@ ok(html.includes('id="authView"'), "HTML must include the authentication view");
 ok(html.includes('id="serviceGate"'), "User app must include the maintenance/update gate");
 ok(html.includes('id="reportForm"'), "User app must include playback reports");
 ok(html.includes('id="previousEpisodeButton"'), "Player must include a previous-episode control");
+ok(html.includes('hls.js@1.7.3/dist/hls.min.js'), "Player must load the pinned HLS.js runtime");
+ok(html.includes("worker-src 'self' blob:"), "CSP must allow the HLS.js worker blob");
 
 const adminHtml = fs.readFileSync(path.join(adminRoot, "index.html"), "utf8");
 const adminIds = [...adminHtml.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
@@ -168,6 +170,9 @@ ok(
 const appSource = fs.readFileSync(path.join(webRoot, "app.js"), "utf8");
 ok(appSource.includes("function previousEpisode("), "Player must resolve previous episodes");
 ok(appSource.includes("function releasePlayerMedia("), "Player must release video resources when leaving playback");
+ok(appSource.includes("function isHlsSource("), "Player must detect HLS sources");
+ok(appSource.includes("HlsRuntime?.isSupported?.()"), "Player must use HLS.js when MediaSource playback is available");
+ok(appSource.includes("hls.recoverMediaError()"), "Player must attempt HLS media recovery");
 ok(
   /if \(replace\) \{\s*window\.history\.replaceState\([^;]+;\s*renderRoute\(\);/m.test(appSource),
   "Route replacement must immediately render the new route"
