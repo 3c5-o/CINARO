@@ -177,6 +177,7 @@ ok(fs.existsSync(path.join(root, "firestore.rules")), "Missing Firestore securit
 ok(fs.existsSync(path.join(root, "firebase.json")), "Missing Firebase deployment config");
 const firestoreRules = fs.readFileSync(path.join(root, "firestore.rules"), "utf8");
 ok(firestoreRules.includes("function activeUser()"), "Firestore rules must define blocked-account enforcement");
+ok(firestoreRules.includes("data.get('status', 'active')"), "Blocked-account rules must safely handle users without a status field");
 ok(firestoreRules.includes("uniqueViewIncrement"), "Firestore rules must protect unique view increments");
 ok(firestoreRules.includes("supervisorCanPublish"), "Firestore rules must enforce supervisor publishing permissions");
 ok(firestoreRules.includes("match /contentRequests/{requestId}"), "Firestore rules must protect content requests");
