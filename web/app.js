@@ -83,6 +83,8 @@
     firebaseAuthUnsubscribe: null,
     userStateUnsubscribe: null,
     userProfileUnsubscribe: null,
+    requestUnsubscribe: null,
+    requests: [],
     remoteConfig: {},
     sections: [],
     serviceLocked: false,
@@ -113,6 +115,7 @@
     settingsSheet: byId("settingsSheet"),
     infoSheet: byId("infoSheet"),
     reportSheet: byId("reportSheet"),
+    requestSheet: byId("requestSheet"),
     toastRegion: byId("toastRegion"),
     confirmDialog: byId("confirmDialog"),
     authView: byId("authView"),
@@ -473,6 +476,9 @@
     state.userStateUnsubscribe = null;
     state.userProfileUnsubscribe?.();
     state.userProfileUnsubscribe = null;
+    state.requestUnsubscribe?.();
+    state.requestUnsubscribe = null;
+    state.requests = [];
     state.cloudHydrated = false;
     state.cloudRevision = 0;
     state.cloudSavedRevision = 0;
@@ -495,6 +501,16 @@
       },
       (error) => console.warn("CINARO user profile listener failed", error)
     );
+
+    if (!user.isAnonymous && state.firebase.listenMyRequests) {
+      state.requestUnsubscribe = state.firebase.listenMyRequests(
+        (rows) => {
+          state.requests = Array.isArray(rows) ? rows : [];
+          if (state.route?.name === "library" && state.libraryTab === "requests") renderLibrary();
+        },
+        (error) => console.warn("CINARO request listener failed", error)
+      );
+    }
   }
 
   function updateServiceGate() {
@@ -589,6 +605,9 @@
         state.userStateUnsubscribe = null;
         state.userProfileUnsubscribe?.();
         state.userProfileUnsubscribe = null;
+        state.requestUnsubscribe?.();
+        state.requestUnsubscribe = null;
+        state.requests = [];
         state.cloudHydrated = false;
         if (!state.localGuest) showAuth("login");
       }
@@ -1092,6 +1111,42 @@
     }).join("")}</div>`;
   }
 
+  function requestStatusInfo(status) {
+    const map = {
+      new: { label: "جديد", className: "new" },
+      reviewing: { label: "قيد المراجعة", className: "reviewing" },
+      added: { label: "تمت الإضافة", className: "added" },
+      rejected: { label: "مرفوض", className: "rejected" }
+    };
+    return map[status] || map.new;
+  }
+
+  function formatRequestDate(value) {
+    const date = new Date(Number(value) || Date.parse(value || ""));
+    if (!Number.isFinite(date.getTime())) return "";
+    return new Intl.DateTimeFormat("ar-IQ", { dateStyle: "medium" }).format(date);
+  }
+
+  function renderRequestList() {
+    if (!state.authUser || state.authUser.isAnonymous) {
+      return `<div class="request-empty-card">${icon("film")}<h2>طلبات المحتوى تحتاج حساب</h2><p>سجّل دخولك حتى ترسل طلب فيلم أو مسلسل وتتابع حالته.</p><button class="button primary" type="button" data-action="request-login">تسجيل الدخول</button></div>`;
+    }
+
+    const rows = [...state.requests].sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+    return `
+      <div class="request-toolbar"><div><b>طلباتك</b><small>الحالة تتحدث مباشرة من الإدارة.</small></div><button class="button primary" type="button" data-action="open-request-sheet">${icon("film")} طلب جديد</button></div>
+      <div class="request-list">
+        ${rows.length ? rows.map((request) => {
+          const status = requestStatusInfo(request.status);
+          const note = String(request.adminNote || "").trim();
+          return `<article class="request-card">
+            <div class="request-card-main"><span class="request-kind">${request.kind === "series" ? "مسلسل" : "فيلم"}</span><h3>${escapeHTML(request.title || "طلب محتوى")}</h3><p>${escapeHTML(request.notes || "بدون ملاحظات")}</p>${note ? `<small class="request-admin-note">ملاحظة الإدارة: ${escapeHTML(note)}</small>` : ""}</div>
+            <div class="request-card-meta"><span class="request-status ${status.className}">${status.label}</span><small>${escapeHTML(formatRequestDate(request.createdAt))}</small></div>
+          </article>`;
+        }).join("") : `<div class="request-empty-card compact">${icon("film")}<h2>ما عندك طلبات بعد</h2><p>أرسل أول طلب وسيظهر هنا مع حالته.</p></div>`}
+      </div>`;
+  }
+
   function renderLibrary() {
     const favoriteItems = DATA.items.filter((item) => favorites.has(item.id));
     const libraryDescription = state.authUser && !state.authUser.isAnonymous
@@ -1099,7 +1154,9 @@
       : "المحتوى المحفوظ وسجل المشاهدة موجودان على هذا الجهاز.";
     const content = state.libraryTab === "favorites"
       ? `<div class="media-grid">${favoriteItems.length ? favoriteItems.map(mediaCard).join("") : emptyState("heart", "قائمتك فارغة", "اضغط رمز القلب على أي فيلم أو مسلسل حتى تحفظه هنا.", "home", "استكشف المحتوى")}</div>`
-      : renderHistoryList();
+      : state.libraryTab === "history"
+        ? renderHistoryList()
+        : renderRequestList();
 
     elements.library.innerHTML = `
       <div class="content-shell page-shell">
@@ -1109,6 +1166,7 @@
         <div class="library-tabs" role="tablist">
           <button class="${state.libraryTab === "favorites" ? "active" : ""}" type="button" role="tab" data-action="library-tab" data-tab="favorites">${icon("heart")} المفضلة</button>
           <button class="${state.libraryTab === "history" ? "active" : ""}" type="button" role="tab" data-action="library-tab" data-tab="history">${icon("history")} سجل المشاهدة</button>
+          <button class="${state.libraryTab === "requests" ? "active" : ""}" type="button" role="tab" data-action="library-tab" data-tab="requests">${icon("film")} الطلبات</button>
         </div>
         <div id="libraryContent">${content}</div>
       </div>`;
@@ -1348,7 +1406,7 @@
 
   function closeSheets() {
     if (elements.sheetBackdrop) elements.sheetBackdrop.hidden = true;
-    [elements.settingsSheet, elements.infoSheet, elements.reportSheet].forEach((sheet) => {
+    [elements.settingsSheet, elements.infoSheet, elements.reportSheet, elements.requestSheet].forEach((sheet) => {
       if (sheet) sheet.hidden = true;
     });
     if (state.activeSheet) {
@@ -1384,6 +1442,21 @@
       byId("confirmAccept").onclick = () => finish(true);
       byId("confirmCancel").onclick = () => finish(false);
     });
+  }
+
+  function openRequestSheet() {
+    if (!state.firebase || !state.authUser || state.authUser.isAnonymous) {
+      closeSheets();
+      showAuth("login");
+      setAuthMessage("سجّل دخولك حتى ترسل طلب فيلم أو مسلسل.");
+      return;
+    }
+    byId("requestForm")?.reset();
+    if (byId("requestMessage")) {
+      byId("requestMessage").textContent = "";
+      byId("requestMessage").className = "auth-message";
+    }
+    openSheet(elements.requestSheet);
   }
 
   const player = {
@@ -1995,6 +2068,32 @@
     player.fullscreen.addEventListener("click", toggleFullscreen);
     player.pip.addEventListener("click", togglePictureInPicture);
     player.captions.addEventListener("click", toggleCaptions);
+    byId("requestContentButton")?.addEventListener("click", openRequestSheet);
+    byId("requestForm")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!state.firebase || !state.authUser || state.authUser.isAnonymous) return openRequestSheet();
+      const submit = event.currentTarget.querySelector('button[type="submit"]');
+      submit.disabled = true;
+      byId("requestMessage").textContent = "جاري إرسال الطلب…";
+      byId("requestMessage").className = "auth-message";
+      try {
+        await state.firebase.submitContentRequest({
+          kind: byId("requestKind").value,
+          title: byId("requestName").value,
+          notes: byId("requestNotes").value
+        });
+        closeSheets();
+        state.libraryTab = "requests";
+        navigate("library");
+        toast("تم إرسال طلبك إلى الإدارة");
+      } catch (error) {
+        byId("requestMessage").textContent = authErrorMessage(error);
+        byId("requestMessage").className = "auth-message error";
+      } finally {
+        submit.disabled = false;
+      }
+    });
+
     byId("playerMoreButton").addEventListener("click", () => { updatePlayerInfo(); openSheet(elements.infoSheet); });
     byId("openReportButton").addEventListener("click", () => {
       if (!player.media) return;
@@ -2106,8 +2205,13 @@
       renderSearchResultsOnly();
       input?.focus();
     } else if (action === "library-tab") {
-      state.libraryTab = button.dataset.tab;
+      state.libraryTab = ["favorites", "history", "requests"].includes(button.dataset.tab) ? button.dataset.tab : "favorites";
       renderLibrary();
+    } else if (action === "open-request-sheet") {
+      openRequestSheet();
+    } else if (action === "request-login") {
+      showAuth("login");
+      setAuthMessage("سجّل دخولك حتى ترسل طلب محتوى وتتابع حالته.");
     } else if (action === "remove-history") removeHistoryEntry(button.dataset.mediaKey);
     else if (action === "select-season") {
       state.selectedSeasons[button.dataset.itemId] = Number(button.dataset.season);
