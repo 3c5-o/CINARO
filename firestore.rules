@@ -152,6 +152,34 @@ service cloud.firestore {
       allow create, update, delete: if admin();
     }
 
+    match /contentRequests/{requestId} {
+      allow create: if signedIn()
+        && request.auth.token.email is string
+        && request.auth.token.email.size() > 0
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'userId', 'userEmail', 'title', 'kind', 'notes',
+          'status', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.userId is string
+        && request.resource.data.userEmail is string
+        && request.resource.data.userEmail == request.auth.token.email
+        && request.resource.data.userEmail.size() <= 180
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 2
+        && request.resource.data.title.size() <= 180
+        && request.resource.data.kind in ['movie', 'series']
+        && request.resource.data.notes is string
+        && request.resource.data.notes.size() <= 600
+        && request.resource.data.status == 'new';
+
+      allow read: if admin() || (
+        signedIn() && resource.data.userId == request.auth.uid
+      );
+
+      allow update, delete: if admin();
+    }
+
     match /reports/{reportId} {
       allow create: if signedIn()
         && request.resource.data.userId == request.auth.uid
