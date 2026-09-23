@@ -110,6 +110,9 @@ ok(html.includes('src="firebase.js" type="module"'), "HTML must load Firebase as
 ok(html.includes('id="authView"'), "HTML must include the authentication view");
 ok(html.includes('id="serviceGate"'), "User app must include the maintenance/update gate");
 ok(html.includes('id="reportForm"'), "User app must include playback reports");
+ok(html.includes('id="requestSheet"'), "User app must include the content request sheet");
+ok(html.includes('id="requestForm"'), "User app must include the content request form");
+ok(html.includes('id="requestContentButton"'), "User settings must expose the content request flow");
 ok(html.includes('id="previousEpisodeButton"'), "Player must include a previous-episode control");
 ok(html.includes('hls.js@1.7.3/dist/hls.min.js'), "Player must load the pinned HLS.js runtime");
 ok(html.includes("worker-src 'self' blob:"), "CSP must allow the HLS.js worker blob");
@@ -125,8 +128,14 @@ ok(adminHtml.includes('id="mobileNav"'), "Admin HTML must include mobile navigat
 ok(adminHtml.includes('id="seasonBuilder"'), "Admin must include the visual season builder");
 ok(adminHtml.includes('id="reportsTable"'), "Admin must include reports management");
 ok(!adminHtml.includes('id="contentSeasons"'), "Admin must not require JSON season editing");
+ok(adminHtml.includes('id="view-requests"'), "Admin must include the content request view");
+ok(adminHtml.includes('id="requestStatusFilter"'), "Admin must include request status filtering");
+ok(adminHtml.includes('id="requestsTable"'), "Admin must include the request management table");
 
 const adminAppSource = fs.readFileSync(path.join(adminRoot, "app.js"), "utf8");
+ok(adminAppSource.includes("function renderRequests("), "Admin must render content requests");
+ok(adminAppSource.includes('listen("contentRequests", "requests"'), "Admin must listen to content requests");
+ok(adminAppSource.includes("function saveContentRequest("), "Admin must update request statuses");
 ok(adminAppSource.includes("function inferMediaType("), "Admin must infer MP4/HLS media types");
 ok(adminAppSource.includes("backupUrl"), "Admin episode editor must preserve backup sources");
 ok(adminAppSource.includes("subtitleUrl"), "Admin episode editor must preserve subtitles");
@@ -166,6 +175,9 @@ ok(fs.existsSync(path.join(root, "firebase.json")), "Missing Firebase deployment
 const firestoreRules = fs.readFileSync(path.join(root, "firestore.rules"), "utf8");
 ok(firestoreRules.includes("uniqueViewIncrement"), "Firestore rules must protect unique view increments");
 ok(firestoreRules.includes("supervisorCanPublish"), "Firestore rules must enforce supervisor publishing permissions");
+ok(firestoreRules.includes("match /contentRequests/{requestId}"), "Firestore rules must protect content requests");
+ok(firestoreRules.includes("request.resource.data.status == 'new'"), "Users must only create requests in the new state");
+ok(firestoreRules.includes("allow update, delete: if admin()"), "Only admins may update or delete content requests");
 ok(firestoreRules.includes("match /reports/{reportId}"), "Firestore rules must protect user reports");
 ok(firestoreRules.includes("request.resource.data.details.size() <= 600"), "Firestore rules must bound report detail size");
 ok(firestoreRules.includes("request.resource.data.sourceUrl.size() <= 2048"), "Firestore rules must bound report source URLs");
@@ -177,6 +189,9 @@ ok(
 
 const appSource = fs.readFileSync(path.join(webRoot, "app.js"), "utf8");
 ok(appSource.includes("function previousEpisode("), "Player must resolve previous episodes");
+ok(appSource.includes("function renderRequestList("), "User app must render request history");
+ok(appSource.includes("state.firebase.submitContentRequest"), "User app must submit content requests through Firebase");
+ok(appSource.includes("state.firebase.listenMyRequests"), "User app must listen to the signed-in user's requests");
 ok(appSource.includes("function releasePlayerMedia("), "Player must release video resources when leaving playback");
 ok(appSource.includes("$('track[data-cinaro-track=\"true\"]', player.video).forEach"), "Player teardown must remove all dynamic subtitle tracks");
 ok(appSource.includes("function isHlsSource("), "Player must detect HLS sources");
@@ -187,6 +202,11 @@ ok(
   "Route replacement must immediately render the new route"
 );
 ok(appSource.includes("clearInterval(player.endedTimer)"), "Autoplay countdown must be cleared as an interval");
+
+const userFirebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
+ok(userFirebaseSource.includes("submitContentRequest: async function"), "Firebase client must support request submission");
+ok(userFirebaseSource.includes("listenMyRequests: function"), "Firebase client must support request history");
+ok(userFirebaseSource.includes('where("userId", "==", user.uid)'), "Request history must be scoped to the signed-in user");
 
 const adminFirebaseSource = fs.readFileSync(path.join(adminRoot, "firebase.js"), "utf8");
 ok(adminFirebaseSource.includes('projectId: "cinaro"'), "Admin Firebase project ID must be cinaro");
