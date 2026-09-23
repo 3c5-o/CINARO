@@ -18,16 +18,17 @@
     sections: [],
     logs: [],
     reports: [],
+    requests: [],
     seasonDraft: [],
     config: {},
     unsubscribers: [],
     dataListenersStarted: false,
-    filters: { contentSearch: "", contentKind: "all", contentStatus: "all", userSearch: "", userStatus: "all", reportStatus: "open" }
+    filters: { contentSearch: "", contentKind: "all", contentStatus: "all", userSearch: "", userStatus: "all", reportStatus: "open", requestStatus: "pending" }
   };
 
   const $ = (id) => document.getElementById(id);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
-  const views = ["dashboard", "content", "editor", "reports", "users", "supervisors", "sections", "settings", "activity"];
+  const views = ["dashboard", "content", "editor", "reports", "requests", "users", "supervisors", "sections", "settings", "activity"];
 
   function escapeHTML(value) {
     return String(value == null ? "" : value).replace(/[&<>'"]/g, (character) => ({
@@ -289,6 +290,7 @@
     setMobileNavigation(false);
     if (next === "content") renderContent();
     if (next === "reports") renderReports();
+    if (next === "requests") renderRequests();
     if (next === "users") renderUsers();
     if (next === "supervisors") renderSupervisors();
     if (next === "sections") renderSections();
@@ -308,6 +310,7 @@
     $("navContentCount").textContent = formatNumber(state.content.length);
     $("navUsersCount").textContent = formatNumber(state.users.length);
     if ($("navReportsCount")) $("navReportsCount").textContent = formatNumber(state.reports.filter((item) => item.status !== "resolved").length);
+    if ($("navRequestsCount")) $("navRequestsCount").textContent = formatNumber(state.requests.filter((item) => ["new", "reviewing"].includes(item.status)).length);
 
     const recent = [...state.content].sort((a, b) => asNumber(b.updatedAt || b.createdAt) - asNumber(a.updatedAt || a.createdAt)).slice(0, 5);
     $("recentContent").innerHTML = recent.length ? recent.map((item) => `
@@ -391,6 +394,58 @@
       const preview = report.sourceUrl ? `<button class="table-action" type="button" data-action="preview-url" data-url="${escapeHTML(report.sourceUrl)}" title="معاينة المصدر"><svg><use href="#i-eye"></use></svg></button>` : "";
       return `<div class="data-row"><span class="report-content"><b>${escapeHTML(report.contentTitle || report.contentId || "محتوى محذوف")}</b><small>${escapeHTML(report.contentId || "—")}${escapeHTML(episode)}</small></span><span class="kind-chip">${escapeHTML(categoryNames[report.category] || report.category || "أخرى")}</span><span class="report-details">${escapeHTML(report.details || "بلا تفاصيل")}<small>${escapeHTML(report.userEmail || report.userId || "مستخدم")}</small></span><span>${resolved ? '<span class="status-chip published">تمت المعالجة</span>' : '<span class="status-chip blocked">مفتوح</span>'}</span><span class="row-actions">${preview}<button class="table-action ${resolved ? "" : "success-action"}" type="button" data-action="toggle-report" data-id="${escapeHTML(report.id)}" data-status="${resolved ? "open" : "resolved"}" title="${resolved ? "إعادة فتح" : "وضع كمعالج"}"><svg><use href="#i-${resolved ? "activity" : "check"}"></use></svg></button></span></div>`;
     }).join("")}</div>`;
+  }
+
+  function renderRequests() {
+    const statusLabels = {
+      new: "جديد",
+      reviewing: "قيد المراجعة",
+      added: "تمت الإضافة",
+      rejected: "مرفوض"
+    };
+    const requestedStatus = state.filters.requestStatus;
+    const rows = [...state.requests].filter((request) => {
+      if (requestedStatus === "all") return true;
+      if (requestedStatus === "pending") return ["new", "reviewing"].includes(request.status);
+      return request.status === requestedStatus;
+    }).sort((a, b) => asNumber(b.createdAt) - asNumber(a.createdAt));
+
+    if (!rows.length) {
+      $("requestsTable").innerHTML = emptyTable("لا توجد طلبات ضمن هذه الحالة", "طلبات الأفلام والمسلسلات الجديدة ستظهر هنا.");
+      return;
+    }
+
+    $("requestsTable").innerHTML = `<div class="data-table requests-data-table"><div class="data-head"><span>الطلب</span><span>المستخدم</span><span>الحالة</span><span>ملاحظة الإدارة</span><span>حفظ</span></div>${rows.map((request) => {
+      const status = ["new", "reviewing", "added", "rejected"].includes(request.status) ? request.status : "new";
+      const options = Object.entries(statusLabels).map(([value, label]) => `<option value="${value}" ${value === status ? "selected" : ""}>${label}</option>`).join("");
+      return `<div class="data-row">
+        <span class="request-title-cell"><b>${escapeHTML(request.title || "طلب محتوى")}</b><small>${request.kind === "series" ? "مسلسل" : "فيلم"} · ${escapeHTML(request.notes || "بدون ملاحظات")}</small></span>
+        <span class="request-user-cell"><b>${escapeHTML(request.userEmail || "—")}</b><small>${escapeHTML(formatDate(request.createdAt))}</small></span>
+        <select class="request-status-control" data-request-select="${escapeHTML(request.id)}">${options}</select>
+        <input class="request-note-control" data-request-note="${escapeHTML(request.id)}" maxlength="600" value="${escapeHTML(request.adminNote || "")}" placeholder="ملاحظة اختيارية للمستخدم">
+        <span class="row-actions"><button class="table-action success-action" type="button" data-action="save-request" data-id="${escapeHTML(request.id)}" title="حفظ الحالة"><svg><use href="#i-save"></use></svg></button></span>
+      </div>`;
+    }).join("")}</div>`;
+  }
+
+  async function saveContentRequest(id) {
+    if (!isAdmin() || !state.firebase) return;
+    const statusControl = $("[data-request-select]").find((element) => element.dataset.requestSelect === id);
+    const noteControl = $("[data-request-note]").find((element) => element.dataset.requestNote === id);
+    const status = ["new", "reviewing", "added", "rejected"].includes(statusControl?.value) ? statusControl.value : "new";
+    const adminNote = asString(noteControl?.value).slice(0, 600);
+
+    try {
+      await state.firebase.saveDocument("contentRequests", id, {
+        status,
+        adminNote,
+        handledBy: state.authUser.uid
+      });
+      await state.firebase.logAudit("تحديث طلب محتوى", id, `${status} · ${adminNote || "بدون ملاحظة"}`, state.authUser);
+      toast("تم تحديث حالة الطلب");
+    } catch (error) {
+      toast(errorMessage(error), "error");
+    }
   }
 
   function renderActivity() {
@@ -899,6 +954,7 @@
     else if (action === "edit-section") editSection(id);
     else if (action === "delete-section") deleteSection(id);
     else if (action === "toggle-report") toggleReport(id, button.dataset.status);
+    else if (action === "save-request") saveContentRequest(id);
     else if (action === "preview-url") openMediaPreview(button.dataset.url, "معاينة مصدر البلاغ");
     else if (action === "preview-movie") openMediaPreview($("movieSourceUrl").value, "معاينة الفيلم");
     else if (action === "add-episode") {
@@ -931,6 +987,7 @@
       renderDashboard();
       if (state.view === "content") renderContent();
       if (state.view === "reports") renderReports();
+      if (state.view === "requests") renderRequests();
       if (state.view === "users") renderUsers();
       if (state.view === "supervisors") renderSupervisors();
       if (state.view === "sections") renderSections();
@@ -955,11 +1012,13 @@
       listen("users", "users", "المستخدمين");
       listen("supervisorAssignments", "supervisors", "تعيينات المشرفين");
       listen("reports", "reports", "البلاغات");
+      listen("contentRequests", "requests", "طلبات المحتوى");
       listen("auditLogs", "logs", "سجل العمليات");
     } else {
       state.users = [];
       state.supervisors = [];
       state.reports = [];
+      state.requests = [];
       state.logs = [];
     }
     state.unsubscribers.push(client.listenDoc("appConfig", "public", (config) => {
@@ -1045,6 +1104,7 @@
     $("userSearch")?.addEventListener("input", (event) => { state.filters.userSearch = event.target.value; renderUsers(); });
     $("userStatusFilter")?.addEventListener("change", (event) => { state.filters.userStatus = event.target.value; renderUsers(); });
     $("reportStatusFilter")?.addEventListener("change", (event) => { state.filters.reportStatus = event.target.value; renderReports(); });
+    $("requestStatusFilter")?.addEventListener("change", (event) => { state.filters.requestStatus = event.target.value; renderRequests(); });
     $("closeMediaPreview")?.addEventListener("click", closeMediaPreview);
     $("mediaPreviewDialog")?.addEventListener("click", (event) => {
       if (event.target === event.currentTarget) closeMediaPreview();
