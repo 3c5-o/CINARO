@@ -31,6 +31,7 @@ android {
             buildConfigField "String", "ONLINE_APP_URL", '"https://3c5-o.github.io/CINARO/web/#home"'
             buildConfigField "String", "OFFLINE_APP_URL", '"file:///android_asset/www/index.html#home"'
             buildConfigField "String", "APP_PATH", '"/CINARO/web/"'
+            buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "true"
         }
         admin {
             dimension "edition"
@@ -40,6 +41,7 @@ android {
             buildConfigField "String", "ONLINE_APP_URL", '"https://3c5-o.github.io/CINARO/admin/#dashboard"'
             buildConfigField "String", "OFFLINE_APP_URL", '"file:///android_asset/admin/index.html#dashboard"'
             buildConfigField "String", "APP_PATH", '"/CINARO/admin/"'
+            buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "false"
         }
     }
 
