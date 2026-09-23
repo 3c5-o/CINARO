@@ -160,6 +160,29 @@ service cloud.firestore {
           'season', 'episode', 'category', 'details', 'sourceUrl',
           'status', 'createdAt', 'updatedAt'
         ])
+        && request.resource.data.userId is string
+        && request.resource.data.userEmail is string
+        && request.resource.data.userEmail.size() <= 180
+        && request.resource.data.contentId is string
+        && request.resource.data.contentId.size() > 0
+        && request.resource.data.contentId.size() <= 120
+        && request.resource.data.contentTitle is string
+        && request.resource.data.contentTitle.size() > 0
+        && request.resource.data.contentTitle.size() <= 180
+        && request.resource.data.kind in ['movie', 'series']
+        && request.resource.data.season is int
+        && request.resource.data.season >= 0
+        && request.resource.data.season <= 1000
+        && request.resource.data.episode is int
+        && request.resource.data.episode >= 0
+        && request.resource.data.episode <= 10000
+        && request.resource.data.category is string
+        && request.resource.data.category.size() > 0
+        && request.resource.data.category.size() <= 40
+        && request.resource.data.details is string
+        && request.resource.data.details.size() <= 600
+        && request.resource.data.sourceUrl is string
+        && request.resource.data.sourceUrl.size() <= 2048
         && request.resource.data.status == 'open';
       allow read, update, delete: if admin();
     }
