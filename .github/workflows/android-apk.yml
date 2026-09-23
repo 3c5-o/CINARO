@@ -52,12 +52,13 @@ jobs:
       - name: Configure optional release signing
         id: signing
         env:
+          IS_PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
           KEYSTORE_BASE64: ${{ secrets.CINARO_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.CINARO_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.CINARO_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.CINARO_KEY_PASSWORD }}
         run: |
-          if [[ -n "$KEYSTORE_BASE64" && -n "$KEYSTORE_PASSWORD" && -n "$KEY_ALIAS" && -n "$KEY_PASSWORD" ]]; then
+          if [[ "$IS_PULL_REQUEST" != "true" && -n "$KEYSTORE_BASE64" && -n "$KEYSTORE_PASSWORD" && -n "$KEY_ALIAS" && -n "$KEY_PASSWORD" ]]; then
             printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/cinaro-release.jks"
             keytool -list -keystore "$RUNNER_TEMP/cinaro-release.jks" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
             echo "signed=true" >> "$GITHUB_OUTPUT"
