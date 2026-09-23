@@ -1426,7 +1426,9 @@
     failedSources: new Set(),
     requestedPlay: false,
     switchingSource: false,
-    viewRecorded: false
+    viewRecorded: false,
+    hls: null,
+    hlsRecoveryAttempts: 0
   };
 
   function playerMediaFromRoute(route) {
@@ -1567,6 +1569,23 @@
     player.captions.classList.remove("active");
   }
 
+  function destroyHls() {
+    if (!player.hls) return;
+    try { player.hls.destroy(); } catch (_) {}
+    player.hls = null;
+    player.hlsRecoveryAttempts = 0;
+  }
+
+  function isHlsSource(source, sourceUrl) {
+    const type = String(source?.type || "").toLowerCase();
+    if (type.includes("mpegurl") || type.includes("hls")) return true;
+    try {
+      return new URL(sourceUrl, location.href).pathname.toLowerCase().endsWith(".m3u8");
+    } catch (_) {
+      return /\.m3u8(?:$|[?#])/i.test(sourceUrl);
+    }
+  }
+
   function loadPlayerSource(index, restoreTime = 0, shouldPlay = false) {
     const source = player.media?.sources[index];
     player.sourceIndex = index;
@@ -1587,13 +1606,64 @@
     player.error.hidden = true;
     player.loading.hidden = false;
     player.video.pause();
+    destroyHls();
+    player.video.removeAttribute("src");
+    player.video.load();
     player.quality.value = String(index);
+
+    if (isHlsSource(source, sourceUrl)) {
+      const HlsRuntime = window.Hls;
+      if (HlsRuntime?.isSupported?.()) {
+        const hls = new HlsRuntime({
+          enableWorker: true,
+          lowLatencyMode: true,
+          backBufferLength: 90
+        });
+        player.hls = hls;
+        player.hlsRecoveryAttempts = 0;
+
+        hls.on(HlsRuntime.Events.MEDIA_ATTACHED, () => {
+          if (player.hls === hls) hls.loadSource(sourceUrl);
+        });
+        hls.on(HlsRuntime.Events.ERROR, (_event, data) => {
+          if (player.hls !== hls || !data?.fatal) return;
+
+          if (data.type === HlsRuntime.ErrorTypes.NETWORK_ERROR && player.hlsRecoveryAttempts < 1) {
+            player.hlsRecoveryAttempts += 1;
+            hls.startLoad();
+            return;
+          }
+          if (data.type === HlsRuntime.ErrorTypes.MEDIA_ERROR && player.hlsRecoveryAttempts < 2) {
+            player.hlsRecoveryAttempts += 1;
+            hls.recoverMediaError();
+            return;
+          }
+
+          destroyHls();
+          handlePlayerError();
+        });
+        hls.attachMedia(player.video);
+        return;
+      }
+
+      if (player.video.canPlayType("application/vnd.apple.mpegurl")) {
+        player.video.src = sourceUrl;
+        player.video.load();
+        return;
+      }
+
+      player.failedSources.add(index);
+      handlePlayerError();
+      return;
+    }
+
     player.video.src = sourceUrl;
     player.video.load();
   }
 
   function releasePlayerMedia() {
     player.video.pause();
+    destroyHls();
     player.requestedPlay = false;
     player.restorePlaying = false;
     player.switchingSource = false;
