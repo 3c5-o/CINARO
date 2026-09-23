@@ -1198,8 +1198,10 @@
     if (nextHash.startsWith("#watch/") && !location.hash.startsWith("#watch/")) {
       state.lastNonPlayerHash = location.hash || "#home";
     }
-    if (replace) window.history.replaceState(null, "", nextHash);
-    else if (location.hash === nextHash) renderRoute();
+    if (replace) {
+      window.history.replaceState(null, "", nextHash);
+      renderRoute();
+    } else if (location.hash === nextHash) renderRoute();
     else location.hash = nextHash;
   }
 
@@ -1406,6 +1408,7 @@
     captions: byId("captionsButton"),
     pip: byId("pipButton"),
     fullscreen: byId("fullscreenButton"),
+    previous: byId("previousEpisodeButton"),
     next: byId("nextEpisodeButton"),
     ended: byId("endedCard"),
     endedTitle: byId("endedTitle"),
@@ -1442,11 +1445,13 @@
         thumbnail: item.backdrop || item.poster,
         sources: item.sources || [],
         subtitles: item.subtitles || [],
+        previousRoute: null,
         nextRoute: null
       };
     }
     const resolved = getEpisode(item, route.parts[3], route.parts[4]);
     if (!resolved) return null;
+    const previous = previousEpisode(item, resolved.season.number, resolved.episode.number);
     const next = nextEpisode(item, resolved.season.number, resolved.episode.number);
     return {
       key: mediaKey(item, resolved.season.number, resolved.episode.number),
@@ -1459,8 +1464,15 @@
       thumbnail: resolved.episode.thumbnail || item.backdrop || item.poster,
       sources: resolved.episode.sources || [],
       subtitles: resolved.episode.subtitles || [],
+      previousRoute: previous ? `watch/series/${encodeURIComponent(item.id)}/${previous.season.number}/${previous.episode.number}` : null,
       nextRoute: next ? `watch/series/${encodeURIComponent(item.id)}/${next.season.number}/${next.episode.number}` : null
     };
+  }
+
+  function previousEpisode(item, seasonNumber, episodeNumber) {
+    const flat = item.seasons.flatMap((season) => season.episodes.map((episode) => ({ season, episode })));
+    const index = flat.findIndex((entry) => Number(entry.season.number) === Number(seasonNumber) && Number(entry.episode.number) === Number(episodeNumber));
+    return index > 0 ? flat[index - 1] : null;
   }
 
   function nextEpisode(item, seasonNumber, episodeNumber) {
@@ -1501,6 +1513,7 @@
     player.title.textContent = media.title;
     player.subtitle.textContent = media.subtitle;
     player.ambient.style.backgroundImage = `url('${cssImage(media.thumbnail)}')`;
+    player.previous.hidden = !media.previousRoute;
     player.next.hidden = !media.nextRoute;
     player.ended.hidden = true;
     player.error.hidden = true;
@@ -1578,14 +1591,40 @@
     player.video.load();
   }
 
-  function hidePlayer() {
-    if (player.root.hidden) return;
-    persistPlayerProgress(true);
+  function releasePlayerMedia() {
     player.video.pause();
-    player.root.hidden = true;
-    player.stage.classList.remove("controls-hidden", "is-playing");
+    player.requestedPlay = false;
+    player.restorePlaying = false;
+    player.switchingSource = false;
+    player.failedSources.clear();
     clearTimeout(player.controlsTimer);
-    clearTimeout(player.endedTimer);
+    clearInterval(player.endedTimer);
+    player.controlsTimer = 0;
+    player.endedTimer = 0;
+
+    if (document.pictureInPictureElement === player.video) {
+      document.exitPictureInPicture().catch(() => {});
+    }
+    if (document.fullscreenElement && player.stage.contains(document.fullscreenElement)) {
+      document.exitFullscreen().catch(() => {});
+    }
+
+    player.video.removeAttribute("src");
+    player.video.load();
+    $('track[data-cinaro-track="true"]', player.video).forEach((track) => track.remove());
+    player.media = null;
+    player.sourceIndex = 0;
+    player.restoreTime = 0;
+    player.ended.hidden = true;
+    player.error.hidden = true;
+    player.loading.hidden = true;
+    player.stage.classList.remove("controls-hidden", "is-playing");
+  }
+
+  function hidePlayer() {
+    if (!player.root.hidden) persistPlayerProgress(true);
+    player.root.hidden = true;
+    releasePlayerMedia();
   }
 
   function closePlayer() {
@@ -1713,9 +1752,17 @@
     toast(enable ? "تم تشغيل الترجمة" : "تم إيقاف الترجمة");
   }
 
+  function goToPreviousEpisode() {
+    if (!player.media?.previousRoute) return;
+    clearInterval(player.endedTimer);
+    player.endedTimer = 0;
+    navigate(player.media.previousRoute, true);
+  }
+
   function goToNextEpisode() {
     if (!player.media?.nextRoute) return;
-    clearTimeout(player.endedTimer);
+    clearInterval(player.endedTimer);
+    player.endedTimer = 0;
     navigate(player.media.nextRoute, true);
   }
 
@@ -1726,6 +1773,8 @@
     player.endedTitle.textContent = player.media?.episode ? `انتهت الحلقة ${player.media.episode.number}` : "انتهى الفيلم";
     player.endedNext.hidden = !player.media?.nextRoute;
     showPlayerControls();
+    clearInterval(player.endedTimer);
+    player.endedTimer = 0;
     if (settings.autoplayNext && player.media?.nextRoute) {
       let remaining = 5;
       player.endedNext.textContent = `الحلقة التالية (${remaining})`;
@@ -1733,6 +1782,7 @@
         remaining -= 1;
         if (remaining <= 0) {
           clearInterval(player.endedTimer);
+          player.endedTimer = 0;
           goToNextEpisode();
         } else {
           player.endedNext.textContent = `الحلقة التالية (${remaining})`;
@@ -1860,10 +1910,12 @@
       player.failedSources.clear();
       loadPlayerSource(player.sourceIndex, player.video.currentTime || player.restoreTime, true);
     });
+    player.previous.addEventListener("click", goToPreviousEpisode);
     player.next.addEventListener("click", goToNextEpisode);
     player.endedNext.addEventListener("click", goToNextEpisode);
     byId("replayButton").addEventListener("click", () => {
-      clearTimeout(player.endedTimer);
+      clearInterval(player.endedTimer);
+      player.endedTimer = 0;
       player.ended.hidden = true;
       player.video.currentTime = 0;
       player.requestedPlay = true;
@@ -2170,7 +2222,7 @@
       pause: () => player.video.pause(),
       seekbackward: (details) => seekBy(-(details.seekOffset || 10)),
       seekforward: (details) => seekBy(details.seekOffset || 10),
-      previoustrack: () => seekBy(-10),
+      previoustrack: () => player.media?.previousRoute ? goToPreviousEpisode() : seekBy(-10),
       nexttrack: goToNextEpisode,
       stop: closePlayer
     };
@@ -2188,7 +2240,7 @@
     updateNetworkStatus();
     registerServiceWorker();
     if (!location.hash) navigate("home", true);
-    renderRoute();
+    else renderRoute();
     updateAccountUI();
 
     window.addEventListener("cinaro:firebase-ready", (event) => connectFirebase(event.detail?.client));
