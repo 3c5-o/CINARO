@@ -110,6 +110,7 @@ ok(html.includes('src="firebase.js" type="module"'), "HTML must load Firebase as
 ok(html.includes('id="authView"'), "HTML must include the authentication view");
 ok(html.includes('id="serviceGate"'), "User app must include the maintenance/update gate");
 ok(html.includes('id="reportForm"'), "User app must include playback reports");
+ok(html.includes('id="previousEpisodeButton"'), "Player must include a previous-episode control");
 
 const adminHtml = fs.readFileSync(path.join(adminRoot, "index.html"), "utf8");
 const adminIds = [...adminHtml.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
@@ -150,6 +151,20 @@ const firestoreRules = fs.readFileSync(path.join(root, "firestore.rules"), "utf8
 ok(firestoreRules.includes("uniqueViewIncrement"), "Firestore rules must protect unique view increments");
 ok(firestoreRules.includes("supervisorCanPublish"), "Firestore rules must enforce supervisor publishing permissions");
 ok(firestoreRules.includes("match /reports/{reportId}"), "Firestore rules must protect user reports");
+ok(!firestoreRules.includes("allow read, write: if true"), "Firestore rules must never allow unrestricted global read/write");
+ok(
+  firestoreRules.includes("match /{document=**}") && firestoreRules.includes("allow read, write: if false"),
+  "Firestore rules must keep a default-deny fallback"
+);
+
+const appSource = fs.readFileSync(path.join(webRoot, "app.js"), "utf8");
+ok(appSource.includes("function previousEpisode("), "Player must resolve previous episodes");
+ok(appSource.includes("function releasePlayerMedia("), "Player must release video resources when leaving playback");
+ok(
+  /if \(replace\) \{\s*window\.history\.replaceState\([^;]+;\s*renderRoute\(\);/m.test(appSource),
+  "Route replacement must immediately render the new route"
+);
+ok(appSource.includes("clearInterval(player.endedTimer)"), "Autoplay countdown must be cleared as an interval");
 
 const adminFirebaseSource = fs.readFileSync(path.join(adminRoot, "firebase.js"), "utf8");
 ok(adminFirebaseSource.includes('projectId: "cinaro"'), "Admin Firebase project ID must be cinaro");
