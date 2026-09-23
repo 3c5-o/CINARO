@@ -321,6 +321,10 @@
         <span><svg aria-hidden="true"><use href="#i-download"></use></svg><span><b>تثبيت CINARO</b><small>إضافته كتطبيق على الهاتف</small></span></span>
         <svg aria-hidden="true"><use href="#i-arrow-left"></use></svg>
       </button>
+      <button id="requestContentButton" class="setting-row action-row" type="button">
+        <span><svg aria-hidden="true"><use href="#i-film"></use></svg><span><b>طلب فيلم أو مسلسل</b><small>أرسل طلبك وتابع حالته من قائمتي</small></span></span>
+        <svg aria-hidden="true"><use href="#i-arrow-left"></use></svg>
+      </button>
       <button id="clearHistoryButton" class="setting-row action-row danger-row" type="button">
         <span><svg aria-hidden="true"><use href="#i-trash"></use></svg><span><b>مسح سجل المشاهدة</b><small>لا يحذف الأفلام من المفضلة</small></span></span>
         <svg aria-hidden="true"><use href="#i-arrow-left"></use></svg>
@@ -355,6 +359,21 @@
       <label><span>تفاصيل إضافية</span><textarea id="reportDetails" rows="4" maxlength="600" placeholder="اكتب ما حدث باختصار…"></textarea></label>
       <button class="button primary" type="submit"><svg aria-hidden="true"><use href="#i-check"></use></svg> إرسال البلاغ</button>
       <p id="reportMessage" class="auth-message" role="status"></p>
+    </form>
+  </aside>
+
+  <aside id="requestSheet" class="bottom-sheet compact-sheet" aria-labelledby="requestTitle" hidden>
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">
+      <div><small>مكتبة CINARO</small><h2 id="requestTitle">طلب فيلم أو مسلسل</h2></div>
+      <button class="icon-button" type="button" data-close-sheet aria-label="إغلاق"><svg aria-hidden="true"><use href="#i-x"></use></svg></button>
+    </div>
+    <form id="requestForm" class="report-form">
+      <label><span>نوع المحتوى</span><select id="requestKind" required><option value="movie">فيلم</option><option value="series">مسلسل</option></select></label>
+      <label><span>اسم الفيلم أو المسلسل</span><input id="requestName" maxlength="180" minlength="2" required placeholder="اكتب الاسم بدقة"></label>
+      <label><span>ملاحظات</span><textarea id="requestNotes" rows="4" maxlength="600" placeholder="مثلاً سنة الإصدار أو لغة الترجمة — اختياري"></textarea></label>
+      <button class="button primary" type="submit"><svg aria-hidden="true"><use href="#i-check"></use></svg> إرسال الطلب</button>
+      <p id="requestMessage" class="auth-message" role="status"></p>
     </form>
   </aside>
 
