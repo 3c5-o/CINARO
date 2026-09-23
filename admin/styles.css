@@ -235,7 +235,7 @@ code { color: #a8bad0; font-family: ui-monospace, SFMono-Regular, Menlo, monospa
 .season-card-head label:nth-child(2) { flex: 1; }
 .season-card-head .table-action { margin-bottom: .1rem; }
 .episode-builder-list { display: grid; gap: .7rem; padding: .85rem; }
-.episode-builder-row { display: grid; grid-template-columns: 5.5rem minmax(130px, .7fr) minmax(220px, 1.4fr) 5.5rem 2.2rem; gap: .55rem; align-items: end; padding: .7rem; border: 1px solid rgba(255,255,255,.065); border-radius: 12px; background: rgba(255,255,255,.018); }
+.episode-builder-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .55rem; align-items: end; padding: .7rem; border: 1px solid rgba(255,255,255,.065); border-radius: 12px; background: rgba(255,255,255,.018); }
 .episode-builder-row label { min-width: 0; }
 .episode-builder-row input { min-width: 0; }
 .episode-builder-row .table-action { margin-bottom: .25rem; }
