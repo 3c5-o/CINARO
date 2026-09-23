@@ -923,6 +923,7 @@
     const video = $("mediaPreviewVideo");
     $("mediaPreviewTitle").textContent = title;
     $("mediaPreviewMessage").textContent = "إذا لم يبدأ الفيديو، فتحقق أن الرابط مباشر ويسمح بالتشغيل من التطبيق.";
+    $("mediaPreviewMessage").className = "form-message";
     dialog.hidden = false;
     video.pause();
     destroyPreviewHls();
