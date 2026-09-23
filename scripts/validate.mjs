@@ -126,6 +126,14 @@ ok(adminHtml.includes('id="seasonBuilder"'), "Admin must include the visual seas
 ok(adminHtml.includes('id="reportsTable"'), "Admin must include reports management");
 ok(!adminHtml.includes('id="contentSeasons"'), "Admin must not require JSON season editing");
 
+const adminAppSource = fs.readFileSync(path.join(adminRoot, "app.js"), "utf8");
+ok(adminAppSource.includes("function inferMediaType("), "Admin must infer MP4/HLS media types");
+ok(adminAppSource.includes("backupUrl"), "Admin episode editor must preserve backup sources");
+ok(adminAppSource.includes("subtitleUrl"), "Admin episode editor must preserve subtitles");
+ok(adminAppSource.includes("extraSources: sources.slice(2)"), "Admin must preserve additional episode sources");
+ok(adminAppSource.includes("extraSubtitles: subtitles.slice(1)"), "Admin must preserve additional episode subtitles");
+ok(adminAppSource.includes("thumbnail: validMediaUrl(episode.thumbnail"), "Admin must preserve episode thumbnails");
+
 const adminStyles = fs.readFileSync(path.join(adminRoot, "styles.css"), "utf8");
 ok(adminStyles.includes('inset-inline-start: 0'), "Admin sidebar must use logical RTL positioning");
 ok(!adminStyles.includes('inset: 0 auto 0 0'), "Admin mobile sidebar must not mix physical and logical positioning");
