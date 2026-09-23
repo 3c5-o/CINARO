@@ -9,6 +9,13 @@ on:
       - "admin/**"
       - "android-app/**"
       - ".github/workflows/android-apk.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "admin/**"
+      - "android-app/**"
+      - ".github/workflows/android-apk.yml"
   workflow_dispatch:
 
 permissions:
