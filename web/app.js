@@ -1755,7 +1755,7 @@
 
     player.video.removeAttribute("src");
     player.video.load();
-    $('track[data-cinaro-track="true"]', player.video).forEach((track) => track.remove());
+    player.video.querySelectorAll('track[data-cinaro-track="true"]').forEach((track) => track.remove());
     player.media = null;
     player.sourceIndex = 0;
     player.restoreTime = 0;
