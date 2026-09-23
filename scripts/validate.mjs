@@ -170,6 +170,7 @@ ok(
 const appSource = fs.readFileSync(path.join(webRoot, "app.js"), "utf8");
 ok(appSource.includes("function previousEpisode("), "Player must resolve previous episodes");
 ok(appSource.includes("function releasePlayerMedia("), "Player must release video resources when leaving playback");
+ok(appSource.includes("$('track[data-cinaro-track=\"true\"]', player.video).forEach"), "Player teardown must remove all dynamic subtitle tracks");
 ok(appSource.includes("function isHlsSource("), "Player must detect HLS sources");
 ok(appSource.includes("HlsRuntime?.isSupported?.()"), "Player must use HLS.js when MediaSource playback is available");
 ok(appSource.includes("hls.recoverMediaError()"), "Player must attempt HLS media recovery");
