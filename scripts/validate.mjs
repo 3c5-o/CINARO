@@ -151,6 +151,8 @@ const firestoreRules = fs.readFileSync(path.join(root, "firestore.rules"), "utf8
 ok(firestoreRules.includes("uniqueViewIncrement"), "Firestore rules must protect unique view increments");
 ok(firestoreRules.includes("supervisorCanPublish"), "Firestore rules must enforce supervisor publishing permissions");
 ok(firestoreRules.includes("match /reports/{reportId}"), "Firestore rules must protect user reports");
+ok(firestoreRules.includes("request.resource.data.details.size() <= 600"), "Firestore rules must bound report detail size");
+ok(firestoreRules.includes("request.resource.data.sourceUrl.size() <= 2048"), "Firestore rules must bound report source URLs");
 ok(!firestoreRules.includes("allow read, write: if true"), "Firestore rules must never allow unrestricted global read/write");
 ok(
   firestoreRules.includes("match /{document=**}") && firestoreRules.includes("allow read, write: if false"),
