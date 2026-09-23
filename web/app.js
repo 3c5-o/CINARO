@@ -1502,7 +1502,8 @@
       return;
     }
 
-    clearTimeout(player.endedTimer);
+    clearInterval(player.endedTimer);
+    player.endedTimer = 0;
     player.media = media;
     player.sourceIndex = 0;
     player.failedSources.clear();
