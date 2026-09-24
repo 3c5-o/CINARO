@@ -11,7 +11,7 @@ const ok = (condition, message) => { if (!condition) errors.push(message); };
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 const expectedVersion = packageJson.version;
-ok(expectedVersion === "2.3.2", "Package version must be CINARO 2.3.2");
+ok(expectedVersion === "2.4.0", "Package version must be CINARO 2.4.0");
 
 const requiredFiles = [
   "index.html",
@@ -117,6 +117,8 @@ ok(html.includes('id="reportForm"'), "User app must include playback reports");
 ok(html.includes('id="requestSheet"'), "User app must include the content request sheet");
 ok(html.includes('id="requestForm"'), "User app must include the content request form");
 ok(html.includes('id="requestContentButton"'), "User settings must expose the content request flow");
+ok(html.includes('id="checkUpdateButton"'), "User settings must expose an explicit update check");
+ok(html.includes('id="updateStatusText"'), "User settings must display release status");
 ok(html.includes('id="previousEpisodeButton"'), "Player must include a previous-episode control");
 ok(html.includes('hls.js@1.7.3/dist/hls.min.js'), "Player must load the pinned HLS.js runtime");
 ok(html.includes("worker-src 'self' blob:"), "CSP must allow the HLS.js worker blob");
@@ -135,6 +137,12 @@ ok(!adminHtml.includes('id="contentSeasons"'), "Admin must not require JSON seas
 ok(adminHtml.includes('id="view-requests"'), "Admin must include the content request view");
 ok(adminHtml.includes('id="requestStatusFilter"'), "Admin must include request status filtering");
 ok(adminHtml.includes('id="requestsTable"'), "Admin must include the request management table");
+ok(adminHtml.includes('data-view="requests" data-admin-only') && adminHtml.includes('id="mobileRequestsCount"'), "Admin mobile navigation must expose content requests with a badge");
+ok(adminHtml.includes('id="statRequests"') && adminHtml.includes('id="statReports"'), "Admin dashboard must surface active requests and reports");
+ok(adminHtml.includes('id="validateContentButton"'), "Admin editor must expose playback-link validation");
+ok(adminHtml.includes('id="contentSectionsPicker"') && adminHtml.includes('id="supervisorSectionsPicker"'), "Admin must use visual section pickers");
+ok(adminHtml.includes('id="exportBackupButton"') && adminHtml.includes('id="importBackupButton"') && adminHtml.includes('id="exportAuditButton"'), "Admin must expose backup restore and audit export");
+ok(adminHtml.includes('id="settingLatestVersion"') && adminHtml.includes('id="settingUpdateNotes"'), "Admin update settings must include latest version and release notes");
 ok(adminHtml.includes('hls.js@1.7.3/dist/hls.min.js'), "Admin must load the pinned HLS.js runtime");
 ok(adminHtml.includes('id="tmdbImportPanel"'), "Admin editor must expose TMDb import");
 ok(adminHtml.includes('id="tmdbSettingsForm"'), "Admin settings must expose TMDb token controls");
@@ -152,6 +160,19 @@ ok(adminAppSource.includes("HlsRuntime?.isSupported?.()"), "Admin must explicitl
 ok(adminAppSource.includes("function renderRequests("), "Admin must render content requests");
 ok(adminAppSource.includes('listen("contentRequests", "requests"'), "Admin must listen to content requests");
 ok(adminAppSource.includes("function saveContentRequest("), "Admin must update request statuses");
+ok(adminAppSource.includes("function openRequestAsContent("), "Admin must turn requests into manual or TMDb content");
+ok(adminAppSource.includes('action === "request-add-manual"') && adminAppSource.includes('action === "request-add-tmdb"'), "Admin request rows must expose manual and TMDb fulfillment");
+ok(adminAppSource.includes("state.pendingRequestId") && adminAppSource.includes('status: "added"') && adminAppSource.includes("contentId: id"), "Saving requested content must complete and link the request");
+ok(adminAppSource.includes("function saveReport(") && adminAppSource.includes('data-report-select'), "Admin must support multi-state report triage");
+ok(adminAppSource.includes("function validateCurrentPlayback(") && adminAppSource.includes("function probePlaybackUrl("), "Admin must validate playback links before publishing");
+ok(adminAppSource.includes("رقم حلقة مكرر") && adminAppSource.includes("رقم موسم مكرر"), "Admin must reject duplicate season and episode numbers");
+ok(adminAppSource.includes("function exportBackup(") && adminAppSource.includes("function importBackupFile(") && adminAppSource.includes("function exportAuditCsv("), "Admin must implement backup restore and audit export");
+ok(adminAppSource.includes("function renderSectionPickers(") && adminAppSource.includes("function toggleSectionChoice("), "Admin must implement visual section selection");
+ok(adminAppSource.includes("managementSectionId"), "Admin content writes must include a canonical management section");
+ok(adminAppSource.includes("function migrateManagementSections("), "Admin must migrate legacy content to canonical management sections");
+ok(adminAppSource.includes("تم منع استيراد نسخة مكررة من TMDb"), "Admin must block duplicate TMDb imports");
+ok(adminAppSource.includes("existingDraft") && adminAppSource.includes("previousEpisode"), "TMDb series refresh must preserve existing episode playback");
+ok(adminAppSource.includes('window.addEventListener("unhandledrejection"'), "Admin must surface asynchronous runtime failures");
 ok(adminAppSource.includes('document.querySelectorAll("[data-request-select]")'), "Admin request status control must use a CSS selector query");
 ok(adminAppSource.includes('document.querySelectorAll("[data-request-note]")'), "Admin request note control must use a CSS selector query");
 ok(!adminAppSource.includes('const statusControl = $("[data-request-select]")'), "Admin must not pass CSS selectors to the ID helper");
@@ -219,7 +240,7 @@ const androidBuild = fs.readFileSync(path.join(root, "android-app", "app", "buil
 ok(androidBuild.includes('buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "true"'), "User Android flavor must block screen capture");
 ok(androidBuild.includes('buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "false"'), "Admin Android flavor must keep normal screen capture behavior");
 ok(androidBuild.includes(`versionName "${expectedVersion}"`), "Android versionName must match package.json");
-ok(androidBuild.includes('versionCode 9'), "Android versionCode must be 9 for CINARO 2.3.2");
+ok(androidBuild.includes('versionCode 10'), "Android versionCode must be 10 for CINARO 2.4.0");
 ok(fs.existsSync(path.join(root, "android-app", "app", "src", "admin", "res", "mipmap-xxxhdpi", "ic_launcher.png")), "Admin Android flavor must have a dedicated launcher icon");
 
 const firebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
@@ -235,7 +256,8 @@ ok(firestoreRules.includes("data.get('status', 'active')"), "Blocked-account rul
 ok(firestoreRules.includes("uniqueViewIncrement"), "Firestore rules must protect unique view increments");
 ok(firestoreRules.includes("supervisorCanPublish"), "Firestore rules must enforce supervisor publishing permissions");
 ok(firestoreRules.includes("supervisorCanReadContent"), "Firestore rules must scope supervisor content reads");
-ok(firestoreRules.includes("data.sectionIds.hasAny(currentAssignment().data.sectionIds)"), "Supervisor reads must intersect assigned section IDs");
+ok(firestoreRules.includes("data.managementSectionId in currentAssignment().data.sectionIds"), "Supervisor reads must require the canonical assigned management section");
+ok(firestoreRules.includes("data.sectionIds.hasOnly(currentAssignment().data.sectionIds)"), "Supervisor writes must stay entirely inside assigned sections");
 ok(!firestoreRules.includes("|| supervisor();"), "Firestore content reads must not grant supervisors blanket access");
 ok(firestoreRules.includes("supervisorCanCreateContent"), "Firestore rules must constrain supervisor content creation");
 ok(firestoreRules.includes("supervisorCanUpdateContent"), "Firestore rules must constrain supervisor content updates");
@@ -245,7 +267,9 @@ ok(firestoreRules.includes("allow write: if admin() || (owner(userId) && activeU
 ok(firestoreRules.includes("request.resource.data.get('views', 0) == resource.data.get('views', 0)"), "Supervisors must not change view counters");
 ok(firestoreRules.includes("match /contentRequests/{requestId}"), "Firestore rules must protect content requests");
 ok(firestoreRules.includes("request.resource.data.status == 'new'"), "Users must only create requests in the new state");
-ok(firestoreRules.includes("allow update, delete: if admin()"), "Only admins may update or delete content requests");
+ok(firestoreRules.includes("allow update: if admin()"), "Only admins may update content requests");
+ok(firestoreRules.includes("resource.data.status == 'new'"), "Users may cancel only new content requests");
+ok(firestoreRules.includes("resource.data.userId == request.auth.uid"), "Request cancellation must be limited to the request owner");
 ok(firestoreRules.includes("match /reports/{reportId}"), "Firestore rules must protect user reports");
 ok(firestoreRules.includes("request.resource.data.details.size() <= 600"), "Firestore rules must bound report detail size");
 ok(firestoreRules.includes("request.resource.data.sourceUrl.size() <= 2048"), "Firestore rules must bound report source URLs");
@@ -261,6 +285,14 @@ ok(appSource.includes("function previousEpisode("), "Player must resolve previou
 ok(appSource.includes("function renderRequestList("), "User app must render request history");
 ok(appSource.includes("state.firebase.submitContentRequest"), "User app must submit content requests through Firebase");
 ok(appSource.includes("state.firebase.listenMyRequests"), "User app must listen to the signed-in user's requests");
+ok(appSource.includes('action === "request-search"'), "Missing search results must offer a content request");
+ok(appSource.includes('action === "cancel-request"'), "Users must be able to cancel new content requests");
+ok(appSource.includes("requestNotificationsReady"), "User app must notify request status changes without notifying on initial hydration");
+ok(appSource.includes("cinaro/request-duplicate") && appSource.includes("cinaro/request-exists"), "User app must block duplicate and already-available content requests");
+ok(appSource.includes("catalog-more") && appSource.includes("search-more"), "Large catalogs and search results must render incrementally");
+ok(appSource.includes("playbackRate") && appSource.includes("captionsEnabled"), "Player speed and caption preferences must persist");
+ok(appSource.includes("function updateUpdateControl(") && appSource.includes("function openAvailableUpdate("), "User app must expose release status and update action");
+ok(appSource.includes('window.addEventListener("unhandledrejection"'), "User app must surface asynchronous runtime failures");
 ok(appSource.includes("function releasePlayerMedia("), "Player must release video resources when leaving playback");
 ok(appSource.includes("player.video.querySelectorAll('track[data-cinaro-track=\"true\"]').forEach"), "Player teardown must remove all dynamic subtitle tracks");
 ok(appSource.includes("function isHlsSource("), "Player must detect HLS sources");
@@ -289,6 +321,10 @@ ok(webStyles.includes("touch-action: manipulation"), "User interactive controls 
 
 const userFirebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
 ok(userFirebaseSource.includes("submitContentRequest: async function"), "Firebase client must support request submission");
+ok(userFirebaseSource.includes("cancelContentRequest: async function"), "Firebase client must support request cancellation");
+ok(userFirebaseSource.includes('latestVersion: textValue(data.latestVersion, "2.4.0"'), "Firebase config must expose latest release metadata");
+ok(userFirebaseSource.includes('updateNotes: textValue(data.updateNotes'), "Firebase config must expose update notes");
+ok(userFirebaseSource.includes("playbackRate: numberValue") && userFirebaseSource.includes("captionsEnabled: Boolean"), "Cloud state must persist player preferences");
 ok(userFirebaseSource.includes("listenMyRequests: function"), "Firebase client must support request history");
 ok(userFirebaseSource.includes(`app_version: "${expectedVersion}"`), "Firebase analytics version must match package.json");
 ok(userFirebaseSource.includes(`minimumVersion: textValue(data.minimumVersion, "${expectedVersion}"`), "Firebase minimum-version fallback must match package.json");
@@ -301,7 +337,7 @@ ok(adminFirebaseSource.includes('adminEmail: ADMIN_EMAIL'), "Admin Firebase clie
 ok(!adminFirebaseSource.match(/password\s*:\s*["']/i), "Admin Firebase client must not contain a password");
 ok(adminFirebaseSource.includes('role = "supervisor"'), "Admin Firebase must support assigned supervisors");
 ok(adminFirebaseSource.includes("listenContentForSections: function"), "Admin Firebase must expose a scoped supervisor listener");
-ok(adminFirebaseSource.includes('where("sectionIds", "array-contains-any", safeSections)'), "Supervisor content listener must query assigned sections");
+ok(adminFirebaseSource.includes('where("managementSectionId", "in", safeSections)'), "Supervisor content listener must query canonical management sections");
 
 const androidWorkflow = fs.readFileSync(path.join(root, ".github", "workflows", "android-apk.yml"), "utf8");
 ok(androidWorkflow.includes("CINARO_KEYSTORE_BASE64"), "Android workflow must support the stable signing keystore");
