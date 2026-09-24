@@ -1070,7 +1070,25 @@
       state.unsubscribers.push(stop);
     };
 
-    listen("content", "content", "المحتوى");
+    if (isAdmin()) {
+      listen("content", "content", "المحتوى");
+    } else {
+      const stopScopedContent = client.listenContentForSections(
+        assignedSectionIds(),
+        (rows) => {
+          state.content = rows.filter(canManageContent);
+          setConnection("connected", "متصل بمحتوى الأقسام المسموحة");
+          refresh();
+        },
+        (error) => {
+          console.warn("CINARO supervisor content listener failed", error);
+          setConnection("error", "تعذّر تحميل محتوى الأقسام المسموحة");
+          showNotice("تعذّر تحميل محتوى الأقسام المسموحة. تحقق من تعيين المشرف وقواعد Firestore.", "error");
+        }
+      );
+      state.unsubscribers.push(stopScopedContent);
+    }
+
     listen("sections", "sections", "الأقسام");
     if (isAdmin()) {
       listen("users", "users", "المستخدمين");
