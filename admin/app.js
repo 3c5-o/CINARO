@@ -14,6 +14,8 @@
     editingContentId: "",
     editingSupervisorUid: "",
     editingSectionId: "",
+    pendingRequestId: "",
+    pendingRequestTitle: "",
     content: [],
     users: [],
     supervisors: [],
@@ -311,10 +313,17 @@
     $("statActiveUsers").textContent = `${formatNumber(activeUsers)} نشط`;
     $("statViews").textContent = formatNumber(views);
     $("statSupervisors").textContent = formatNumber(state.supervisors.filter((item) => item.active !== false).length);
+    if ($("statRequests")) $("statRequests").textContent = formatNumber(state.requests.filter((item) => ["new", "reviewing"].includes(item.status)).length);
+    if ($("statReports")) $("statReports").textContent = formatNumber(state.reports.filter((item) => item.status !== "resolved").length);
     $("navContentCount").textContent = formatNumber(state.content.length);
     $("navUsersCount").textContent = formatNumber(state.users.length);
     if ($("navReportsCount")) $("navReportsCount").textContent = formatNumber(state.reports.filter((item) => item.status !== "resolved").length);
     if ($("navRequestsCount")) $("navRequestsCount").textContent = formatNumber(state.requests.filter((item) => ["new", "reviewing"].includes(item.status)).length);
+    if ($("mobileRequestsCount")) {
+      const requestCount = state.requests.filter((item) => ["new", "reviewing"].includes(item.status)).length;
+      $("mobileRequestsCount").textContent = requestCount ? formatNumber(requestCount) : "";
+      $("mobileRequestsCount").hidden = requestCount === 0;
+    }
 
     const recent = [...state.content].sort((a, b) => asNumber(b.updatedAt || b.createdAt) - asNumber(a.updatedAt || a.createdAt)).slice(0, 5);
     $("recentContent").innerHTML = recent.length ? recent.map((item) => `
@@ -746,8 +755,10 @@
   function fillSettings() {
     $("settingFeatured").value = toArray(state.config.featured).join(", ");
     $("settingAnnouncement").value = asString(state.config.announcement);
-    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.3.2");
+    $("settingLatestVersion").value = asString(state.config.latestVersion, "2.4.0");
+    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.4.0");
     $("settingUpdateUrl").value = asString(state.config.updateUrl, "https://github.com/3c5-o/CINARO/releases");
+    $("settingUpdateNotes").value = asString(state.config.updateNotes);
     $("settingMaintenance").checked = state.config.maintenance === true;
     $("settingForceUpdate").checked = state.config.forceUpdate === true;
     fillTmdbSettings();
@@ -865,6 +876,8 @@
 
   function resetContentForm() {
     state.editingContentId = "";
+    state.pendingRequestId = "";
+    state.pendingRequestTitle = "";
     $("contentForm")?.reset();
     $("contentTmdbId").value = "";
     $("tmdbSearchInput").value = "";
