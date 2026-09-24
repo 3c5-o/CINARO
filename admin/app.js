@@ -457,7 +457,7 @@
   function fillSettings() {
     $("settingFeatured").value = toArray(state.config.featured).join(", ");
     $("settingAnnouncement").value = asString(state.config.announcement);
-    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.2.0");
+    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.2.1");
     $("settingUpdateUrl").value = asString(state.config.updateUrl, "https://github.com/3c5-o/CINARO/releases");
     $("settingMaintenance").checked = state.config.maintenance === true;
     $("settingForceUpdate").checked = state.config.forceUpdate === true;
@@ -920,7 +920,7 @@
       const payload = {
         featured: parseCsv($("settingFeatured").value),
         announcement: asString($("settingAnnouncement").value).slice(0, 500),
-        minimumVersion: asString($("settingMinVersion").value, "2.2.0").slice(0, 20),
+        minimumVersion: asString($("settingMinVersion").value, "2.2.1").slice(0, 20),
         updateUrl: validMediaUrl($("settingUpdateUrl").value) || "https://github.com/3c5-o/CINARO/releases",
         maintenance: $("settingMaintenance").checked,
         forceUpdate: $("settingForceUpdate").checked,
