@@ -51,7 +51,9 @@
   const defaultSettings = {
     oled: false,
     autoplayNext: true,
-    reduceMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    reduceMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    playbackRate: 1,
+    captionsEnabled: false
   };
 
   let favorites = new Set(storage.get(STORAGE.favorites, []));
@@ -85,6 +87,8 @@
     userProfileUnsubscribe: null,
     requestUnsubscribe: null,
     requests: [],
+    requestNotificationsReady: false,
+    runtimeErrorShown: false,
     remoteConfig: {},
     sections: [],
     serviceLocked: false,
@@ -479,6 +483,7 @@
     state.requestUnsubscribe?.();
     state.requestUnsubscribe = null;
     state.requests = [];
+    state.requestNotificationsReady = false;
     state.cloudHydrated = false;
     state.cloudRevision = 0;
     state.cloudSavedRevision = 0;
@@ -505,7 +510,17 @@
     if (!user.isAnonymous && state.firebase.listenMyRequests) {
       state.requestUnsubscribe = state.firebase.listenMyRequests(
         (rows) => {
-          state.requests = Array.isArray(rows) ? rows : [];
+          const nextRows = Array.isArray(rows) ? rows : [];
+          if (state.requestNotificationsReady) {
+            nextRows.forEach((request) => {
+              const previous = state.requests.find((item) => item.id === request.id);
+              if (!previous || previous.status === request.status) return;
+              const info = requestStatusInfo(request.status);
+              toast(`طلب «${request.title || "محتوى"}» أصبح: ${info.label}`);
+            });
+          }
+          state.requests = nextRows;
+          state.requestNotificationsReady = true;
           if (state.route?.name === "library" && state.libraryTab === "requests") renderLibrary();
         },
         (error) => console.warn("CINARO request listener failed", error)
