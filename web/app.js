@@ -559,6 +559,24 @@
     if (!player.root.hidden) hidePlayer();
   }
 
+  function updateUpdateControl() {
+    const label = byId("updateStatusText");
+    if (!label) return;
+    const latest = String(state.remoteConfig.latestVersion || state.remoteConfig.minimumVersion || APP_VERSION).trim();
+    const hasUpdate = latest && compareVersions(APP_VERSION, latest) < 0;
+    label.textContent = hasUpdate ? `يتوفر الإصدار ${latest}` : `أنت على أحدث إصدار (${APP_VERSION})`;
+  }
+
+  function openAvailableUpdate() {
+    const latest = String(state.remoteConfig.latestVersion || state.remoteConfig.minimumVersion || APP_VERSION).trim();
+    if (!latest || compareVersions(APP_VERSION, latest) >= 0) {
+      toast("أنت تستخدم أحدث إصدار من CINARO");
+      return;
+    }
+    const url = safeMediaUrl(state.remoteConfig.updateUrl, "https://github.com/3c5-o/CINARO/releases");
+    window.location.href = url;
+  }
+
   function replaceCatalog(payload) {
     state.remoteConfig = payload?.config && typeof payload.config === "object" ? payload.config : {};
     state.sections = Array.isArray(payload?.sections) ? payload.sections : [];
@@ -578,6 +596,7 @@
       elements.remoteNotice.classList.toggle("maintenance", Boolean(state.remoteConfig.maintenance || (needsUpdate && state.remoteConfig.forceUpdate)));
     }
     updateServiceGate();
+    updateUpdateControl();
     if (state.remoteConfig.maintenance) setFirebaseStatus("connected", "وضع الصيانة مفعل من الإدارة");
     const incomingItems = Array.isArray(payload?.items) ? payload.items : [];
     DATA = {
@@ -2454,6 +2473,7 @@
 
     elements.settingsButton.addEventListener("click", () => {
       syncSettingsControls();
+      updateUpdateControl();
       openSheet(elements.settingsSheet);
     });
     elements.sheetBackdrop.addEventListener("click", closeSheets);
@@ -2487,6 +2507,7 @@
       toast("تم مسح سجل المشاهدة");
     });
     byId("installButton").addEventListener("click", installApp);
+    byId("checkUpdateButton")?.addEventListener("click", openAvailableUpdate);
 
     window.addEventListener("beforeinstallprompt", (event) => {
       event.preventDefault();
