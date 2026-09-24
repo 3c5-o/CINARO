@@ -2,7 +2,7 @@
   "use strict";
 
   let DATA = window.CINARO_DATA;
-  const APP_VERSION = "2.4.0";
+  const APP_VERSION = "2.4.1";
   const IMAGE_FALLBACK = "assets/images/poster-placeholder.webp";
 
   if (!DATA || !Array.isArray(DATA.items)) {
@@ -72,6 +72,7 @@
     searchType: "all",
     searchLimit: 60,
     libraryTab: "favorites",
+    requestFilter: "all",
     selectedSeasons: {},
     installPrompt: null,
     activeSheet: null,
@@ -1071,7 +1072,8 @@
     const genres = ["الكل", ...new Set(source.flatMap((item) => item.genres))];
     const filtered = source.filter((item) => config.genre === "الكل" || item.genres.includes(config.genre));
     const sorted = sortItems(filtered, config.sort);
-    const visible = sorted.slice(0, Math.max(30, asNumber(config.visible, 60)));
+    const visibleCount = Number.isFinite(Number(config.visible)) ? Number(config.visible) : 60;
+    const visible = sorted.slice(0, Math.max(30, visibleCount));
     const title = kind === "movie" ? "الأفلام" : "المسلسلات";
     const kicker = kind === "movie" ? "شاشة كبيرة في جيبك" : "مواسم تستحق المتابعة";
     const description = kind === "movie" ? "اكتشف الأفلام ورتّبها حسب الجديد أو التقييم أو المشاهدة." : "تصفّح المسلسلات وانتقل بين المواسم والحلقات بسهولة.";
@@ -1190,10 +1192,10 @@
 
   function requestStatusInfo(status) {
     const map = {
-      new: { label: "جديد", className: "new" },
-      reviewing: { label: "قيد المراجعة", className: "reviewing" },
-      added: { label: "تمت الإضافة", className: "added" },
-      rejected: { label: "مرفوض", className: "rejected" }
+      new: { label: "تم الإرسال", className: "new", step: 1, description: "وصل طلبك إلى الإدارة وينتظر المراجعة." },
+      reviewing: { label: "قيد المراجعة", className: "reviewing", step: 2, description: "الإدارة تراجع الطلب وتجهز المحتوى إذا كان متاحاً." },
+      added: { label: "تمت الإضافة", className: "added", step: 3, description: "المحتوى أصبح جاهزاً داخل مكتبة CINARO." },
+      rejected: { label: "تعذّرت الإضافة", className: "rejected", step: 1, description: "تعذرت إضافة الطلب حالياً. راجع ملاحظة الإدارة إن وجدت." }
     };
     return map[status] || map.new;
   }
@@ -1206,23 +1208,88 @@
 
   function renderRequestList() {
     if (!state.authUser || state.authUser.isAnonymous) {
-      return `<div class="request-empty-card">${icon("film")}<h2>طلبات المحتوى تحتاج حساب</h2><p>سجّل دخولك حتى ترسل طلب فيلم أو مسلسل وتتابع حالته.</p><button class="button primary" type="button" data-action="request-login">تسجيل الدخول</button></div>`;
+      return `<div class="request-empty-card request-login-card"><span class="request-empty-icon">${icon("film")}</span><span class="request-eyebrow">REQUEST CENTER</span><h2>طلبات المحتوى تحتاج حساب</h2><p>سجّل دخولك حتى ترسل فيلم أو مسلسل وتتابع كل تحديث من الإدارة داخل التطبيق.</p><button class="button primary" type="button" data-action="request-login">تسجيل الدخول</button></div>`;
     }
 
-    const rows = [...state.requests].sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+    const allRows = [...state.requests].sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+    const counts = {
+      total: allRows.length,
+      active: allRows.filter((request) => ["new", "reviewing"].includes(request.status)).length,
+      added: allRows.filter((request) => request.status === "added").length,
+      rejected: allRows.filter((request) => request.status === "rejected").length
+    };
+    const rows = allRows.filter((request) => {
+      if (state.requestFilter === "active") return ["new", "reviewing"].includes(request.status);
+      if (state.requestFilter === "added") return request.status === "added";
+      if (state.requestFilter === "rejected") return request.status === "rejected";
+      return true;
+    });
+
+    const filterButton = (value, label, count) => `<button class="request-filter ${state.requestFilter === value ? "active" : ""}" type="button" data-action="request-filter" data-filter="${value}"><span>${label}</span><em>${count}</em></button>`;
+
     return `
-      <div class="request-toolbar"><div><b>طلباتك</b><small>الحالة تتحدث مباشرة من الإدارة.</small></div><button class="button primary" type="button" data-action="open-request-sheet">${icon("film")} طلب جديد</button></div>
-      <div class="request-list">
-        ${rows.length ? rows.map((request) => {
-          const status = requestStatusInfo(request.status);
-          const note = String(request.adminNote || "").trim();
-          const linkedContent = request.contentId && itemMap.get(request.contentId);
-          return `<article class="request-card">
-            <div class="request-card-main"><span class="request-kind">${request.kind === "series" ? "مسلسل" : "فيلم"}</span><h3>${escapeHTML(request.title || "طلب محتوى")}</h3><p>${escapeHTML(request.notes || "بدون ملاحظات")}</p>${note ? `<small class="request-admin-note">ملاحظة الإدارة: ${escapeHTML(note)}</small>` : ""}</div>
-            <div class="request-card-meta"><span class="request-status ${status.className}">${status.label}</span><small>${escapeHTML(formatRequestDate(request.createdAt))}</small><div class="request-card-actions">${linkedContent ? `<button class="button primary compact-button" type="button" data-route="details/${escapeAttribute(linkedContent.id)}">فتح المحتوى</button>` : ""}${request.status === "new" ? `<button class="button secondary compact-button" type="button" data-action="cancel-request" data-request-id="${escapeAttribute(request.id)}">إلغاء الطلب</button>` : ""}</div></div>
-          </article>`;
-        }).join("") : `<div class="request-empty-card compact">${icon("film")}<h2>ما عندك طلبات بعد</h2><p>أرسل أول طلب وسيظهر هنا مع حالته.</p></div>`}
-      </div>`;
+      <section class="request-center">
+        <div class="request-hero">
+          <div class="request-hero-mark">${icon("film")}</div>
+          <div class="request-hero-copy"><span class="request-eyebrow">CINARO REQUEST CENTER</span><h2>اطلب اللي تريد تشوفه</h2><p>أرسل اسم الفيلم أو المسلسل، وتابع مرحلة الطلب لحظة بلحظة من نفس الصفحة.</p></div>
+          <button class="button primary request-new-button" type="button" data-action="open-request-sheet">${icon("plus")} طلب جديد</button>
+        </div>
+
+        <div class="request-stats" aria-label="ملخص الطلبات">
+          <article><span>${icon("film")}</span><div><small>كل الطلبات</small><strong>${counts.total}</strong></div></article>
+          <article><span>${icon("clock")}</span><div><small>قيد المتابعة</small><strong>${counts.active}</strong></div></article>
+          <article><span>${icon("check")}</span><div><small>تمت الإضافة</small><strong>${counts.added}</strong></div></article>
+        </div>
+
+        <div class="request-filterbar" role="tablist" aria-label="فلترة الطلبات">
+          ${filterButton("all", "الكل", counts.total)}
+          ${filterButton("active", "قيد المتابعة", counts.active)}
+          ${filterButton("added", "تمت الإضافة", counts.added)}
+          ${filterButton("rejected", "متعذرة", counts.rejected)}
+        </div>
+
+        <div class="request-list">
+          ${rows.length ? rows.map((request) => {
+            const status = requestStatusInfo(request.status);
+            const note = String(request.adminNote || "").trim();
+            const linkedContent = request.contentId && itemMap.get(request.contentId);
+            const rejected = request.status === "rejected";
+            const stepClass = (step) => status.step >= step && !rejected ? "done" : "";
+            return `<article class="request-card request-card-${status.className}">
+              <div class="request-card-head">
+                <div class="request-type-icon">${icon(request.kind === "series" ? "tv" : "film")}</div>
+                <div class="request-heading-copy">
+                  <div class="request-heading-badges"><span class="request-kind">${request.kind === "series" ? "مسلسل" : "فيلم"}</span><span class="request-status ${status.className}">${status.label}</span></div>
+                  <h3>${escapeHTML(request.title || "طلب محتوى")}</h3>
+                  <small class="request-date">${icon("clock")} ${escapeHTML(formatRequestDate(request.createdAt))}</small>
+                </div>
+              </div>
+
+              <p class="request-status-description">${escapeHTML(status.description)}</p>
+              ${request.notes ? `<div class="request-user-note"><span>ملاحظتك</span><p>${escapeHTML(request.notes)}</p></div>` : ""}
+
+              ${rejected ? `<div class="request-progress rejected-progress"><span class="request-progress-alert">${icon("alert")}</span><div><b>تعذّرت إضافة هذا الطلب</b><small>يمكنك إرسال طلب جديد لاحقاً أو تعديل الاسم عند المحاولة القادمة.</small></div></div>` : `
+                <div class="request-progress" aria-label="تقدم الطلب">
+                  <div class="request-step ${stepClass(1)}"><i>${icon("check")}</i><span>تم الإرسال</span></div>
+                  <div class="request-step-line ${status.step >= 2 ? "done" : ""}"></div>
+                  <div class="request-step ${stepClass(2)}"><i>${icon(status.step >= 2 ? "check" : "clock")}</i><span>قيد المراجعة</span></div>
+                  <div class="request-step-line ${status.step >= 3 ? "done" : ""}"></div>
+                  <div class="request-step ${stepClass(3)}"><i>${icon(status.step >= 3 ? "check" : "film")}</i><span>تمت الإضافة</span></div>
+                </div>`}
+
+              ${note ? `<div class="request-admin-note"><span class="request-note-icon">${icon("info")}</span><div><b>ملاحظة الإدارة</b><p>${escapeHTML(note)}</p></div></div>` : ""}
+
+              <div class="request-card-footer">
+                <small>رقم الطلب: ${escapeHTML(String(request.id || "").slice(0, 10).toUpperCase())}</small>
+                <div class="request-card-actions">
+                  ${linkedContent ? `<button class="button primary compact-button" type="button" data-route="details/${escapeAttribute(linkedContent.id)}">${icon("play")} فتح المحتوى</button>` : ""}
+                  ${request.status === "new" ? `<button class="button secondary compact-button" type="button" data-action="cancel-request" data-request-id="${escapeAttribute(request.id)}">${icon("x")} إلغاء الطلب</button>` : ""}
+                </div>
+              </div>
+            </article>`;
+          }).join("") : `<div class="request-empty-card compact"><span class="request-empty-icon">${icon("film")}</span><h2>${allRows.length ? "لا توجد طلبات بهذه الحالة" : "ما عندك طلبات بعد"}</h2><p>${allRows.length ? "غيّر الفلتر حتى تشوف باقي طلباتك." : "أرسل أول طلب وسيظهر هنا مع حالة واضحة لكل مرحلة."}</p>${allRows.length ? "" : `<button class="button primary" type="button" data-action="open-request-sheet">إرسال أول طلب</button>`}</div>`}
+        </div>
+      </section>`;
   }
 
   function renderLibrary() {
@@ -1236,10 +1303,14 @@
         ? renderHistoryList()
         : renderRequestList();
 
+    const pageHeading = state.libraryTab === "requests"
+      ? { kicker: "مركز الطلبات", title: "طلبات المحتوى", description: "اطلب أفلامك ومسلسلاتك وتابع حالة كل طلب من نفس المكان." }
+      : { kicker: "مساحتك الخاصة", title: "قائمتي", description: libraryDescription };
+
     elements.library.innerHTML = `
       <div class="content-shell page-shell">
         <div class="page-heading">
-          <div><span>مساحتك الخاصة</span><h1>قائمتي</h1><p>${libraryDescription}</p></div>
+          <div><span>${pageHeading.kicker}</span><h1>${pageHeading.title}</h1><p>${pageHeading.description}</p></div>
         </div>
         <div class="library-tabs" role="tablist">
           <button class="${state.libraryTab === "favorites" ? "active" : ""}" type="button" role="tab" data-action="library-tab" data-tab="favorites">${icon("heart")} المفضلة</button>
@@ -2339,6 +2410,9 @@
     } else if (action === "library-tab") {
       state.libraryTab = ["favorites", "history", "requests"].includes(button.dataset.tab) ? button.dataset.tab : "favorites";
       renderLibrary();
+    } else if (action === "request-filter") {
+      state.requestFilter = ["all", "active", "added", "rejected"].includes(button.dataset.filter) ? button.dataset.filter : "all";
+      renderLibrary();
     } else if (action === "open-request-sheet") {
       openRequestSheet();
     } else if (action === "request-search") {
@@ -2564,7 +2638,7 @@
     if (!("serviceWorker" in navigator) || !/^https?:$/.test(location.protocol)) return;
     window.addEventListener("load", async () => {
       try {
-        const registration = await navigator.serviceWorker.register("./sw.js?v=2.4.0", { scope: "./", updateViaCache: "none" });
+        const registration = await navigator.serviceWorker.register("./sw.js?v=2.4.1", { scope: "./", updateViaCache: "none" });
         registration.addEventListener("updatefound", () => {
           const worker = registration.installing;
           worker?.addEventListener("statechange", () => {

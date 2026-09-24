@@ -11,7 +11,7 @@ const ok = (condition, message) => { if (!condition) errors.push(message); };
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 const expectedVersion = packageJson.version;
-ok(expectedVersion === "2.4.0", "Package version must be CINARO 2.4.0");
+ok(expectedVersion === "2.4.1", "Package version must be CINARO 2.4.1");
 
 const requiredFiles = [
   "index.html",
@@ -240,7 +240,7 @@ const androidBuild = fs.readFileSync(path.join(root, "android-app", "app", "buil
 ok(androidBuild.includes('buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "true"'), "User Android flavor must block screen capture");
 ok(androidBuild.includes('buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "false"'), "Admin Android flavor must keep normal screen capture behavior");
 ok(androidBuild.includes(`versionName "${expectedVersion}"`), "Android versionName must match package.json");
-ok(androidBuild.includes('versionCode 10'), "Android versionCode must be 10 for CINARO 2.4.0");
+ok(androidBuild.includes('versionCode 11'), "Android versionCode must be 11 for CINARO 2.4.1");
 ok(fs.existsSync(path.join(root, "android-app", "app", "src", "admin", "res", "mipmap-xxxhdpi", "ic_launcher.png")), "Admin Android flavor must have a dedicated launcher icon");
 
 const firebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
@@ -290,6 +290,9 @@ ok(appSource.includes('action === "cancel-request"'), "Users must be able to can
 ok(appSource.includes("requestNotificationsReady"), "User app must notify request status changes without notifying on initial hydration");
 ok(appSource.includes("cinaro/request-duplicate") && appSource.includes("cinaro/request-exists"), "User app must block duplicate and already-available content requests");
 ok(appSource.includes("catalog-more") && appSource.includes("search-more"), "Large catalogs and search results must render incrementally");
+ok(!appSource.includes("asNumber("), "User app must not call the admin-only asNumber helper");
+ok(appSource.includes("requestFilter") && appSource.includes('action === "request-filter"'), "Request Center must support status filtering");
+ok(appSource.includes("request-hero") && appSource.includes("request-progress"), "Request Center must render premium summary and progress UI");
 ok(appSource.includes("playbackRate") && appSource.includes("captionsEnabled"), "Player speed and caption preferences must persist");
 ok(appSource.includes("function updateUpdateControl(") && appSource.includes("function openAvailableUpdate("), "User app must expose release status and update action");
 ok(appSource.includes('window.addEventListener("unhandledrejection"'), "User app must surface asynchronous runtime failures");
@@ -318,11 +321,13 @@ const webStyles = fs.readFileSync(path.join(webRoot, "styles.css"), "utf8");
 ok(webStyles.includes("user-select: none"), "User app must disable casual content selection");
 ok(webStyles.includes("-webkit-touch-callout: none"), "User app must disable long-press content callouts");
 ok(webStyles.includes("touch-action: manipulation"), "User interactive controls must use reliable mobile tap behavior");
+ok(webStyles.includes(".request-center") && webStyles.includes(".request-stats") && webStyles.includes(".request-progress"), "User styles must include the redesigned Request Center");
+ok(html.includes('id="i-plus"'), "User icon sprite must include the Request Center plus icon");
 
 const userFirebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
 ok(userFirebaseSource.includes("submitContentRequest: async function"), "Firebase client must support request submission");
 ok(userFirebaseSource.includes("cancelContentRequest: async function"), "Firebase client must support request cancellation");
-ok(userFirebaseSource.includes('latestVersion: textValue(data.latestVersion, "2.4.0"'), "Firebase config must expose latest release metadata");
+ok(userFirebaseSource.includes('latestVersion: textValue(data.latestVersion, "2.4.1"'), "Firebase config must expose latest release metadata");
 ok(userFirebaseSource.includes('updateNotes: textValue(data.updateNotes'), "Firebase config must expose update notes");
 ok(userFirebaseSource.includes("playbackRate: numberValue") && userFirebaseSource.includes("captionsEnabled: Boolean"), "Cloud state must persist player preferences");
 ok(userFirebaseSource.includes("listenMyRequests: function"), "Firebase client must support request history");
