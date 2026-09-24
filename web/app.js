@@ -1559,12 +1559,22 @@
   function openPlayerForRoute(route) {
     const media = playerMediaFromRoute(route);
     if (!media || !media.sources.length) {
+      destroyHls();
+      clearInterval(player.endedTimer);
+      player.endedTimer = 0;
       player.video.pause();
       player.video.removeAttribute("src");
       player.video.load();
+      player.video.querySelectorAll('track[data-cinaro-track="true"]').forEach((track) => track.remove());
       player.media = media;
       player.requestedPlay = false;
+      player.restorePlaying = false;
+      player.switchingSource = false;
+      player.failedSources.clear();
       player.root.hidden = false;
+      player.previous.hidden = !media?.previousRoute;
+      player.next.hidden = !media?.nextRoute;
+      player.ended.hidden = true;
       player.error.hidden = false;
       player.loading.hidden = true;
       player.errorText.textContent = "لا يوجد رابط فيديو صالح لهذا المحتوى.";
