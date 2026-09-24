@@ -154,13 +154,38 @@
     if ($("contentPublished")) $("contentPublished").disabled = !hasPermission("publishContent");
     if ($("contentSections")) {
       const allowed = assignedSectionIds();
-      $("contentSections").placeholder = admin ? "action, featured" : allowed.join(", ");
+      $("contentSections").placeholder = admin ? "اختر من الأقسام" : allowed.join(", ");
     }
+    renderSectionPickers();
   }
 
   function sectionName(id) {
     const section = state.sections.find((item) => item.id === id);
     return section ? section.name : id;
+  }
+
+  function renderSectionPicker(rootId, inputId, allowedIds = null) {
+    const root = $(rootId);
+    const input = $(inputId);
+    if (!root || !input) return;
+    const selected = parseCsv(input.value);
+    const allowed = Array.isArray(allowedIds) ? new Set(allowedIds) : null;
+    const rows = state.sections.filter((section) => section.active !== false && (!allowed || allowed.has(section.id)));
+    root.innerHTML = rows.length ? rows.map((section) => `<button class="section-choice ${selected.includes(section.id) ? "active" : ""}" type="button" data-action="toggle-section-choice" data-target="${escapeHTML(inputId)}" data-section-id="${escapeHTML(section.id)}">${escapeHTML(section.name || section.id)}</button>`).join("") : '<small class="picker-empty">لا توجد أقسام متاحة.</small>';
+  }
+
+  function renderSectionPickers() {
+    renderSectionPicker("contentSectionsPicker", "contentSections", isAdmin() ? null : assignedSectionIds());
+    if (isAdmin()) renderSectionPicker("supervisorSectionsPicker", "supervisorSections");
+  }
+
+  function toggleSectionChoice(targetId, sectionId) {
+    const input = $(targetId);
+    if (!input || !sectionId) return;
+    const selected = parseCsv(input.value);
+    const next = selected.includes(sectionId) ? selected.filter((id) => id !== sectionId) : [...selected, sectionId];
+    input.value = next.join(", ");
+    renderSectionPickers();
   }
 
   function contentStatus(item) {
@@ -1016,6 +1041,7 @@
     $("editorKicker").textContent = "محتوى جديد";
     $("editorTitle").textContent = "إضافة محتوى";
     setMessage("contentFormMessage", "");
+    renderSectionPickers();
     toggleKindFields();
   }
 
@@ -1086,6 +1112,7 @@
     $("contentDuration").value = item.duration || 0;
     $("contentGenres").value = toArray(item.genres).join(", ");
     $("contentSections").value = toArray(item.sectionIds).join(", ");
+    renderSectionPickers();
     $("contentDescription").value = item.description || "";
     $("contentPoster").value = item.poster || "";
     $("contentBackdrop").value = item.backdrop || "";
@@ -1297,6 +1324,7 @@
     $("permissionPublish").checked = false;
     $("supervisorFormTitle").textContent = "مشرف جديد";
     setMessage("supervisorMessage", "");
+    renderSectionPickers();
   }
 
   function editSupervisor(id) {
@@ -1308,6 +1336,7 @@
     $("supervisorEmail").value = item.email || "";
     $("supervisorName").value = item.displayName || "";
     $("supervisorSections").value = toArray(item.sectionIds).join(", ");
+    renderSectionPickers();
     $("permissionCreate").checked = item.permissions?.createContent === true;
     $("permissionEdit").checked = item.permissions?.editContent === true;
     $("permissionDelete").checked = item.permissions?.deleteContent === true;
@@ -1645,6 +1674,7 @@
     if (action === "edit-content") openContentEditor(id);
     else if (action === "delete-content") deleteContent(id);
     else if (action === "refresh-tmdb") refreshContentFromTmdb(id);
+    else if (action === "toggle-section-choice") toggleSectionChoice(button.dataset.target, button.dataset.sectionId);
     else if (action === "toggle-published") togglePublished(id);
     else if (action === "toggle-user") toggleUser(id, button.dataset.status);
     else if (action === "edit-supervisor") editSupervisor(id);
@@ -1710,6 +1740,7 @@
       if (state.view === "supervisors") renderSupervisors();
       if (state.view === "sections") renderSections();
       if (state.view === "activity") renderActivity();
+      renderSectionPickers();
     };
     const listen = (name, setter, label) => {
       const stop = client.listenCollection(name, (rows) => {
