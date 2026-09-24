@@ -884,6 +884,26 @@
     toggleKindFields();
   }
 
+  function openNewContent(kind = "movie", importMode = "manual") {
+    if (!hasPermission("createContent")) {
+      toast("لا تملك صلاحية إضافة محتوى", "error");
+      return;
+    }
+    resetContentForm();
+    $("contentKind").value = kind === "series" ? "series" : "movie";
+    toggleKindFields();
+    if (!isAdmin()) {
+      $("contentSections").value = assignedSectionIds()[0] || "";
+      setImportMode("manual");
+    } else {
+      setImportMode(importMode === "tmdb" ? "tmdb" : "manual");
+    }
+    setView("editor");
+    if (importMode === "tmdb" && isAdmin()) {
+      window.setTimeout(() => $("tmdbSearchInput")?.focus(), 60);
+    }
+  }
+
   function openContentEditor(id) {
     const item = state.content.find((entry) => entry.id === id);
     if (!item) {
@@ -1324,6 +1344,7 @@
     else if (action === "save-request") saveContentRequest(id);
     else if (action === "preview-url") openMediaPreview(button.dataset.url, "معاينة مصدر البلاغ");
     else if (action === "preview-movie") openMediaPreview($("movieSourceUrl").value, "معاينة الفيلم");
+    else if (action === "new-tmdb") openNewContent(button.dataset.kind, "tmdb");
     else if (action === "tmdb-select") importTmdbItem(button.dataset.tmdbId, button.dataset.tmdbKind);
     else if (action === "add-episode") {
       const seasonIndex = asNumber(button.dataset.seasonIndex, -1);
@@ -1485,12 +1506,7 @@
     });
     $("logoutButton")?.addEventListener("click", () => state.firebase?.logout().catch((error) => toast(errorMessage(error), "error")));
     $("menuButton")?.addEventListener("click", () => setMobileNavigation(!$("adminSidebar")?.classList.contains("open")));
-    $("newContentButton")?.addEventListener("click", () => {
-      if (!hasPermission("createContent")) return toast("لا تملك صلاحية إضافة محتوى", "error");
-      resetContentForm();
-      if (!isAdmin()) $("contentSections").value = assignedSectionIds()[0] || "";
-      setView("editor");
-    });
+    $("newContentButton")?.addEventListener("click", () => openNewContent("movie", "manual"));
     $("contentKind")?.addEventListener("change", () => {
       toggleKindFields();
       if (state.tmdb.importMode === "tmdb") {
