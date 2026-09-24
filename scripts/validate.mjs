@@ -11,7 +11,7 @@ const ok = (condition, message) => { if (!condition) errors.push(message); };
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 const expectedVersion = packageJson.version;
-ok(expectedVersion === "2.4.0", "Package version must be CINARO 2.4.0");
+ok(expectedVersion === "2.4.1", "Package version must be CINARO 2.4.1");
 
 const requiredFiles = [
   "index.html",
@@ -240,7 +240,7 @@ const androidBuild = fs.readFileSync(path.join(root, "android-app", "app", "buil
 ok(androidBuild.includes('buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "true"'), "User Android flavor must block screen capture");
 ok(androidBuild.includes('buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "false"'), "Admin Android flavor must keep normal screen capture behavior");
 ok(androidBuild.includes(`versionName "${expectedVersion}"`), "Android versionName must match package.json");
-ok(androidBuild.includes('versionCode 10'), "Android versionCode must be 10 for CINARO 2.4.0");
+ok(androidBuild.includes('versionCode 11'), "Android versionCode must be 11 for CINARO 2.4.1");
 ok(fs.existsSync(path.join(root, "android-app", "app", "src", "admin", "res", "mipmap-xxxhdpi", "ic_launcher.png")), "Admin Android flavor must have a dedicated launcher icon");
 
 const firebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
@@ -327,7 +327,7 @@ ok(html.includes('id="i-plus"'), "User icon sprite must include the Request Cent
 const userFirebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
 ok(userFirebaseSource.includes("submitContentRequest: async function"), "Firebase client must support request submission");
 ok(userFirebaseSource.includes("cancelContentRequest: async function"), "Firebase client must support request cancellation");
-ok(userFirebaseSource.includes('latestVersion: textValue(data.latestVersion, "2.4.0"'), "Firebase config must expose latest release metadata");
+ok(userFirebaseSource.includes('latestVersion: textValue(data.latestVersion, "2.4.1"'), "Firebase config must expose latest release metadata");
 ok(userFirebaseSource.includes('updateNotes: textValue(data.updateNotes'), "Firebase config must expose update notes");
 ok(userFirebaseSource.includes("playbackRate: numberValue") && userFirebaseSource.includes("captionsEnabled: Boolean"), "Cloud state must persist player preferences");
 ok(userFirebaseSource.includes("listenMyRequests: function"), "Firebase client must support request history");
