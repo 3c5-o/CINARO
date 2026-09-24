@@ -31,7 +31,16 @@ service cloud.firestore {
     function supervisor() {
       return signedIn()
         && currentAssignment().data.active == true
-        && currentAssignment().data.sectionIds is list;
+        && currentAssignment().data.sectionIds is list
+        && currentAssignment().data.sectionIds.size() > 0
+        && currentAssignment().data.sectionIds.size() <= 30;
+    }
+
+    function supervisorCanReadContent(data) {
+      return supervisor()
+        && data.sectionIds is list
+        && data.sectionIds.size() > 0
+        && data.sectionIds.hasAny(currentAssignment().data.sectionIds);
     }
 
     function supervisorCanCreate() {
@@ -104,7 +113,9 @@ service cloud.firestore {
     }
 
     match /content/{contentId} {
-      allow get, list: if resource.data.published == true || admin() || supervisor();
+      allow get, list: if resource.data.published == true
+        || admin()
+        || supervisorCanReadContent(resource.data);
 
       allow create: if admin() || supervisorCanCreateContent(contentId, request.resource.data);
 
