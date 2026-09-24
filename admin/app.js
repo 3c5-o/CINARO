@@ -1609,6 +1609,6 @@
   renderDashboard();
   if (window.CINARO_ADMIN_FIREBASE) connectFirebase(window.CINARO_ADMIN_FIREBASE);
   if ("serviceWorker" in navigator && location.protocol === "https:") {
-    navigator.serviceWorker.register("sw.js", { scope: "./" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
+    navigator.serviceWorker.register("sw.js?v=2.3.1", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
   }
 })();
