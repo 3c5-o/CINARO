@@ -9,6 +9,10 @@ const adminRoot = path.join(root, "admin");
 const errors = [];
 const ok = (condition, message) => { if (!condition) errors.push(message); };
 
+const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+const expectedVersion = packageJson.version;
+ok(expectedVersion === "2.2.0", "Package version must be CINARO 2.2.0");
+
 const requiredFiles = [
   "index.html",
   "styles.css",
@@ -110,6 +114,12 @@ ok(html.includes('src="firebase.js" type="module"'), "HTML must load Firebase as
 ok(html.includes('id="authView"'), "HTML must include the authentication view");
 ok(html.includes('id="serviceGate"'), "User app must include the maintenance/update gate");
 ok(html.includes('id="reportForm"'), "User app must include playback reports");
+ok(html.includes('id="requestSheet"'), "User app must include the content request sheet");
+ok(html.includes('id="requestForm"'), "User app must include the content request form");
+ok(html.includes('id="requestContentButton"'), "User settings must expose the content request flow");
+ok(html.includes('id="previousEpisodeButton"'), "Player must include a previous-episode control");
+ok(html.includes('hls.js@1.7.3/dist/hls.min.js'), "Player must load the pinned HLS.js runtime");
+ok(html.includes("worker-src 'self' blob:"), "CSP must allow the HLS.js worker blob");
 
 const adminHtml = fs.readFileSync(path.join(adminRoot, "index.html"), "utf8");
 const adminIds = [...adminHtml.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
@@ -122,6 +132,28 @@ ok(adminHtml.includes('id="mobileNav"'), "Admin HTML must include mobile navigat
 ok(adminHtml.includes('id="seasonBuilder"'), "Admin must include the visual season builder");
 ok(adminHtml.includes('id="reportsTable"'), "Admin must include reports management");
 ok(!adminHtml.includes('id="contentSeasons"'), "Admin must not require JSON season editing");
+ok(adminHtml.includes('id="view-requests"'), "Admin must include the content request view");
+ok(adminHtml.includes('id="requestStatusFilter"'), "Admin must include request status filtering");
+ok(adminHtml.includes('id="requestsTable"'), "Admin must include the request management table");
+ok(adminHtml.includes('hls.js@1.7.3/dist/hls.min.js'), "Admin must load the pinned HLS.js runtime");
+
+const adminAppSource = fs.readFileSync(path.join(adminRoot, "app.js"), "utf8");
+ok(adminAppSource.includes("function destroyPreviewHls("), "Admin must tear down HLS previews");
+ok(adminAppSource.includes("HlsRuntime?.isSupported?.()"), "Admin must explicitly preview HLS sources");
+ok(adminAppSource.includes("function renderRequests("), "Admin must render content requests");
+ok(adminAppSource.includes('listen("contentRequests", "requests"'), "Admin must listen to content requests");
+ok(adminAppSource.includes("function saveContentRequest("), "Admin must update request statuses");
+ok(adminAppSource.includes('document.querySelectorAll("[data-request-select]")'), "Admin request status control must use a CSS selector query");
+ok(adminAppSource.includes('document.querySelectorAll("[data-request-note]")'), "Admin request note control must use a CSS selector query");
+ok(!adminAppSource.includes('const statusControl = $("[data-request-select]")'), "Admin must not pass CSS selectors to the ID helper");
+ok(adminAppSource.includes("function inferMediaType("), "Admin must infer MP4/HLS media types");
+ok(adminAppSource.includes("backupUrl"), "Admin episode editor must preserve backup sources");
+ok(adminAppSource.includes("subtitleUrl"), "Admin episode editor must preserve subtitles");
+ok(adminAppSource.includes("extraSources: sources.slice(2)"), "Admin must preserve additional episode sources");
+ok(adminAppSource.includes("extraSubtitles: subtitles.slice(1)"), "Admin must preserve additional episode subtitles");
+ok(adminAppSource.includes("existingMovieSources.slice(2)"), "Admin must preserve additional movie sources");
+ok(adminAppSource.includes("existingMovieSubtitles.slice(1)"), "Admin must preserve additional movie subtitles");
+ok(adminAppSource.includes("thumbnail: validMediaUrl(episode.thumbnail"), "Admin must preserve episode thumbnails");
 
 const adminStyles = fs.readFileSync(path.join(adminRoot, "styles.css"), "utf8");
 ok(adminStyles.includes('inset-inline-start: 0'), "Admin sidebar must use logical RTL positioning");
@@ -137,6 +169,15 @@ ok(adminHtml.includes('assets/icons/icon-192.png'), "Admin interface must use it
 
 const androidActivity = fs.readFileSync(path.join(root, "android-app", "app", "src", "main", "java", "com", "cinaro", "app", "MainActivity.java"), "utf8");
 ok(androidActivity.includes('settings.setLoadWithOverviewMode(false)'), "Android WebView must not shrink the app into a wide overview");
+ok(androidActivity.includes('WindowManager.LayoutParams.FLAG_SECURE'), "Android user edition must support secure-screen protection");
+ok(androidActivity.includes(`CINARO/${expectedVersion} AndroidApp`), "Android user agent must match the package version");
+const androidManifest = fs.readFileSync(path.join(root, "android-app", "app", "src", "main", "AndroidManifest.xml"), "utf8");
+ok(androidManifest.includes('android:allowBackup="false"'), "Android app data backups must be disabled");
+const androidBuild = fs.readFileSync(path.join(root, "android-app", "app", "build.gradle"), "utf8");
+ok(androidBuild.includes('buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "true"'), "User Android flavor must block screen capture");
+ok(androidBuild.includes('buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "false"'), "Admin Android flavor must keep normal screen capture behavior");
+ok(androidBuild.includes(`versionName "${expectedVersion}"`), "Android versionName must match package.json");
+ok(androidBuild.includes('versionCode 5'), "Android versionCode must be 5 for CINARO 2.2.0");
 ok(fs.existsSync(path.join(root, "android-app", "app", "src", "admin", "res", "mipmap-xxxhdpi", "ic_launcher.png")), "Admin Android flavor must have a dedicated launcher icon");
 
 const firebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
@@ -147,9 +188,51 @@ ok(!firebaseSource.includes("\\\\:"), "Firebase config contains an escaped colon
 ok(fs.existsSync(path.join(root, "firestore.rules")), "Missing Firestore security rules");
 ok(fs.existsSync(path.join(root, "firebase.json")), "Missing Firebase deployment config");
 const firestoreRules = fs.readFileSync(path.join(root, "firestore.rules"), "utf8");
+ok(firestoreRules.includes("function activeUser()"), "Firestore rules must define blocked-account enforcement");
+ok(firestoreRules.includes("data.get('status', 'active')"), "Blocked-account rules must safely handle users without a status field");
 ok(firestoreRules.includes("uniqueViewIncrement"), "Firestore rules must protect unique view increments");
 ok(firestoreRules.includes("supervisorCanPublish"), "Firestore rules must enforce supervisor publishing permissions");
+ok(firestoreRules.includes("supervisorCanCreateContent"), "Firestore rules must constrain supervisor content creation");
+ok(firestoreRules.includes("supervisorCanUpdateContent"), "Firestore rules must constrain supervisor content updates");
+ok(firestoreRules.includes("data.views == 0"), "Supervisor-created content must start with zero views");
+ok(firestoreRules.includes("data.get('published', false) == false"), "Supervisor content creation must honor publish permission");
+ok(firestoreRules.includes("allow write: if admin() || (owner(userId) && activeUser())"), "Blocked users must not write private synced state");
+ok(firestoreRules.includes("request.resource.data.get('views', 0) == resource.data.get('views', 0)"), "Supervisors must not change view counters");
+ok(firestoreRules.includes("match /contentRequests/{requestId}"), "Firestore rules must protect content requests");
+ok(firestoreRules.includes("request.resource.data.status == 'new'"), "Users must only create requests in the new state");
+ok(firestoreRules.includes("allow update, delete: if admin()"), "Only admins may update or delete content requests");
 ok(firestoreRules.includes("match /reports/{reportId}"), "Firestore rules must protect user reports");
+ok(firestoreRules.includes("request.resource.data.details.size() <= 600"), "Firestore rules must bound report detail size");
+ok(firestoreRules.includes("request.resource.data.sourceUrl.size() <= 2048"), "Firestore rules must bound report source URLs");
+ok(!firestoreRules.includes("allow read, write: if true"), "Firestore rules must never allow unrestricted global read/write");
+ok(
+  firestoreRules.includes("match /{document=**}") && firestoreRules.includes("allow read, write: if false"),
+  "Firestore rules must keep a default-deny fallback"
+);
+
+const appSource = fs.readFileSync(path.join(webRoot, "app.js"), "utf8");
+ok(appSource.includes(`const APP_VERSION = "${expectedVersion}"`), "Web app version must match package.json");
+ok(appSource.includes("function previousEpisode("), "Player must resolve previous episodes");
+ok(appSource.includes("function renderRequestList("), "User app must render request history");
+ok(appSource.includes("state.firebase.submitContentRequest"), "User app must submit content requests through Firebase");
+ok(appSource.includes("state.firebase.listenMyRequests"), "User app must listen to the signed-in user's requests");
+ok(appSource.includes("function releasePlayerMedia("), "Player must release video resources when leaving playback");
+ok(appSource.includes("player.video.querySelectorAll('track[data-cinaro-track=\"true\"]').forEach"), "Player teardown must remove all dynamic subtitle tracks");
+ok(appSource.includes("function isHlsSource("), "Player must detect HLS sources");
+ok(appSource.includes("HlsRuntime?.isSupported?.()"), "Player must use HLS.js when MediaSource playback is available");
+ok(appSource.includes("hls.recoverMediaError()"), "Player must attempt HLS media recovery");
+ok(
+  /if \(replace\) \{\s*window\.history\.replaceState\([^;]+;\s*renderRoute\(\);/m.test(appSource),
+  "Route replacement must immediately render the new route"
+);
+ok(appSource.includes("clearInterval(player.endedTimer)"), "Autoplay countdown must be cleared as an interval");
+
+const userFirebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
+ok(userFirebaseSource.includes("submitContentRequest: async function"), "Firebase client must support request submission");
+ok(userFirebaseSource.includes("listenMyRequests: function"), "Firebase client must support request history");
+ok(userFirebaseSource.includes(`app_version: "${expectedVersion}"`), "Firebase analytics version must match package.json");
+ok(userFirebaseSource.includes(`minimumVersion: textValue(data.minimumVersion, "${expectedVersion}"`), "Firebase minimum-version fallback must match package.json");
+ok(userFirebaseSource.includes('where("userId", "==", user.uid)'), "Request history must be scoped to the signed-in user");
 
 const adminFirebaseSource = fs.readFileSync(path.join(adminRoot, "firebase.js"), "utf8");
 ok(adminFirebaseSource.includes('projectId: "cinaro"'), "Admin Firebase project ID must be cinaro");
@@ -160,6 +243,10 @@ ok(adminFirebaseSource.includes('role = "supervisor"'), "Admin Firebase must sup
 const androidWorkflow = fs.readFileSync(path.join(root, ".github", "workflows", "android-apk.yml"), "utf8");
 ok(androidWorkflow.includes("CINARO_KEYSTORE_BASE64"), "Android workflow must support the stable signing keystore");
 ok(androidWorkflow.includes("apksigner\" verify --verbose --print-certs"), "Android workflow must verify and print APK certificates");
+ok(androidWorkflow.includes(`CINARO-User-v${expectedVersion}.apk`), "Android workflow user APK name must match package.json");
+ok(androidWorkflow.includes(`CINARO-Admin-v${expectedVersion}.apk`), "Android workflow admin APK name must match package.json");
+ok(androidWorkflow.includes(`TAG="v${expectedVersion}"`), "Android workflow release tag must match package.json");
+ok(!androidWorkflow.includes("v2.1.0"), "Android workflow must not publish stale 2.1.0 artifacts");
 
 const serviceWorker = fs.readFileSync(path.join(webRoot, "sw.js"), "utf8");
 for (const requiredFile of requiredFiles.filter((file) => !["sw.js"].includes(file))) {

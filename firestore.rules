@@ -10,6 +10,13 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == userId;
     }
 
+    function activeUser() {
+      return signedIn() && (
+        !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('status', 'active') != 'blocked'
+      );
+    }
+
     function admin() {
       return signedIn() && (
         request.auth.token.admin == true ||
@@ -58,8 +65,36 @@ service cloud.firestore {
         && data.sectionIds.hasOnly(currentAssignment().data.sectionIds);
     }
 
+    function supervisorCanCreateContent(contentId, data) {
+      return supervisorCanCreate()
+        && assignedContent(data)
+        && data.id is string
+        && data.id == contentId
+        && data.updatedBy == request.auth.uid
+        && data.views is int
+        && data.views == 0
+        && (
+          data.get('published', false) == false ||
+          supervisorCanPublish()
+        );
+    }
+
+    function supervisorCanUpdateContent(contentId) {
+      return supervisorCanEdit()
+        && assignedContent(resource.data)
+        && assignedContent(request.resource.data)
+        && request.resource.data.id is string
+        && request.resource.data.id == contentId
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.get('views', 0) == resource.data.get('views', 0)
+        && (
+          request.resource.data.published == resource.data.published ||
+          supervisorCanPublish()
+        );
+    }
+
     function uniqueViewIncrement(contentId) {
-      return signedIn()
+      return activeUser()
         && resource.data.published == true
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views'])
         && request.resource.data.views is int
@@ -71,20 +106,11 @@ service cloud.firestore {
     match /content/{contentId} {
       allow get, list: if resource.data.published == true || admin() || supervisor();
 
-      allow create: if admin() || (
-        supervisorCanCreate()
-        && assignedContent(request.resource.data)
-      );
+      allow create: if admin() || supervisorCanCreateContent(contentId, request.resource.data);
 
-      allow update: if admin() || (
-        supervisorCanEdit()
-        && assignedContent(resource.data)
-        && assignedContent(request.resource.data)
-        && (
-          request.resource.data.published == resource.data.published ||
-          supervisorCanPublish()
-        )
-      ) || uniqueViewIncrement(contentId);
+      allow update: if admin()
+        || supervisorCanUpdateContent(contentId)
+        || uniqueViewIncrement(contentId);
 
       allow delete: if admin() || (
         supervisorCanDelete() && assignedContent(resource.data)
@@ -94,6 +120,7 @@ service cloud.firestore {
         allow get: if owner(userId) || admin();
         allow list: if admin();
         allow create: if owner(userId)
+          && activeUser()
           && request.resource.data.keys().hasOnly(['userId', 'contentId', 'createdAt'])
           && request.resource.data.userId == userId
           && request.resource.data.contentId == contentId;
@@ -124,7 +151,8 @@ service cloud.firestore {
       allow delete: if owner(userId) || admin();
 
       match /private/{documentId} {
-        allow read, write: if owner(userId) || admin();
+        allow read: if owner(userId) || admin();
+        allow write: if admin() || (owner(userId) && activeUser());
       }
     }
 
@@ -152,14 +180,65 @@ service cloud.firestore {
       allow create, update, delete: if admin();
     }
 
+    match /contentRequests/{requestId} {
+      allow create: if activeUser()
+        && request.auth.token.email is string
+        && request.auth.token.email.size() > 0
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'userId', 'userEmail', 'title', 'kind', 'notes',
+          'status', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.userId is string
+        && request.resource.data.userEmail is string
+        && request.resource.data.userEmail == request.auth.token.email
+        && request.resource.data.userEmail.size() <= 180
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 2
+        && request.resource.data.title.size() <= 180
+        && request.resource.data.kind in ['movie', 'series']
+        && request.resource.data.notes is string
+        && request.resource.data.notes.size() <= 600
+        && request.resource.data.status == 'new';
+
+      allow read: if admin() || (
+        signedIn() && resource.data.userId == request.auth.uid
+      );
+
+      allow update, delete: if admin();
+    }
+
     match /reports/{reportId} {
-      allow create: if signedIn()
+      allow create: if activeUser()
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.keys().hasOnly([
           'userId', 'userEmail', 'contentId', 'contentTitle', 'kind',
           'season', 'episode', 'category', 'details', 'sourceUrl',
           'status', 'createdAt', 'updatedAt'
         ])
+        && request.resource.data.userId is string
+        && request.resource.data.userEmail is string
+        && request.resource.data.userEmail.size() <= 180
+        && request.resource.data.contentId is string
+        && request.resource.data.contentId.size() > 0
+        && request.resource.data.contentId.size() <= 120
+        && request.resource.data.contentTitle is string
+        && request.resource.data.contentTitle.size() > 0
+        && request.resource.data.contentTitle.size() <= 180
+        && request.resource.data.kind in ['movie', 'series']
+        && request.resource.data.season is int
+        && request.resource.data.season >= 0
+        && request.resource.data.season <= 1000
+        && request.resource.data.episode is int
+        && request.resource.data.episode >= 0
+        && request.resource.data.episode <= 10000
+        && request.resource.data.category is string
+        && request.resource.data.category.size() > 0
+        && request.resource.data.category.size() <= 40
+        && request.resource.data.details is string
+        && request.resource.data.details.size() <= 600
+        && request.resource.data.sourceUrl is string
+        && request.resource.data.sourceUrl.size() <= 2048
         && request.resource.data.status == 'open';
       allow read, update, delete: if admin();
     }

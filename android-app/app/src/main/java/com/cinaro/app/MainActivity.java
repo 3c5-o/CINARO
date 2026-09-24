@@ -15,6 +15,7 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
+import android.view.WindowManager;
 import android.webkit.ConsoleMessage;
 import android.webkit.DownloadListener;
 import android.webkit.WebChromeClient;
@@ -61,6 +62,9 @@ public class MainActivity extends Activity {
 
     private void configureWindow() {
         Window window = getWindow();
+        if (BuildConfig.BLOCK_SCREEN_CAPTURE) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        }
         window.setStatusBarColor(Color.rgb(8, 9, 13));
         window.setNavigationBarColor(Color.rgb(8, 9, 13));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -95,7 +99,7 @@ public class MainActivity extends Activity {
         settings.setAllowUniversalAccessFromFileURLs(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setUserAgentString(settings.getUserAgentString() + " CINARO/2.1.0 AndroidApp");
+        settings.setUserAgentString(settings.getUserAgentString() + " CINARO/2.2.0 AndroidApp");
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.setSafeBrowsingEnabled(true);

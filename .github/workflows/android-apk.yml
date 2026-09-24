@@ -9,6 +9,13 @@ on:
       - "admin/**"
       - "android-app/**"
       - ".github/workflows/android-apk.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "admin/**"
+      - "android-app/**"
+      - ".github/workflows/android-apk.yml"
   workflow_dispatch:
 
 permissions:
@@ -45,12 +52,13 @@ jobs:
       - name: Configure optional release signing
         id: signing
         env:
+          IS_PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
           KEYSTORE_BASE64: ${{ secrets.CINARO_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.CINARO_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.CINARO_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.CINARO_KEY_PASSWORD }}
         run: |
-          if [[ -n "$KEYSTORE_BASE64" && -n "$KEYSTORE_PASSWORD" && -n "$KEY_ALIAS" && -n "$KEY_PASSWORD" ]]; then
+          if [[ "$IS_PULL_REQUEST" != "true" && -n "$KEYSTORE_BASE64" && -n "$KEYSTORE_PASSWORD" && -n "$KEY_ALIAS" && -n "$KEY_PASSWORD" ]]; then
             printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/cinaro-release.jks"
             keytool -list -keystore "$RUNNER_TEMP/cinaro-release.jks" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
             echo "signed=true" >> "$GITHUB_OUTPUT"
@@ -81,11 +89,11 @@ jobs:
         run: |
           mkdir -p dist
           if [[ "$HAS_RELEASE_SIGNING" == "true" ]]; then
-            cp android-app/app/build/outputs/apk/user/release/app-user-release.apk dist/CINARO-User-v2.1.0.apk
-            cp android-app/app/build/outputs/apk/admin/release/app-admin-release.apk dist/CINARO-Admin-v2.1.0.apk
+            cp android-app/app/build/outputs/apk/user/release/app-user-release.apk dist/CINARO-User-v2.2.0.apk
+            cp android-app/app/build/outputs/apk/admin/release/app-admin-release.apk dist/CINARO-Admin-v2.2.0.apk
           else
-            cp android-app/app/build/outputs/apk/user/debug/app-user-debug.apk dist/CINARO-User-v2.1.0-beta.1.apk
-            cp android-app/app/build/outputs/apk/admin/debug/app-admin-debug.apk dist/CINARO-Admin-v2.1.0-beta.1.apk
+            cp android-app/app/build/outputs/apk/user/debug/app-user-debug.apk dist/CINARO-User-v2.2.0-beta.1.apk
+            cp android-app/app/build/outputs/apk/admin/debug/app-admin-debug.apk dist/CINARO-Admin-v2.2.0-beta.1.apk
           fi
           sha256sum dist/*.apk > dist/CINARO-Android.apk.sha256
           for apk in dist/*.apk; do
@@ -102,22 +110,22 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish CINARO v2.1.0 release
+      - name: Publish CINARO v2.2.0 release
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
           HAS_RELEASE_SIGNING: ${{ steps.signing.outputs.signed }}
         run: |
           if [[ "$HAS_RELEASE_SIGNING" == "true" ]]; then
-            TAG="v2.1.0"
-            TITLE="CINARO User + Admin v2.1.0"
+            TAG="v2.2.0"
+            TITLE="CINARO User + Admin v2.2.0"
             RELEASE_FLAGS=()
-            NOTES="إصدار ثابت وموقّع لنسختي CINARO. يضيف محرر الأفلام والمواسم والحلقات المبسط، بلاغات التشغيل، المشاهدات الفعلية، أقسام الواجهة، صلاحيات المشرفين، إدارة الحساب، والصيانة والتحديث الإجباري. يستخدم هذا الإصدار توقيع CINARO الثابت لتثبيت التحديثات اللاحقة فوقه."
+            NOTES="إصدار CINARO 2.2.0 مع تحسين دورة حياة المشغل، HLS، التنقل بين الحلقات، طلبات الأفلام والمسلسلات، تشديد Firestore، وحماية شاشة نسخة المستخدم. يستخدم توقيع CINARO الثابت لتثبيت التحديثات فوق الإصدارات السابقة."
           else
-            TAG="v2.1.0-beta.1"
-            TITLE="CINARO User + Admin v2.1.0 Beta 1"
+            TAG="v2.2.0-beta.1"
+            TITLE="CINARO User + Admin v2.2.0 Beta 1"
             RELEASE_FLAGS=(--prerelease)
-            NOTES="نسخة اختبار لأن أسرار توقيع CINARO الثابت غير متاحة في المستودع."
+            NOTES="نسخة اختبار CINARO 2.2.0 لأن أسرار التوقيع الثابت غير متاحة في سياق البناء الحالي."
           fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/*.apk dist/CINARO-Android.apk.sha256 --clobber

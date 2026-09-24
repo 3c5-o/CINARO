@@ -190,7 +190,7 @@ async function bootFirebase() {
     analyticsSdk.isSupported().then(function (supported) {
       if (!supported) return;
       analytics = analyticsSdk.getAnalytics(app);
-      analyticsSdk.logEvent(analytics, "app_open", { app_version: "2.1.0" });
+      analyticsSdk.logEvent(analytics, "app_open", { app_version: "2.2.0" });
     }).catch(function () {});
   }
 
@@ -327,6 +327,48 @@ async function bootFirebase() {
       });
     },
 
+    submitContentRequest: async function (payload) {
+      const user = auth.currentUser;
+      if (!user || user.isAnonymous || !user.email) throw new Error("auth/requires-login");
+      const request = payload && typeof payload === "object" ? payload : {};
+      const title = textValue(request.title, "", 180);
+      if (title.length < 2) throw new Error("cinaro/request-title-too-short");
+      return firestoreSdk.addDoc(firestoreSdk.collection(db, "contentRequests"), {
+        userId: user.uid,
+        userEmail: textValue(user.email, "", 180),
+        title: title,
+        kind: request.kind === "series" ? "series" : "movie",
+        notes: textValue(request.notes, "", 600),
+        status: "new",
+        createdAt: firestoreSdk.serverTimestamp(),
+        updatedAt: firestoreSdk.serverTimestamp()
+      });
+    },
+
+    listenMyRequests: function (callback, onError) {
+      const user = auth.currentUser;
+      if (!user || user.isAnonymous) {
+        callback([]);
+        return function () {};
+      }
+      const requestQuery = firestoreSdk.query(
+        firestoreSdk.collection(db, "contentRequests"),
+        firestoreSdk.where("userId", "==", user.uid)
+      );
+      return firestoreSdk.onSnapshot(
+        requestQuery,
+        function (snapshot) {
+          const rows = snapshot.docs.map(function (docSnapshot) {
+            return Object.assign({ id: docSnapshot.id }, plainValue(docSnapshot.data() || {}));
+          });
+          callback(rows);
+        },
+        function (error) {
+          if (typeof onError === "function") onError(error);
+        }
+      );
+    },
+
     listenContent: function (callback, onError) {
       let items = [];
       let featured = [];
@@ -374,7 +416,7 @@ async function bootFirebase() {
           featured = Array.isArray(data.featured) ? data.featured.map(String).slice(0, 12) : [];
           config = {
             announcement: textValue(data.announcement, "", 500),
-            minimumVersion: textValue(data.minimumVersion, "2.1.0", 20),
+            minimumVersion: textValue(data.minimumVersion, "2.2.0", 20),
             maintenance: data.maintenance === true,
             forceUpdate: data.forceUpdate === true,
             updateUrl: mediaUrl(data.updateUrl, "https://github.com/3c5-o/CINARO/releases")

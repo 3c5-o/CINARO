@@ -18,16 +18,18 @@
     sections: [],
     logs: [],
     reports: [],
+    requests: [],
     seasonDraft: [],
     config: {},
     unsubscribers: [],
     dataListenersStarted: false,
-    filters: { contentSearch: "", contentKind: "all", contentStatus: "all", userSearch: "", userStatus: "all", reportStatus: "open" }
+    previewHls: null,
+    filters: { contentSearch: "", contentKind: "all", contentStatus: "all", userSearch: "", userStatus: "all", reportStatus: "open", requestStatus: "pending" }
   };
 
   const $ = (id) => document.getElementById(id);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
-  const views = ["dashboard", "content", "editor", "reports", "users", "supervisors", "sections", "settings", "activity"];
+  const views = ["dashboard", "content", "editor", "reports", "requests", "users", "supervisors", "sections", "settings", "activity"];
 
   function escapeHTML(value) {
     return String(value == null ? "" : value).replace(/[&<>'"]/g, (character) => ({
@@ -192,6 +194,18 @@
     }
   }
 
+  function inferMediaType(url, fallback = "video/mp4") {
+    const input = asString(url).toLowerCase();
+    try {
+      const pathname = new URL(input).pathname.toLowerCase();
+      if (pathname.endsWith(".m3u8")) return "application/vnd.apple.mpegurl";
+      if (pathname.endsWith(".mp4")) return "video/mp4";
+    } catch (_) {}
+    if (/\.m3u8(?:$|[?#])/i.test(input)) return "application/vnd.apple.mpegurl";
+    if (/\.mp4(?:$|[?#])/i.test(input)) return "video/mp4";
+    return asString(fallback, "video/mp4").slice(0, 80);
+  }
+
   function normalizeSources(value) {
     return toArray(value).slice(0, 8).map((source, index) => {
       const url = validMediaUrl(source && source.url);
@@ -277,6 +291,7 @@
     setMobileNavigation(false);
     if (next === "content") renderContent();
     if (next === "reports") renderReports();
+    if (next === "requests") renderRequests();
     if (next === "users") renderUsers();
     if (next === "supervisors") renderSupervisors();
     if (next === "sections") renderSections();
@@ -296,6 +311,7 @@
     $("navContentCount").textContent = formatNumber(state.content.length);
     $("navUsersCount").textContent = formatNumber(state.users.length);
     if ($("navReportsCount")) $("navReportsCount").textContent = formatNumber(state.reports.filter((item) => item.status !== "resolved").length);
+    if ($("navRequestsCount")) $("navRequestsCount").textContent = formatNumber(state.requests.filter((item) => ["new", "reviewing"].includes(item.status)).length);
 
     const recent = [...state.content].sort((a, b) => asNumber(b.updatedAt || b.createdAt) - asNumber(a.updatedAt || a.createdAt)).slice(0, 5);
     $("recentContent").innerHTML = recent.length ? recent.map((item) => `
@@ -381,6 +397,58 @@
     }).join("")}</div>`;
   }
 
+  function renderRequests() {
+    const statusLabels = {
+      new: "جديد",
+      reviewing: "قيد المراجعة",
+      added: "تمت الإضافة",
+      rejected: "مرفوض"
+    };
+    const requestedStatus = state.filters.requestStatus;
+    const rows = [...state.requests].filter((request) => {
+      if (requestedStatus === "all") return true;
+      if (requestedStatus === "pending") return ["new", "reviewing"].includes(request.status);
+      return request.status === requestedStatus;
+    }).sort((a, b) => asNumber(b.createdAt) - asNumber(a.createdAt));
+
+    if (!rows.length) {
+      $("requestsTable").innerHTML = emptyTable("لا توجد طلبات ضمن هذه الحالة", "طلبات الأفلام والمسلسلات الجديدة ستظهر هنا.");
+      return;
+    }
+
+    $("requestsTable").innerHTML = `<div class="data-table requests-data-table"><div class="data-head"><span>الطلب</span><span>المستخدم</span><span>الحالة</span><span>ملاحظة الإدارة</span><span>حفظ</span></div>${rows.map((request) => {
+      const status = ["new", "reviewing", "added", "rejected"].includes(request.status) ? request.status : "new";
+      const options = Object.entries(statusLabels).map(([value, label]) => `<option value="${value}" ${value === status ? "selected" : ""}>${label}</option>`).join("");
+      return `<div class="data-row">
+        <span class="request-title-cell"><b>${escapeHTML(request.title || "طلب محتوى")}</b><small>${request.kind === "series" ? "مسلسل" : "فيلم"} · ${escapeHTML(request.notes || "بدون ملاحظات")}</small></span>
+        <span class="request-user-cell"><b>${escapeHTML(request.userEmail || "—")}</b><small>${escapeHTML(formatDate(request.createdAt))}</small></span>
+        <select class="request-status-control" data-request-select="${escapeHTML(request.id)}">${options}</select>
+        <input class="request-note-control" data-request-note="${escapeHTML(request.id)}" maxlength="600" value="${escapeHTML(request.adminNote || "")}" placeholder="ملاحظة اختيارية للمستخدم">
+        <span class="row-actions"><button class="table-action success-action" type="button" data-action="save-request" data-id="${escapeHTML(request.id)}" title="حفظ الحالة"><svg><use href="#i-save"></use></svg></button></span>
+      </div>`;
+    }).join("")}</div>`;
+  }
+
+  async function saveContentRequest(id) {
+    if (!isAdmin() || !state.firebase) return;
+    const statusControl = Array.from(document.querySelectorAll("[data-request-select]")).find((element) => element.dataset.requestSelect === id);
+    const noteControl = Array.from(document.querySelectorAll("[data-request-note]")).find((element) => element.dataset.requestNote === id);
+    const status = ["new", "reviewing", "added", "rejected"].includes(statusControl?.value) ? statusControl.value : "new";
+    const adminNote = asString(noteControl?.value).slice(0, 600);
+
+    try {
+      await state.firebase.saveDocument("contentRequests", id, {
+        status,
+        adminNote,
+        handledBy: state.authUser.uid
+      });
+      await state.firebase.logAudit("تحديث طلب محتوى", id, `${status} · ${adminNote || "بدون ملاحظة"}`, state.authUser);
+      toast("تم تحديث حالة الطلب");
+    } catch (error) {
+      toast(errorMessage(error), "error");
+    }
+  }
+
   function renderActivity() {
     const rows = [...state.logs].sort((a, b) => asNumber(b.createdAt) - asNumber(a.createdAt));
     $("activityTable").innerHTML = rows.length ? `<div class="data-table activity-data-table"><div class="data-head"><span>العملية</span><span>الهدف</span><span>المنفذ</span><span>التفاصيل</span><span>الوقت</span></div>${rows.map((item) => `<div class="data-row"><span class="activity-action"><span class="log-dot"></span><b>${escapeHTML(item.action || "عملية")}</b></span><code>${escapeHTML(item.target || "—")}</code><span>${escapeHTML(item.actorEmail || item.actorUid || "—")}</span><span>${escapeHTML(item.details || "—")}</span><span>${escapeHTML(formatDate(item.createdAt))}</span></div>`).join("")}</div>` : emptyTable("سجل العمليات فارغ", "تُحفظ هنا عمليات المحتوى والأقسام والحسابات.");
@@ -389,14 +457,28 @@
   function fillSettings() {
     $("settingFeatured").value = toArray(state.config.featured).join(", ");
     $("settingAnnouncement").value = asString(state.config.announcement);
-    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.1.0");
+    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.2.0");
     $("settingUpdateUrl").value = asString(state.config.updateUrl, "https://github.com/3c5-o/CINARO/releases");
     $("settingMaintenance").checked = state.config.maintenance === true;
     $("settingForceUpdate").checked = state.config.forceUpdate === true;
   }
 
   function newEpisode(number = 1) {
-    return { number, title: `الحلقة ${number}`, duration: 0, url: "" };
+    return {
+      id: `e${number}`,
+      number,
+      title: `الحلقة ${number}`,
+      duration: 0,
+      thumbnail: "",
+      url: "",
+      backupUrl: "",
+      subtitleUrl: "",
+      primarySource: null,
+      backupSource: null,
+      extraSources: [],
+      primarySubtitle: null,
+      extraSubtitles: []
+    };
   }
 
   function newSeason(number = 1) {
@@ -421,7 +503,10 @@
           <div class="episode-builder-row">
             <label><span>رقم الحلقة</span><input type="number" min="1" value="${escapeHTML(episode.number)}" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="number"></label>
             <label><span>اسم الحلقة</span><input value="${escapeHTML(episode.title)}" maxlength="150" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="title"></label>
-            <label><span>رابط الحلقة</span><input type="url" inputmode="url" value="${escapeHTML(episode.url)}" placeholder="https://…/video.mp4" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="url"></label>
+            <label><span>رابط الحلقة الأساسي</span><input type="url" inputmode="url" value="${escapeHTML(episode.url || "")}" placeholder="https://…/video.mp4 أو stream.m3u8" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="url"></label>
+            <label><span>رابط احتياطي</span><input type="url" inputmode="url" value="${escapeHTML(episode.backupUrl || "")}" placeholder="اختياري" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="backupUrl"></label>
+            <label><span>صورة الحلقة</span><input type="url" inputmode="url" value="${escapeHTML(episode.thumbnail || "")}" placeholder="https://…/episode.webp" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="thumbnail"></label>
+            <label><span>ترجمة عربية VTT</span><input type="url" inputmode="url" value="${escapeHTML(episode.subtitleUrl || "")}" placeholder="اختياري" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="subtitleUrl"></label>
             <label><span>المدة</span><input type="number" min="0" value="${escapeHTML(episode.duration)}" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="duration"></label>
             <button class="table-action danger" type="button" data-action="remove-episode" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" title="حذف الحلقة"><svg><use href="#i-x"></use></svg></button>
           </div>`).join("")}</div>
@@ -433,15 +518,48 @@
     return state.seasonDraft.map((season, seasonIndex) => ({
       number: Math.max(1, Math.round(asNumber(season.number, seasonIndex + 1))),
       title: asString(season.title, `الموسم ${seasonIndex + 1}`),
-      episodes: toArray(season.episodes).map((episode, episodeIndex) => ({
-        id: `e${Math.max(1, Math.round(asNumber(episode.number, episodeIndex + 1)))}`,
-        number: Math.max(1, Math.round(asNumber(episode.number, episodeIndex + 1))),
-        title: asString(episode.title, `الحلقة ${episodeIndex + 1}`),
-        duration: Math.max(0, Math.round(asNumber(episode.duration))),
-        thumbnail: "",
-        sources: [{ label: "تلقائي", url: episode.url, type: "video/mp4" }],
-        subtitles: []
-      }))
+      episodes: toArray(season.episodes).map((episode, episodeIndex) => {
+        const number = Math.max(1, Math.round(asNumber(episode.number, episodeIndex + 1)));
+        const primaryUrl = asString(episode.url);
+        const backupUrl = asString(episode.backupUrl);
+        const sourceCandidates = [];
+        if (primaryUrl) {
+          sourceCandidates.push({
+            label: asString(episode.primarySource?.label, "تلقائي"),
+            url: primaryUrl,
+            type: inferMediaType(primaryUrl, episode.primarySource?.type)
+          });
+        }
+        if (backupUrl) {
+          sourceCandidates.push({
+            label: asString(episode.backupSource?.label, "احتياطي"),
+            url: backupUrl,
+            type: inferMediaType(backupUrl, episode.backupSource?.type)
+          });
+        }
+        sourceCandidates.push(...toArray(episode.extraSources));
+
+        const subtitleCandidates = [];
+        const subtitleUrl = asString(episode.subtitleUrl);
+        if (subtitleUrl) {
+          subtitleCandidates.push({
+            label: asString(episode.primarySubtitle?.label, "العربية"),
+            srclang: asString(episode.primarySubtitle?.srclang, "ar"),
+            src: subtitleUrl
+          });
+        }
+        subtitleCandidates.push(...toArray(episode.extraSubtitles));
+
+        return {
+          id: asString(episode.id, `e${number}`).slice(0, 80),
+          number,
+          title: asString(episode.title, `الحلقة ${episodeIndex + 1}`),
+          duration: Math.max(0, Math.round(asNumber(episode.duration))),
+          thumbnail: validMediaUrl(episode.thumbnail || ""),
+          sources: normalizeSources(sourceCandidates),
+          subtitles: normalizeSubtitles(subtitleCandidates)
+        };
+      })
     }));
   }
 
@@ -508,12 +626,25 @@
     state.seasonDraft = item.kind === "series" ? toArray(item.seasons).map((season, seasonIndex) => ({
       number: asNumber(season.number, seasonIndex + 1),
       title: asString(season.title, `الموسم ${seasonIndex + 1}`),
-      episodes: toArray(season.episodes).map((episode, episodeIndex) => ({
-        number: asNumber(episode.number, episodeIndex + 1),
-        title: asString(episode.title, `الحلقة ${episodeIndex + 1}`),
-        duration: asNumber(episode.duration),
-        url: asString(episode.sources?.[0]?.url)
-      }))
+      episodes: toArray(season.episodes).map((episode, episodeIndex) => {
+        const sources = toArray(episode.sources);
+        const subtitles = toArray(episode.subtitles);
+        return {
+          id: asString(episode.id, `e${episode.number || episodeIndex + 1}`),
+          number: asNumber(episode.number, episodeIndex + 1),
+          title: asString(episode.title, `الحلقة ${episodeIndex + 1}`),
+          duration: asNumber(episode.duration),
+          thumbnail: asString(episode.thumbnail),
+          url: asString(sources[0]?.url),
+          backupUrl: asString(sources[1]?.url),
+          subtitleUrl: asString(subtitles[0]?.src),
+          primarySource: sources[0] || null,
+          backupSource: sources[1] || null,
+          extraSources: sources.slice(2),
+          primarySubtitle: subtitles[0] || null,
+          extraSubtitles: subtitles.slice(1)
+        };
+      })
     })) : [];
     $("contentViews").value = item.views || 0;
     $("contentOrder").value = item.order || 0;
@@ -544,13 +675,39 @@
       const poster = validMediaUrl($("contentPoster").value);
       const backdrop = validMediaUrl($("contentBackdrop").value) || poster;
       if (!poster) throw new Error("رابط البوستر يجب أن يكون HTTPS.");
-      const movieSourceCandidates = [
-        { label: "تلقائي", url: $("movieSourceUrl").value, type: "video/mp4" },
-        { label: "احتياطي", url: $("movieBackupUrl").value, type: "video/mp4" }
-      ].filter((source) => asString(source.url));
+      const existingMovieSources = kind === "movie" ? toArray(existing?.sources) : [];
+      const primaryMovieUrl = asString($("movieSourceUrl").value);
+      const backupMovieUrl = asString($("movieBackupUrl").value);
+      const movieSourceCandidates = [];
+      if (primaryMovieUrl) {
+        movieSourceCandidates.push({
+          label: asString(existingMovieSources[0]?.label, "تلقائي"),
+          url: primaryMovieUrl,
+          type: inferMediaType(primaryMovieUrl, existingMovieSources[0]?.type)
+        });
+      }
+      if (backupMovieUrl) {
+        movieSourceCandidates.push({
+          label: asString(existingMovieSources[1]?.label, "احتياطي"),
+          url: backupMovieUrl,
+          type: inferMediaType(backupMovieUrl, existingMovieSources[1]?.type)
+        });
+      }
+      movieSourceCandidates.push(...existingMovieSources.slice(2));
       const sources = kind === "movie" ? normalizeSources(movieSourceCandidates) : [];
+
+      const existingMovieSubtitles = kind === "movie" ? toArray(existing?.subtitles) : [];
       const subtitleUrl = asString($("movieSubtitleUrl").value);
-      const subtitles = kind === "movie" && subtitleUrl ? normalizeSubtitles([{ label: "العربية", srclang: "ar", src: subtitleUrl }]) : [];
+      const movieSubtitleCandidates = [];
+      if (subtitleUrl) {
+        movieSubtitleCandidates.push({
+          label: asString(existingMovieSubtitles[0]?.label, "العربية"),
+          srclang: asString(existingMovieSubtitles[0]?.srclang, "ar"),
+          src: subtitleUrl
+        });
+      }
+      movieSubtitleCandidates.push(...existingMovieSubtitles.slice(1));
+      const subtitles = kind === "movie" ? normalizeSubtitles(movieSubtitleCandidates) : [];
       const seasons = kind === "series" ? normalizeSeasons(seasonsFromEditor()) : [];
       if (kind === "movie" && !sources.length) throw new Error("أضف مصدراً واحداً على الأقل للفيلم.");
       if (kind === "series" && !seasons.length) throw new Error("أضف موسماً واحداً على الأقل للمسلسل.");
@@ -763,7 +920,7 @@
       const payload = {
         featured: parseCsv($("settingFeatured").value),
         announcement: asString($("settingAnnouncement").value).slice(0, 500),
-        minimumVersion: asString($("settingMinVersion").value, "2.1.0").slice(0, 20),
+        minimumVersion: asString($("settingMinVersion").value, "2.2.0").slice(0, 20),
         updateUrl: validMediaUrl($("settingUpdateUrl").value) || "https://github.com/3c5-o/CINARO/releases",
         maintenance: $("settingMaintenance").checked,
         forceUpdate: $("settingForceUpdate").checked,
@@ -776,6 +933,12 @@
     finally { setBusy(form, false); }
   }
 
+  function destroyPreviewHls() {
+    if (!state.previewHls) return;
+    try { state.previewHls.destroy(); } catch (_) {}
+    state.previewHls = null;
+  }
+
   function openMediaPreview(url, title = "معاينة الفيديو") {
     const safeUrl = validMediaUrl(url);
     if (!safeUrl) {
@@ -786,7 +949,37 @@
     const video = $("mediaPreviewVideo");
     $("mediaPreviewTitle").textContent = title;
     $("mediaPreviewMessage").textContent = "إذا لم يبدأ الفيديو، فتحقق أن الرابط مباشر ويسمح بالتشغيل من التطبيق.";
+    $("mediaPreviewMessage").className = "form-message";
     dialog.hidden = false;
+    video.pause();
+    destroyPreviewHls();
+    video.removeAttribute("src");
+    video.load();
+
+    if (inferMediaType(safeUrl) === "application/vnd.apple.mpegurl") {
+      const HlsRuntime = window.Hls;
+      if (HlsRuntime?.isSupported?.()) {
+        const hls = new HlsRuntime({ enableWorker: true, backBufferLength: 60 });
+        state.previewHls = hls;
+        hls.on(HlsRuntime.Events.MEDIA_ATTACHED, () => {
+          if (state.previewHls === hls) hls.loadSource(safeUrl);
+        });
+        hls.on(HlsRuntime.Events.ERROR, (_event, data) => {
+          if (!data?.fatal || state.previewHls !== hls) return;
+          $("mediaPreviewMessage").textContent = "تعذّر تشغيل مصدر HLS. تحقق من CORS وصلاحية الرابط.";
+          $("mediaPreviewMessage").className = "form-message error";
+        });
+        hls.attachMedia(video);
+        video.play().catch(() => {});
+        return;
+      }
+      if (!video.canPlayType("application/vnd.apple.mpegurl")) {
+        $("mediaPreviewMessage").textContent = "هذا الجهاز لا يدعم معاينة HLS.";
+        $("mediaPreviewMessage").className = "form-message error";
+        return;
+      }
+    }
+
     video.src = safeUrl;
     video.load();
     video.play().catch(() => {});
@@ -795,6 +988,7 @@
   function closeMediaPreview() {
     const video = $("mediaPreviewVideo");
     video.pause();
+    destroyPreviewHls();
     video.removeAttribute("src");
     video.load();
     $("mediaPreviewDialog").hidden = true;
@@ -824,6 +1018,7 @@
     else if (action === "edit-section") editSection(id);
     else if (action === "delete-section") deleteSection(id);
     else if (action === "toggle-report") toggleReport(id, button.dataset.status);
+    else if (action === "save-request") saveContentRequest(id);
     else if (action === "preview-url") openMediaPreview(button.dataset.url, "معاينة مصدر البلاغ");
     else if (action === "preview-movie") openMediaPreview($("movieSourceUrl").value, "معاينة الفيلم");
     else if (action === "add-episode") {
@@ -856,6 +1051,7 @@
       renderDashboard();
       if (state.view === "content") renderContent();
       if (state.view === "reports") renderReports();
+      if (state.view === "requests") renderRequests();
       if (state.view === "users") renderUsers();
       if (state.view === "supervisors") renderSupervisors();
       if (state.view === "sections") renderSections();
@@ -880,11 +1076,13 @@
       listen("users", "users", "المستخدمين");
       listen("supervisorAssignments", "supervisors", "تعيينات المشرفين");
       listen("reports", "reports", "البلاغات");
+      listen("contentRequests", "requests", "طلبات المحتوى");
       listen("auditLogs", "logs", "سجل العمليات");
     } else {
       state.users = [];
       state.supervisors = [];
       state.reports = [];
+      state.requests = [];
       state.logs = [];
     }
     state.unsubscribers.push(client.listenDoc("appConfig", "public", (config) => {
@@ -970,6 +1168,7 @@
     $("userSearch")?.addEventListener("input", (event) => { state.filters.userSearch = event.target.value; renderUsers(); });
     $("userStatusFilter")?.addEventListener("change", (event) => { state.filters.userStatus = event.target.value; renderUsers(); });
     $("reportStatusFilter")?.addEventListener("change", (event) => { state.filters.reportStatus = event.target.value; renderReports(); });
+    $("requestStatusFilter")?.addEventListener("change", (event) => { state.filters.requestStatus = event.target.value; renderRequests(); });
     $("closeMediaPreview")?.addEventListener("click", closeMediaPreview);
     $("mediaPreviewDialog")?.addEventListener("click", (event) => {
       if (event.target === event.currentTarget) closeMediaPreview();
