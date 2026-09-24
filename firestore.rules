@@ -216,7 +216,12 @@ service cloud.firestore {
         signedIn() && resource.data.userId == request.auth.uid
       );
 
-      allow update, delete: if admin();
+      allow update: if admin();
+      allow delete: if admin() || (
+        activeUser()
+        && resource.data.userId == request.auth.uid
+        && resource.data.status == 'new'
+      );
     }
 
     match /reports/{reportId} {
