@@ -65,11 +65,12 @@
     heroIndex: 0,
     heroTimer: null,
     catalog: {
-      movie: { genre: "الكل", sort: "latest" },
-      series: { genre: "الكل", sort: "latest" }
+      movie: { genre: "الكل", sort: "latest", visible: 60 },
+      series: { genre: "الكل", sort: "latest", visible: 60 }
     },
     searchQuery: "",
     searchType: "all",
+    searchLimit: 60,
     libraryTab: "favorites",
     selectedSeasons: {},
     installPrompt: null,
@@ -1033,6 +1034,7 @@
     const genres = ["الكل", ...new Set(source.flatMap((item) => item.genres))];
     const filtered = source.filter((item) => config.genre === "الكل" || item.genres.includes(config.genre));
     const sorted = sortItems(filtered, config.sort);
+    const visible = sorted.slice(0, Math.max(30, asNumber(config.visible, 60)));
     const title = kind === "movie" ? "الأفلام" : "المسلسلات";
     const kicker = kind === "movie" ? "شاشة كبيرة في جيبك" : "مواسم تستحق المتابعة";
     const description = kind === "movie" ? "اكتشف الأفلام ورتّبها حسب الجديد أو التقييم أو المشاهدة." : "تصفّح المسلسلات وانتقل بين المواسم والحلقات بسهولة.";
@@ -1054,7 +1056,8 @@
           </select>
         </div>
         <div class="result-count">${sorted.length} ${kind === "movie" ? "فيلم" : "مسلسل"}</div>
-        <div class="media-grid">${mediaGrid(sorted, `لا يوجد ${title} ضمن هذا التصنيف.`)}</div>
+        <div class="media-grid">${mediaGrid(visible, `لا يوجد ${title} ضمن هذا التصنيف.`)}</div>
+        ${visible.length < sorted.length ? `<div class="load-more-wrap"><button class="button secondary" type="button" data-action="catalog-more" data-kind="${kind}">عرض المزيد (${sorted.length - visible.length})</button></div>` : ""}
       </div>`;
   }
 
@@ -1079,6 +1082,7 @@
     const clearButton = byId("clearSearchButton");
     if (!resultsNode || !countNode) return;
     const results = searchResults();
+    const visibleResults = results.slice(0, Math.max(30, state.searchLimit || 60));
     clearButton?.toggleAttribute("hidden", !state.searchQuery);
     if (!state.searchQuery.trim()) {
       countNode.textContent = "";
@@ -1091,7 +1095,7 @@
       resultsNode.innerHTML = `<div class="request-empty-card search-request-card">${icon("search")}<h2>ما لقينا هذا المحتوى</h2><p>تقدر ترسل الاسم مباشرة إلى الإدارة حتى تضيفه للمكتبة.</p><button class="button primary" type="button" data-action="request-search" data-kind="${requestKind}" data-title="${escapeAttribute(state.searchQuery)}">${icon("film")} طلب هذا المحتوى</button></div>`;
       return;
     }
-    resultsNode.innerHTML = mediaGrid(results, "جرّب كتابة اسم مختلف أو اختر نوعًا آخر.");
+    resultsNode.innerHTML = `${mediaGrid(visibleResults, "جرّب كتابة اسم مختلف أو اختر نوعًا آخر.")}${visibleResults.length < results.length ? `<div class="load-more-wrap"><button class="button secondary" type="button" data-action="search-more">عرض المزيد (${results.length - visibleResults.length})</button></div>` : ""}`;
   }
 
   function renderSearch() {
@@ -2270,13 +2274,25 @@
       const kind = button.dataset.kind;
       if (state.catalog[kind]) {
         state.catalog[kind].genre = button.dataset.genre;
+        state.catalog[kind].visible = 60;
+        renderCatalog(kind);
+      }
+    } else if (action === "catalog-more") {
+      const kind = button.dataset.kind;
+      if (state.catalog[kind]) {
+        state.catalog[kind].visible = (state.catalog[kind].visible || 60) + 60;
         renderCatalog(kind);
       }
     } else if (action === "search-type") {
       state.searchType = button.dataset.type;
+      state.searchLimit = 60;
       renderSearch();
+    } else if (action === "search-more") {
+      state.searchLimit += 60;
+      renderSearchResultsOnly();
     } else if (action === "clear-search") {
       state.searchQuery = "";
+      state.searchLimit = 60;
       const input = byId("searchInput");
       if (input) input.value = "";
       renderSearchResultsOnly();
@@ -2387,6 +2403,7 @@
     document.addEventListener("input", (event) => {
       if (event.target.id === "searchInput") {
         state.searchQuery = event.target.value;
+        state.searchLimit = 60;
         renderSearchResultsOnly();
       }
     });
@@ -2395,6 +2412,7 @@
       const sortKind = event.target.dataset.catalogSort;
       if (sortKind && state.catalog[sortKind]) {
         state.catalog[sortKind].sort = event.target.value;
+        state.catalog[sortKind].visible = 60;
         renderCatalog(sortKind);
       }
     });
