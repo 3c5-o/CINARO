@@ -335,7 +335,7 @@ async function bootFirebase() {
       if (title.length < 2) throw new Error("cinaro/request-title-too-short");
       return firestoreSdk.addDoc(firestoreSdk.collection(db, "contentRequests"), {
         userId: user.uid,
-        userEmail: textValue(user.email, "", 180).toLowerCase(),
+        userEmail: textValue(user.email, "", 180),
         title: title,
         kind: request.kind === "series" ? "series" : "movie",
         notes: textValue(request.notes, "", 600),
