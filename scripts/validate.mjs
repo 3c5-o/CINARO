@@ -11,7 +11,7 @@ const ok = (condition, message) => { if (!condition) errors.push(message); };
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 const expectedVersion = packageJson.version;
-ok(expectedVersion === "2.2.0", "Package version must be CINARO 2.2.0");
+ok(expectedVersion === "2.2.1", "Package version must be CINARO 2.2.1");
 
 const requiredFiles = [
   "index.html",
@@ -154,6 +154,7 @@ ok(adminAppSource.includes("extraSubtitles: subtitles.slice(1)"), "Admin must pr
 ok(adminAppSource.includes("existingMovieSources.slice(2)"), "Admin must preserve additional movie sources");
 ok(adminAppSource.includes("existingMovieSubtitles.slice(1)"), "Admin must preserve additional movie subtitles");
 ok(adminAppSource.includes("thumbnail: validMediaUrl(episode.thumbnail"), "Admin must preserve episode thumbnails");
+ok(adminAppSource.includes("client.listenContentForSections("), "Supervisors must use the scoped content listener");
 
 const adminStyles = fs.readFileSync(path.join(adminRoot, "styles.css"), "utf8");
 ok(adminStyles.includes('inset-inline-start: 0'), "Admin sidebar must use logical RTL positioning");
@@ -177,7 +178,7 @@ const androidBuild = fs.readFileSync(path.join(root, "android-app", "app", "buil
 ok(androidBuild.includes('buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "true"'), "User Android flavor must block screen capture");
 ok(androidBuild.includes('buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "false"'), "Admin Android flavor must keep normal screen capture behavior");
 ok(androidBuild.includes(`versionName "${expectedVersion}"`), "Android versionName must match package.json");
-ok(androidBuild.includes('versionCode 5'), "Android versionCode must be 5 for CINARO 2.2.0");
+ok(androidBuild.includes('versionCode 6'), "Android versionCode must be 6 for CINARO 2.2.1");
 ok(fs.existsSync(path.join(root, "android-app", "app", "src", "admin", "res", "mipmap-xxxhdpi", "ic_launcher.png")), "Admin Android flavor must have a dedicated launcher icon");
 
 const firebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
@@ -192,6 +193,9 @@ ok(firestoreRules.includes("function activeUser()"), "Firestore rules must defin
 ok(firestoreRules.includes("data.get('status', 'active')"), "Blocked-account rules must safely handle users without a status field");
 ok(firestoreRules.includes("uniqueViewIncrement"), "Firestore rules must protect unique view increments");
 ok(firestoreRules.includes("supervisorCanPublish"), "Firestore rules must enforce supervisor publishing permissions");
+ok(firestoreRules.includes("supervisorCanReadContent"), "Firestore rules must scope supervisor content reads");
+ok(firestoreRules.includes("data.sectionIds.hasAny(currentAssignment().data.sectionIds)"), "Supervisor reads must intersect assigned section IDs");
+ok(!firestoreRules.includes("|| supervisor();"), "Firestore content reads must not grant supervisors blanket access");
 ok(firestoreRules.includes("supervisorCanCreateContent"), "Firestore rules must constrain supervisor content creation");
 ok(firestoreRules.includes("supervisorCanUpdateContent"), "Firestore rules must constrain supervisor content updates");
 ok(firestoreRules.includes("data.views == 0"), "Supervisor-created content must start with zero views");
@@ -239,6 +243,8 @@ ok(adminFirebaseSource.includes('projectId: "cinaro"'), "Admin Firebase project 
 ok(adminFirebaseSource.includes('adminEmail: ADMIN_EMAIL'), "Admin Firebase client must expose the allowlisted email");
 ok(!adminFirebaseSource.match(/password\s*:\s*["']/i), "Admin Firebase client must not contain a password");
 ok(adminFirebaseSource.includes('role = "supervisor"'), "Admin Firebase must support assigned supervisors");
+ok(adminFirebaseSource.includes("listenContentForSections: function"), "Admin Firebase must expose a scoped supervisor listener");
+ok(adminFirebaseSource.includes('where("sectionIds", "array-contains-any", safeSections)'), "Supervisor content listener must query assigned sections");
 
 const androidWorkflow = fs.readFileSync(path.join(root, ".github", "workflows", "android-apk.yml"), "utf8");
 ok(androidWorkflow.includes("CINARO_KEYSTORE_BASE64"), "Android workflow must support the stable signing keystore");
@@ -247,6 +253,11 @@ ok(androidWorkflow.includes(`CINARO-User-v${expectedVersion}.apk`), "Android wor
 ok(androidWorkflow.includes(`CINARO-Admin-v${expectedVersion}.apk`), "Android workflow admin APK name must match package.json");
 ok(androidWorkflow.includes(`TAG="v${expectedVersion}"`), "Android workflow release tag must match package.json");
 ok(!androidWorkflow.includes("v2.1.0"), "Android workflow must not publish stale 2.1.0 artifacts");
+
+const firebaseRulesWorkflow = fs.readFileSync(path.join(root, ".github", "workflows", "firebase-rules.yml"), "utf8");
+ok(firebaseRulesWorkflow.includes("firebase-tools@latest deploy --only firestore:rules"), "Firebase rules workflow must deploy Firestore rules");
+ok(firebaseRulesWorkflow.includes("FIREBASE_SERVICE_ACCOUNT_CINARO"), "Firebase rules workflow must support a service-account secret");
+ok(firebaseRulesWorkflow.includes("FIREBASE_TOKEN"), "Firebase rules workflow must support a Firebase token fallback");
 
 const serviceWorker = fs.readFileSync(path.join(webRoot, "sw.js"), "utf8");
 for (const requiredFile of requiredFiles.filter((file) => !["sw.js"].includes(file))) {
