@@ -7,10 +7,10 @@
   <meta name="description" content="لوحة إدارة CINARO للمحتوى والمستخدمين والمشرفين">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; connect-src 'self' https: wss:; frame-src 'self' https://cinaro.firebaseapp.com; style-src 'self' 'unsafe-inline'; script-src 'self' https://www.gstatic.com https://cdn.jsdelivr.net; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>CINARO Admin</title>
-  <link rel="manifest" href="manifest.webmanifest?v=2.3.1">
+  <link rel="manifest" href="manifest.webmanifest?v=2.3.2">
   <link rel="icon" type="image/png" href="assets/icons/favicon-32.png">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=2.3.1">
+  <link rel="stylesheet" href="styles.css?v=2.3.2">
 </head>
 <body class="admin-booting">
   <div id="loginView" class="admin-login-view">
@@ -69,7 +69,14 @@
       </section>
 
       <section id="view-content" class="admin-view" data-title="إدارة المحتوى">
-        <div class="section-toolbar"><div><span>المكتبة</span><h2>الأفلام والمسلسلات</h2><p>كل ما يظهر هنا مصدره Firestore، ولا توجد بيانات تجريبية داخل نسخة المستخدم.</p></div><button id="newContentButton" class="admin-button primary" type="button"><svg><use href="#i-plus"></use></svg> إضافة محتوى</button></div>
+        <div class="section-toolbar">
+          <div><span>المكتبة</span><h2>الأفلام والمسلسلات</h2><p>أضف المحتوى يدوياً أو استورد معلوماته من TMDb ثم أضف روابط التشغيل الخاصة بك.</p></div>
+          <div class="content-create-actions">
+            <button id="newContentButton" class="admin-button primary" type="button"><svg><use href="#i-plus"></use></svg> إضافة يدوية</button>
+            <button class="admin-button ghost tmdb-quick-button" type="button" data-action="new-tmdb" data-kind="movie" data-admin-only><svg><use href="#i-film"></use></svg> فيلم من TMDb</button>
+            <button class="admin-button ghost tmdb-quick-button" type="button" data-action="new-tmdb" data-kind="series" data-admin-only><svg><use href="#i-film"></use></svg> مسلسل من TMDb</button>
+          </div>
+        </div>
         <div class="filter-bar"><label class="admin-search"><svg><use href="#i-search"></use></svg><input id="contentSearch" type="search" placeholder="ابحث بالاسم أو المعرّف…"></label><select id="contentKindFilter" aria-label="تصفية النوع"><option value="all">كل الأنواع</option><option value="movie">أفلام</option><option value="series">مسلسلات</option></select><select id="contentStatusFilter" aria-label="تصفية الحالة"><option value="all">كل الحالات</option><option value="published">منشور</option><option value="draft">مسودة</option></select></div>
         <div class="panel table-panel"><div id="contentTable" class="data-table-wrap"></div></div>
       </section>
@@ -95,7 +102,10 @@
                 <label class="check-field"><input id="tmdbImportGenres" type="checkbox" checked><span>التصنيفات والتصنيف العمري</span></label>
                 <label class="check-field"><input id="tmdbImportEpisodes" type="checkbox" checked><span>المواسم والحلقات للمسلسلات</span></label>
               </div>
-              <p id="tmdbImportMessage" class="form-message tmdb-message" role="status"></p>
+              <div class="tmdb-import-status-row">
+                <p id="tmdbImportMessage" class="form-message tmdb-message" role="status"></p>
+                <button class="admin-button ghost compact" type="button" data-view="settings">إعداد TMDb</button>
+              </div>
               <div id="tmdbSearchResults" class="tmdb-results"></div>
               <p class="tmdb-attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
             </div>
@@ -128,7 +138,7 @@
             <label><span>معرّفات المحتوى المميز</span><textarea id="settingFeatured" rows="3" placeholder="movie-id, series-id"></textarea></label>
             <label><span>رسالة عامة للمستخدمين</span><textarea id="settingAnnouncement" rows="3" placeholder="اختياري"></textarea></label>
             <div class="form-grid two">
-              <label><span>الحد الأدنى لإصدار التطبيق</span><input id="settingMinVersion" value="2.3.1"></label>
+              <label><span>الحد الأدنى لإصدار التطبيق</span><input id="settingMinVersion" value="2.3.2"></label>
               <label><span>رابط تنزيل التحديث</span><input id="settingUpdateUrl" type="url" value="https://github.com/3c5-o/CINARO/releases"></label>
               <label class="check-field"><input id="settingMaintenance" type="checkbox"><span>وضع الصيانة</span></label>
               <label class="check-field"><input id="settingForceUpdate" type="checkbox"><span>إجبار التحديث</span></label>
@@ -192,8 +202,8 @@
     <symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
   </svg>
 
-  <script src="firebase.js?v=2.3.1" type="module"></script>
+  <script src="firebase.js?v=2.3.2" type="module"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="app.js?v=2.3.1" defer></script>
+  <script src="app.js?v=2.3.2" defer></script>
 </body>
 </html>

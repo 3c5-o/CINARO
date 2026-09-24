@@ -41,6 +41,7 @@ public class MainActivity extends Activity {
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenCallback;
     private boolean usingOfflineFallback;
+    private boolean refreshAfterUpgrade;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,6 +62,7 @@ public class MainActivity extends Activity {
         SharedPreferences runtimePreferences = getSharedPreferences("cinaro_runtime", MODE_PRIVATE);
         int lastVersionCode = runtimePreferences.getInt("last_version_code", -1);
         boolean appUpdated = lastVersionCode != BuildConfig.VERSION_CODE;
+        refreshAfterUpgrade = appUpdated;
 
         if (appUpdated) {
             webView.clearCache(true);
@@ -115,7 +117,7 @@ public class MainActivity extends Activity {
         settings.setAllowUniversalAccessFromFileURLs(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setUserAgentString(settings.getUserAgentString() + " CINARO/2.3.1 AndroidApp");
+        settings.setUserAgentString(settings.getUserAgentString() + " CINARO/2.3.2 AndroidApp");
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.setSafeBrowsingEnabled(true);
@@ -133,6 +135,23 @@ public class MainActivity extends Activity {
     }
 
     private class CinaroWebViewClient extends WebViewClient {
+        @Override
+        public void onPageFinished(WebView view, String url) {
+            super.onPageFinished(view, url);
+            if (!refreshAfterUpgrade || url == null || !url.startsWith("https://" + APP_HOST + BuildConfig.APP_PATH)) {
+                return;
+            }
+
+            refreshAfterUpgrade = false;
+            String cleanupScript =
+                    "(async()=>{" +
+                    "try{if('serviceWorker' in navigator){const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.unregister()));}}catch(e){}" +
+                    "try{if(window.caches){const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));}}catch(e){}" +
+                    "location.replace(" + org.json.JSONObject.quote(BuildConfig.ONLINE_APP_URL) + ");" +
+                    "})()";
+            view.evaluateJavascript(cleanupScript, null);
+        }
+
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             Uri uri = request.getUrl();

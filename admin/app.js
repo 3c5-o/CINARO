@@ -488,7 +488,7 @@
   function setImportMode(mode) {
     const next = mode === "tmdb" && isAdmin() ? "tmdb" : "manual";
     state.tmdb.importMode = next;
-    $("[data-import-mode]").forEach((button) => button.classList.toggle("active", button.dataset.importMode === next));
+    $$("[data-import-mode]").forEach((button) => button.classList.toggle("active", button.dataset.importMode === next));
     $("tmdbImportPanel")?.classList.toggle("is-hidden", next !== "tmdb");
     if (next === "tmdb" && !readTmdbToken()) {
       setTmdbMessage("أضف TMDb Read Access Token من إعدادات التطبيق أولاً.", "error");
@@ -746,7 +746,7 @@
   function fillSettings() {
     $("settingFeatured").value = toArray(state.config.featured).join(", ");
     $("settingAnnouncement").value = asString(state.config.announcement);
-    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.3.1");
+    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.3.2");
     $("settingUpdateUrl").value = asString(state.config.updateUrl, "https://github.com/3c5-o/CINARO/releases");
     $("settingMaintenance").checked = state.config.maintenance === true;
     $("settingForceUpdate").checked = state.config.forceUpdate === true;
@@ -882,6 +882,26 @@
     $("editorTitle").textContent = "إضافة محتوى";
     setMessage("contentFormMessage", "");
     toggleKindFields();
+  }
+
+  function openNewContent(kind = "movie", importMode = "manual") {
+    if (!hasPermission("createContent")) {
+      toast("لا تملك صلاحية إضافة محتوى", "error");
+      return;
+    }
+    resetContentForm();
+    $("contentKind").value = kind === "series" ? "series" : "movie";
+    toggleKindFields();
+    if (!isAdmin()) {
+      $("contentSections").value = assignedSectionIds()[0] || "";
+      setImportMode("manual");
+    } else {
+      setImportMode(importMode === "tmdb" ? "tmdb" : "manual");
+    }
+    setView("editor");
+    if (importMode === "tmdb" && isAdmin()) {
+      window.setTimeout(() => $("tmdbSearchInput")?.focus(), 60);
+    }
   }
 
   function openContentEditor(id) {
@@ -1223,7 +1243,7 @@
       const payload = {
         featured: parseCsv($("settingFeatured").value),
         announcement: asString($("settingAnnouncement").value).slice(0, 500),
-        minimumVersion: asString($("settingMinVersion").value, "2.3.1").slice(0, 20),
+        minimumVersion: asString($("settingMinVersion").value, "2.3.2").slice(0, 20),
         updateUrl: validMediaUrl($("settingUpdateUrl").value) || "https://github.com/3c5-o/CINARO/releases",
         maintenance: $("settingMaintenance").checked,
         forceUpdate: $("settingForceUpdate").checked,
@@ -1324,6 +1344,7 @@
     else if (action === "save-request") saveContentRequest(id);
     else if (action === "preview-url") openMediaPreview(button.dataset.url, "معاينة مصدر البلاغ");
     else if (action === "preview-movie") openMediaPreview($("movieSourceUrl").value, "معاينة الفيلم");
+    else if (action === "new-tmdb") openNewContent(button.dataset.kind, "tmdb");
     else if (action === "tmdb-select") importTmdbItem(button.dataset.tmdbId, button.dataset.tmdbKind);
     else if (action === "add-episode") {
       const seasonIndex = asNumber(button.dataset.seasonIndex, -1);
@@ -1485,12 +1506,7 @@
     });
     $("logoutButton")?.addEventListener("click", () => state.firebase?.logout().catch((error) => toast(errorMessage(error), "error")));
     $("menuButton")?.addEventListener("click", () => setMobileNavigation(!$("adminSidebar")?.classList.contains("open")));
-    $("newContentButton")?.addEventListener("click", () => {
-      if (!hasPermission("createContent")) return toast("لا تملك صلاحية إضافة محتوى", "error");
-      resetContentForm();
-      if (!isAdmin()) $("contentSections").value = assignedSectionIds()[0] || "";
-      setView("editor");
-    });
+    $("newContentButton")?.addEventListener("click", () => openNewContent("movie", "manual"));
     $("contentKind")?.addEventListener("change", () => {
       toggleKindFields();
       if (state.tmdb.importMode === "tmdb") {
@@ -1499,7 +1515,7 @@
         setTmdbMessage("نوع البحث تغيّر. نفّذ البحث من جديد.");
       }
     });
-    $("[data-import-mode]").forEach((button) => button.addEventListener("click", () => setImportMode(button.dataset.importMode)));
+    $$("[data-import-mode]").forEach((button) => button.addEventListener("click", () => setImportMode(button.dataset.importMode)));
     $("tmdbSearchButton")?.addEventListener("click", searchTmdb);
     $("tmdbSearchInput")?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
@@ -1608,7 +1624,7 @@
   fillSettings();
   renderDashboard();
   if (window.CINARO_ADMIN_FIREBASE) connectFirebase(window.CINARO_ADMIN_FIREBASE);
-  if ("serviceWorker" in navigator && location.protocol === "https:") {
-    navigator.serviceWorker.register("sw.js?v=2.3.1", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
+  if (!window.CinaroNative && "serviceWorker" in navigator && location.protocol === "https:") {
+    navigator.serviceWorker.register("sw.js?v=2.3.2", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
   }
 })();
