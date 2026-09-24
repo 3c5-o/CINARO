@@ -2433,6 +2433,7 @@
   }
 
   function registerServiceWorker() {
+    if (window.CinaroNative) return;
     if (!("serviceWorker" in navigator) || !/^https?:$/.test(location.protocol)) return;
     window.addEventListener("load", async () => {
       try {
