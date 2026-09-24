@@ -7,13 +7,32 @@ on:
       - "firestore.rules"
       - "firebase.json"
       - ".github/workflows/firebase-rules.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "firestore.rules"
+      - "firebase.json"
+      - ".github/workflows/firebase-rules.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  validate-firestore-rules:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Validate protected rule markers
+        run: |
+          grep -q "supervisorCanReadContent" firestore.rules
+          grep -q "data.sectionIds.hasAny(currentAssignment().data.sectionIds)" firestore.rules
+          grep -q "allow read, write: if false" firestore.rules
+
   deploy-firestore-rules:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
