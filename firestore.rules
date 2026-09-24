@@ -38,9 +38,8 @@ service cloud.firestore {
 
     function supervisorCanReadContent(data) {
       return supervisor()
-        && data.sectionIds is list
-        && data.sectionIds.size() > 0
-        && data.sectionIds.hasAny(currentAssignment().data.sectionIds);
+        && data.managementSectionId is string
+        && data.managementSectionId in currentAssignment().data.sectionIds;
     }
 
     function supervisorCanCreate() {
@@ -71,7 +70,9 @@ service cloud.firestore {
       return supervisor()
         && data.sectionIds is list
         && data.sectionIds.size() > 0
-        && data.sectionIds.hasOnly(currentAssignment().data.sectionIds);
+        && data.sectionIds.hasOnly(currentAssignment().data.sectionIds)
+        && data.managementSectionId is string
+        && data.managementSectionId in currentAssignment().data.sectionIds;
     }
 
     function supervisorCanCreateContent(contentId, data) {
