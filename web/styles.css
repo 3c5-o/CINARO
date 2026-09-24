@@ -2167,6 +2167,17 @@ main {
   font-size: .65rem;
 }
 
+.load-more-wrap {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  padding: 1rem 0 .25rem;
+}
+
+.load-more-wrap .button {
+  min-width: min(100%, 220px);
+}
+
 .search-request-card {
   grid-column: 1 / -1;
   max-width: 34rem;
