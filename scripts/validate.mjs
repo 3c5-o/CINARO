@@ -290,6 +290,9 @@ ok(appSource.includes('action === "cancel-request"'), "Users must be able to can
 ok(appSource.includes("requestNotificationsReady"), "User app must notify request status changes without notifying on initial hydration");
 ok(appSource.includes("cinaro/request-duplicate") && appSource.includes("cinaro/request-exists"), "User app must block duplicate and already-available content requests");
 ok(appSource.includes("catalog-more") && appSource.includes("search-more"), "Large catalogs and search results must render incrementally");
+ok(!appSource.includes("asNumber("), "User app must not call the admin-only asNumber helper");
+ok(appSource.includes("requestFilter") && appSource.includes('action === "request-filter"'), "Request Center must support status filtering");
+ok(appSource.includes("request-hero") && appSource.includes("request-progress"), "Request Center must render premium summary and progress UI");
 ok(appSource.includes("playbackRate") && appSource.includes("captionsEnabled"), "Player speed and caption preferences must persist");
 ok(appSource.includes("function updateUpdateControl(") && appSource.includes("function openAvailableUpdate("), "User app must expose release status and update action");
 ok(appSource.includes('window.addEventListener("unhandledrejection"'), "User app must surface asynchronous runtime failures");
@@ -318,6 +321,8 @@ const webStyles = fs.readFileSync(path.join(webRoot, "styles.css"), "utf8");
 ok(webStyles.includes("user-select: none"), "User app must disable casual content selection");
 ok(webStyles.includes("-webkit-touch-callout: none"), "User app must disable long-press content callouts");
 ok(webStyles.includes("touch-action: manipulation"), "User interactive controls must use reliable mobile tap behavior");
+ok(webStyles.includes(".request-center") && webStyles.includes(".request-stats") && webStyles.includes(".request-progress"), "User styles must include the redesigned Request Center");
+ok(html.includes('id="i-plus"'), "User icon sprite must include the Request Center plus icon");
 
 const userFirebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
 ok(userFirebaseSource.includes("submitContentRequest: async function"), "Firebase client must support request submission");
