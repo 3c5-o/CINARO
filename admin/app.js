@@ -237,7 +237,7 @@
   }
 
   function normalizeSeasons(value, requireSources = true) {
-    return toArray(value).slice(0, 100).map((season, seasonIndex) => {
+    const seasons = toArray(value).slice(0, 100).map((season, seasonIndex) => {
       const number = Math.max(1, Math.round(asNumber(season.number, seasonIndex + 1)));
       const episodes = toArray(season.episodes).slice(0, 500).map((episode, episodeIndex) => ({
         id: asString(episode.id, `e${episode.number || episodeIndex + 1}`).slice(0, 80),
@@ -249,9 +249,103 @@
         subtitles: normalizeSubtitles(episode.subtitles)
       }));
       if (!episodes.length) throw new Error(`الموسم ${number} لا يحتوي حلقات.`);
+      const episodeNumbers = episodes.map((episode) => episode.number);
+      if (new Set(episodeNumbers).size !== episodeNumbers.length) throw new Error(`الموسم ${number} يحتوي رقم حلقة مكرر.`);
       if (requireSources && episodes.some((episode) => !episode.sources.length)) throw new Error(`كل حلقة في الموسم ${number} تحتاج مصدراً واحداً على الأقل قبل النشر.`);
       return { number, title: asString(season.title, `الموسم ${number}`).slice(0, 120), episodes };
     });
+    const seasonNumbers = seasons.map((season) => season.number);
+    if (new Set(seasonNumbers).size !== seasonNumbers.length) throw new Error("يوجد رقم موسم مكرر.");
+    return seasons;
+  }
+
+  function collectDraftPlaybackUrls() {
+    const kind = $("contentKind")?.value === "series" ? "series" : "movie";
+    const urls = [];
+    if (kind === "movie") {
+      [$("movieSourceUrl")?.value, $("movieBackupUrl")?.value].forEach((value) => {
+        const url = validMediaUrl(value);
+        if (url) urls.push(url);
+      });
+    } else {
+      state.seasonDraft.forEach((season) => {
+        toArray(season.episodes).forEach((episode) => {
+          [episode.url, episode.backupUrl].forEach((value) => {
+            const url = validMediaUrl(value);
+            if (url) urls.push(url);
+          });
+        });
+      });
+    }
+    return Array.from(new Set(urls));
+  }
+
+  function probePlaybackUrl(url) {
+    return new Promise((resolve) => {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.muted = true;
+      video.playsInline = true;
+      let hls = null;
+      let settled = false;
+      const finish = (ok, reason = "") => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        try { hls?.destroy?.(); } catch (_) {}
+        video.removeAttribute("src");
+        try { video.load(); } catch (_) {}
+        resolve({ url, ok, reason });
+      };
+      const timer = window.setTimeout(() => finish(false, "انتهت مهلة الفحص"), 9000);
+      video.addEventListener("loadedmetadata", () => finish(true), { once: true });
+      video.addEventListener("canplay", () => finish(true), { once: true });
+      video.addEventListener("error", () => finish(false, "تعذّر تحميل المصدر"), { once: true });
+
+      if (inferMediaType(url) === "application/vnd.apple.mpegurl" && window.Hls?.isSupported?.()) {
+        try {
+          hls = new window.Hls({ enableWorker: true, maxBufferLength: 5 });
+          hls.on(window.Hls.Events.MANIFEST_PARSED, () => finish(true));
+          hls.on(window.Hls.Events.ERROR, (_event, data) => { if (data?.fatal) finish(false, "تعذّر قراءة HLS"); });
+          hls.attachMedia(video);
+          hls.on(window.Hls.Events.MEDIA_ATTACHED, () => hls?.loadSource(url));
+          return;
+        } catch (_) {}
+      }
+
+      video.src = url;
+      try { video.load(); } catch (_) { finish(false, "تعذّر بدء الفحص"); }
+    });
+  }
+
+  async function validateCurrentPlayback() {
+    const button = $("validateContentButton");
+    const urls = collectDraftPlaybackUrls();
+    if (!urls.length) {
+      setMessage("contentFormMessage", "لا توجد روابط تشغيل لفحصها.", "error");
+      return;
+    }
+    button.disabled = true;
+    setMessage("contentFormMessage", `جاري فحص ${urls.length} رابط تشغيل…`, "pending");
+    const results = [];
+    try {
+      for (let offset = 0; offset < urls.length; offset += 3) {
+        const batch = urls.slice(offset, offset + 3);
+        results.push(...await Promise.all(batch.map(probePlaybackUrl)));
+        setMessage("contentFormMessage", `تم فحص ${Math.min(offset + batch.length, urls.length)} من ${urls.length}…`, "pending");
+      }
+      const failed = results.filter((item) => !item.ok);
+      if (failed.length) {
+        console.warn("CINARO failed playback probes", failed);
+        setMessage("contentFormMessage", `فشل ${failed.length} من ${results.length} رابط. راجع الروابط قبل النشر.`, "error");
+        toast("بعض روابط التشغيل لا تعمل", "error");
+      } else {
+        setMessage("contentFormMessage", `كل روابط التشغيل (${results.length}) استجابت بنجاح.`, "success");
+        toast("فحص روابط التشغيل ناجح");
+      }
+    } finally {
+      button.disabled = false;
+    }
   }
 
   function setBusy(form, busy) {
@@ -1635,6 +1729,7 @@
       state.seasonDraft.push(newSeason(state.seasonDraft.length + 1));
       renderSeasonBuilder();
     });
+    $("validateContentButton")?.addEventListener("click", validateCurrentPlayback);
     $("contentForm")?.addEventListener("submit", saveContent);
     $("supervisorForm")?.addEventListener("submit", saveSupervisor);
     $("sectionForm")?.addEventListener("submit", saveSection);
