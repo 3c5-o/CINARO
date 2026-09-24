@@ -850,7 +850,30 @@
         $("contentAgeRating").value = tmdbCertification(detailsAr, normalizedKind);
       }
       if (normalizedKind === "series" && $("tmdbImportEpisodes").checked) {
-        state.seasonDraft = await fetchTmdbSeriesSeasons(tmdbId, detailsAr.seasons);
+        const existingDraft = toArray(state.seasonDraft);
+        const importedSeasons = await fetchTmdbSeriesSeasons(tmdbId, detailsAr.seasons);
+        state.seasonDraft = importedSeasons.map((season) => {
+          const previousSeason = existingDraft.find((entry) => asNumber(entry.number) === asNumber(season.number));
+          return {
+            ...season,
+            episodes: toArray(season.episodes).map((episode) => {
+              const previousEpisode = toArray(previousSeason?.episodes).find((entry) => asNumber(entry.number) === asNumber(episode.number));
+              if (!previousEpisode) return episode;
+              return {
+                ...episode,
+                duration: asNumber(episode.duration, asNumber(previousEpisode.duration)),
+                url: asString(previousEpisode.url),
+                backupUrl: asString(previousEpisode.backupUrl),
+                subtitleUrl: asString(previousEpisode.subtitleUrl),
+                primarySource: previousEpisode.primarySource || null,
+                backupSource: previousEpisode.backupSource || null,
+                extraSources: toArray(previousEpisode.extraSources),
+                primarySubtitle: previousEpisode.primarySubtitle || null,
+                extraSubtitles: toArray(previousEpisode.extraSubtitles)
+              };
+            })
+          };
+        });
         renderSeasonBuilder();
       }
       toggleKindFields();
