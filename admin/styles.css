@@ -218,6 +218,11 @@ code { color: #a8bad0; font-family: ui-monospace, SFMono-Regular, Menlo, monospa
 .permission-list { display: grid; gap: .55rem; padding: .85rem; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.02); }
 .permission-list > span { color: var(--text); font-size: .8rem; font-weight: 700; }
 .permission-list .check-field { border: 0; min-height: unset; padding: .25rem 0; background: transparent; }
+.section-picker-field { align-content: start; }
+.section-picker { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .15rem; }
+.section-choice { min-height: 34px; padding: .42rem .7rem; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); background: rgba(255,255,255,.025); font-size: .7rem; font-weight: 700; }
+.section-choice.active { border-color: rgba(83,165,255,.55); color: #fff; background: rgba(83,165,255,.16); }
+.picker-empty { color: var(--dim); }
 .settings-form { max-width: 800px; }
 .settings-stack { display: grid; gap: 1rem; max-width: 900px; }
 .content-create-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .55rem; }
