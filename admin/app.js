@@ -428,15 +428,19 @@
       return;
     }
 
-    $("requestsTable").innerHTML = `<div class="data-table requests-data-table"><div class="data-head"><span>الطلب</span><span>المستخدم</span><span>الحالة</span><span>ملاحظة الإدارة</span><span>حفظ</span></div>${rows.map((request) => {
+    $("requestsTable").innerHTML = `<div class="data-table requests-data-table"><div class="data-head"><span>الطلب</span><span>المستخدم</span><span>الحالة</span><span>ملاحظة الإدارة</span><span>إجراءات</span></div>${rows.map((request) => {
       const status = ["new", "reviewing", "added", "rejected"].includes(request.status) ? request.status : "new";
       const options = Object.entries(statusLabels).map(([value, label]) => `<option value="${value}" ${value === status ? "selected" : ""}>${label}</option>`).join("");
+      const linkedContent = request.contentId && state.content.find((item) => item.id === request.contentId);
+      const addActions = status === "added"
+        ? (linkedContent ? `<button class="table-action" type="button" data-action="edit-content" data-id="${escapeHTML(linkedContent.id)}" title="فتح المحتوى"><svg><use href="#i-edit"></use></svg></button>` : "")
+        : `<button class="table-action" type="button" data-action="request-add-manual" data-id="${escapeHTML(request.id)}" title="إضافة يدوياً"><svg><use href="#i-plus"></use></svg></button><button class="table-action" type="button" data-action="request-add-tmdb" data-id="${escapeHTML(request.id)}" title="البحث في TMDb"><svg><use href="#i-search"></use></svg></button>`;
       return `<div class="data-row">
-        <span class="request-title-cell"><b>${escapeHTML(request.title || "طلب محتوى")}</b><small>${request.kind === "series" ? "مسلسل" : "فيلم"} · ${escapeHTML(request.notes || "بدون ملاحظات")}</small></span>
+        <span class="request-title-cell"><b>${escapeHTML(request.title || "طلب محتوى")}</b><small>${request.kind === "series" ? "مسلسل" : "فيلم"} · ${escapeHTML(request.notes || "بدون ملاحظات")}</small>${request.contentId ? `<small>مرتبط: ${escapeHTML(request.contentId)}</small>` : ""}</span>
         <span class="request-user-cell"><b>${escapeHTML(request.userEmail || "—")}</b><small>${escapeHTML(formatDate(request.createdAt))}</small></span>
         <select class="request-status-control" data-request-select="${escapeHTML(request.id)}">${options}</select>
-        <input class="request-note-control" data-request-note="${escapeHTML(request.id)}" maxlength="600" value="${escapeHTML(request.adminNote || "")}" placeholder="ملاحظة اختيارية للمستخدم">
-        <span class="row-actions"><button class="table-action success-action" type="button" data-action="save-request" data-id="${escapeHTML(request.id)}" title="حفظ الحالة"><svg><use href="#i-save"></use></svg></button></span>
+        <input class="request-note-control" data-request-note="${escapeHTML(request.id)}" maxlength="600" value="${escapeHTML(request.adminNote || "")}" placeholder="ملاحظة تظهر للمستخدم">
+        <span class="row-actions">${addActions}<button class="table-action success-action" type="button" data-action="save-request" data-id="${escapeHTML(request.id)}" title="حفظ الحالة"><svg><use href="#i-save"></use></svg></button></span>
       </div>`;
     }).join("")}</div>`;
   }
