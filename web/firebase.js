@@ -190,7 +190,7 @@ async function bootFirebase() {
     analyticsSdk.isSupported().then(function (supported) {
       if (!supported) return;
       analytics = analyticsSdk.getAnalytics(app);
-      analyticsSdk.logEvent(analytics, "app_open", { app_version: "2.3.2" });
+      analyticsSdk.logEvent(analytics, "app_open", { app_version: "2.4.0" });
     }).catch(function () {});
   }
 
@@ -276,6 +276,20 @@ async function bootFirebase() {
       return publicUser(user);
     },
 
+    requestEmailChange: async function (newEmail) {
+      const user = auth.currentUser;
+      if (!user || user.isAnonymous) throw new Error("auth/requires-login");
+      const email = textValue(newEmail, "", 180).toLowerCase();
+      if (!email || email === String(user.email || "").toLowerCase()) throw new Error("cinaro/email-unchanged");
+      if (typeof authSdk.verifyBeforeUpdateEmail === "function") {
+        await authSdk.verifyBeforeUpdateEmail(user, email);
+      } else {
+        await authSdk.updateEmail(user, email);
+        await authSdk.sendEmailVerification(user);
+      }
+      return true;
+    },
+
     sendVerification: async function () {
       const user = auth.currentUser;
       if (!user || user.isAnonymous) throw new Error("auth/requires-login");
@@ -343,6 +357,15 @@ async function bootFirebase() {
         createdAt: firestoreSdk.serverTimestamp(),
         updatedAt: firestoreSdk.serverTimestamp()
       });
+    },
+
+    cancelContentRequest: async function (requestId) {
+      const user = auth.currentUser;
+      if (!user || user.isAnonymous) throw new Error("auth/requires-login");
+      const safeId = textValue(requestId, "", 150);
+      if (!safeId) throw new Error("cinaro/invalid-request");
+      await firestoreSdk.deleteDoc(firestoreSdk.doc(db, "contentRequests", safeId));
+      return true;
     },
 
     listenMyRequests: function (callback, onError) {
@@ -416,7 +439,9 @@ async function bootFirebase() {
           featured = Array.isArray(data.featured) ? data.featured.map(String).slice(0, 12) : [];
           config = {
             announcement: textValue(data.announcement, "", 500),
-            minimumVersion: textValue(data.minimumVersion, "2.3.2", 20),
+            latestVersion: textValue(data.latestVersion, "2.4.0", 20),
+            minimumVersion: textValue(data.minimumVersion, "2.4.0", 20),
+            updateNotes: textValue(data.updateNotes, "", 1000),
             maintenance: data.maintenance === true,
             forceUpdate: data.forceUpdate === true,
             updateUrl: mediaUrl(data.updateUrl, "https://github.com/3c5-o/CINARO/releases")
@@ -490,7 +515,9 @@ async function bootFirebase() {
           settings: {
             oled: Boolean(payload.settings && payload.settings.oled),
             autoplayNext: payload.settings && payload.settings.autoplayNext !== false,
-            reduceMotion: Boolean(payload.settings && payload.settings.reduceMotion)
+            reduceMotion: Boolean(payload.settings && payload.settings.reduceMotion),
+            playbackRate: numberValue(payload.settings && payload.settings.playbackRate, 1, 0.5, 2),
+            captionsEnabled: Boolean(payload.settings && payload.settings.captionsEnabled)
           },
           updatedAt: firestoreSdk.serverTimestamp()
         },

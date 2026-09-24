@@ -152,7 +152,7 @@ async function boot() {
 
       const contentQuery = firestoreSdk.query(
         getCollection("content"),
-        firestoreSdk.where("sectionIds", "array-contains-any", safeSections)
+        firestoreSdk.where("managementSectionId", "in", safeSections)
       );
 
       return firestoreSdk.onSnapshot(

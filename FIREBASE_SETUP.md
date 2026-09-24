@@ -61,13 +61,17 @@ npx firebase-tools deploy --only firestore:rules
 
 المسلسل يستخدم الحقول نفسها، مع `seasons` بدل `sources`. كل موسم يحتوي `number` و`title` و`episodes`، وكل حلقة تحتوي رابطها داخل `sources`.
 
+كل مستند محتوى جديد يستخدم أيضاً `managementSectionId` لتحديد قسم الإدارة الأساسي. هذا الحقل هو الذي يحدد نطاق قراءة المشرف، بينما `sectionIds` تحدد جميع الأقسام التي يظهر فيها المحتوى. لوحة الإدارة 2.4.0 ترحّل المحتوى القديم تلقائياً عند دخول المدير.
+
 يمكن ترتيب اختيارات الواجهة ووضع التنبيهات من لوحة الإدارة أو بوضع مصفوفة معرّفات داخل المستند `appConfig/public`:
 
 ```json
 {
   "featured": ["movie-example", "series-example"],
   "announcement": "رسالة اختيارية للمستخدمين",
-  "minimumVersion": "2.3.2",
+  "latestVersion": "2.4.0",
+  "minimumVersion": "2.4.0",
+  "updateNotes": "ملاحظات التحديث التي تظهر للمستخدم",
   "updateUrl": "https://github.com/3c5-o/CINARO/releases/latest",
   "maintenance": false,
   "forceUpdate": false
@@ -82,6 +86,7 @@ npx firebase-tools deploy --only firestore:rules
 - `users/{uid}/private/state` للمفضلة والسجل والإعدادات.
 - `content/{contentId}/viewers/{uid}` عند احتساب أول مشاهدة فعلية للحساب.
 - `reports/{reportId}` عند إرسال المستخدم بلاغًا عن مشكلة تشغيل.
+- `contentRequests/{requestId}` لطلبات الأفلام والمسلسلات ومتابعة حالتها.
 
 نسخة المستخدم لا تملك صلاحية إضافة أو تعديل المحتوى. لوحة الإدارة متاحة من:
 

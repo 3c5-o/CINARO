@@ -2,7 +2,7 @@
   "use strict";
 
   let DATA = window.CINARO_DATA;
-  const APP_VERSION = "2.3.2";
+  const APP_VERSION = "2.4.0";
   const IMAGE_FALLBACK = "assets/images/poster-placeholder.webp";
 
   if (!DATA || !Array.isArray(DATA.items)) {
@@ -51,7 +51,9 @@
   const defaultSettings = {
     oled: false,
     autoplayNext: true,
-    reduceMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    reduceMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    playbackRate: 1,
+    captionsEnabled: false
   };
 
   let favorites = new Set(storage.get(STORAGE.favorites, []));
@@ -63,11 +65,12 @@
     heroIndex: 0,
     heroTimer: null,
     catalog: {
-      movie: { genre: "الكل", sort: "latest" },
-      series: { genre: "الكل", sort: "latest" }
+      movie: { genre: "الكل", sort: "latest", visible: 60 },
+      series: { genre: "الكل", sort: "latest", visible: 60 }
     },
     searchQuery: "",
     searchType: "all",
+    searchLimit: 60,
     libraryTab: "favorites",
     selectedSeasons: {},
     installPrompt: null,
@@ -85,6 +88,8 @@
     userProfileUnsubscribe: null,
     requestUnsubscribe: null,
     requests: [],
+    requestNotificationsReady: false,
+    runtimeErrorShown: false,
     remoteConfig: {},
     sections: [],
     serviceLocked: false,
@@ -313,7 +318,11 @@
       "auth/operation-not-allowed": "طريقة الدخول غير مفعّلة من Firebase Console.",
       "auth/requires-login": "سجّل الدخول بحسابك لإكمال هذه العملية.",
       "auth/requires-recent-login": "لحماية حسابك، سجّل الخروج ثم ادخل مجددًا وأعد المحاولة.",
-      "cinaro/name-too-short": "الاسم يجب أن يحتوي حرفين على الأقل."
+      "cinaro/name-too-short": "الاسم يجب أن يحتوي حرفين على الأقل.",
+      "cinaro/request-duplicate": "عندك طلب مشابه ما زال جديداً أو قيد المراجعة.",
+      "cinaro/request-exists": "هذا المحتوى موجود بالفعل داخل CINARO.",
+      "cinaro/request-title-too-short": "اكتب اسم الفيلم أو المسلسل بصورة أوضح.",
+      "cinaro/email-unchanged": "اكتب بريداً جديداً مختلفاً عن بريد حسابك الحالي."
     };
     return messages[code] || "تعذّر إكمال العملية. تحقق من البيانات والاتصال.";
   }
@@ -383,6 +392,7 @@
     if (byId("accountPanelName")) byId("accountPanelName").textContent = name;
     if (byId("accountPanelEmail")) byId("accountPanelEmail").textContent = email || (isGuest ? "بياناتك محفوظة على هذا الجهاز" : "");
     if (byId("profileName") && document.activeElement !== byId("profileName")) byId("profileName").value = user?.displayName || "";
+    if (byId("profileEmail") && document.activeElement !== byId("profileEmail")) byId("profileEmail").value = email;
     const verification = byId("emailVerificationStatus")?.closest(".account-verification");
     if (byId("emailVerificationStatus")) {
       byId("emailVerificationStatus").textContent = user?.emailVerified ? "البريد الإلكتروني موثّق" : "البريد الإلكتروني غير موثّق";
@@ -479,6 +489,7 @@
     state.requestUnsubscribe?.();
     state.requestUnsubscribe = null;
     state.requests = [];
+    state.requestNotificationsReady = false;
     state.cloudHydrated = false;
     state.cloudRevision = 0;
     state.cloudSavedRevision = 0;
@@ -505,7 +516,17 @@
     if (!user.isAnonymous && state.firebase.listenMyRequests) {
       state.requestUnsubscribe = state.firebase.listenMyRequests(
         (rows) => {
-          state.requests = Array.isArray(rows) ? rows : [];
+          const nextRows = Array.isArray(rows) ? rows : [];
+          if (state.requestNotificationsReady) {
+            nextRows.forEach((request) => {
+              const previous = state.requests.find((item) => item.id === request.id);
+              if (!previous || previous.status === request.status) return;
+              const info = requestStatusInfo(request.status);
+              toast(`طلب «${request.title || "محتوى"}» أصبح: ${info.label}`);
+            });
+          }
+          state.requests = nextRows;
+          state.requestNotificationsReady = true;
           if (state.route?.name === "library" && state.libraryTab === "requests") renderLibrary();
         },
         (error) => console.warn("CINARO request listener failed", error)
@@ -515,6 +536,7 @@
 
   function updateServiceGate() {
     const minimumVersion = String(state.remoteConfig.minimumVersion || "").trim();
+    const latestVersion = String(state.remoteConfig.latestVersion || minimumVersion || "").trim();
     const needsUpdate = Boolean(minimumVersion && compareVersions(APP_VERSION, minimumVersion) < 0);
     const maintenance = state.remoteConfig.maintenance === true;
     const forcedUpdate = needsUpdate && state.remoteConfig.forceUpdate === true;
@@ -532,12 +554,30 @@
       byId("serviceGateAction").hidden = true;
     } else {
       byId("serviceGateKicker").textContent = "تحديث ضروري";
-      byId("serviceGateTitle").textContent = `حدّث CINARO إلى ${minimumVersion}`;
-      byId("serviceGateText").textContent = "هذه النسخة لم تعد مدعومة. نزّل الإصدار الجديد حتى تواصل المشاهدة بأمان.";
+      byId("serviceGateTitle").textContent = `حدّث CINARO إلى ${latestVersion || minimumVersion}`;
+      byId("serviceGateText").textContent = String(state.remoteConfig.updateNotes || "هذه النسخة لم تعد مدعومة. نزّل الإصدار الجديد حتى تواصل المشاهدة بأمان.").trim();
       byId("serviceGateAction").href = safeMediaUrl(state.remoteConfig.updateUrl, "https://github.com/3c5-o/CINARO/releases");
       byId("serviceGateAction").hidden = false;
     }
     if (!player.root.hidden) hidePlayer();
+  }
+
+  function updateUpdateControl() {
+    const label = byId("updateStatusText");
+    if (!label) return;
+    const latest = String(state.remoteConfig.latestVersion || state.remoteConfig.minimumVersion || APP_VERSION).trim();
+    const hasUpdate = latest && compareVersions(APP_VERSION, latest) < 0;
+    label.textContent = hasUpdate ? `يتوفر الإصدار ${latest}` : `أنت على أحدث إصدار (${APP_VERSION})`;
+  }
+
+  function openAvailableUpdate() {
+    const latest = String(state.remoteConfig.latestVersion || state.remoteConfig.minimumVersion || APP_VERSION).trim();
+    if (!latest || compareVersions(APP_VERSION, latest) >= 0) {
+      toast("أنت تستخدم أحدث إصدار من CINARO");
+      return;
+    }
+    const url = safeMediaUrl(state.remoteConfig.updateUrl, "https://github.com/3c5-o/CINARO/releases");
+    window.location.href = url;
   }
 
   function replaceCatalog(payload) {
@@ -545,9 +585,11 @@
     state.sections = Array.isArray(payload?.sections) ? payload.sections : [];
     if (elements.remoteNotice) {
       const minimumVersion = String(state.remoteConfig.minimumVersion || "").trim();
+      const latestVersion = String(state.remoteConfig.latestVersion || minimumVersion || "").trim();
       const needsUpdate = minimumVersion && compareVersions(APP_VERSION, minimumVersion) < 0;
-      const updateMessage = needsUpdate
-        ? `يتوفر إصدار أحدث من CINARO (${minimumVersion}). حدّث التطبيق للحصول على آخر المميزات.`
+      const hasOptionalUpdate = latestVersion && compareVersions(APP_VERSION, latestVersion) < 0;
+      const updateMessage = (needsUpdate || hasOptionalUpdate)
+        ? `يتوفر إصدار أحدث من CINARO (${latestVersion || minimumVersion}). ${String(state.remoteConfig.updateNotes || "حدّث التطبيق للحصول على آخر المميزات.").trim()}`
         : "";
       const message = state.remoteConfig.maintenance
         ? "CINARO تحت الصيانة حالياً. سيعود العرض قريباً."
@@ -557,6 +599,7 @@
       elements.remoteNotice.classList.toggle("maintenance", Boolean(state.remoteConfig.maintenance || (needsUpdate && state.remoteConfig.forceUpdate)));
     }
     updateServiceGate();
+    updateUpdateControl();
     if (state.remoteConfig.maintenance) setFirebaseStatus("connected", "وضع الصيانة مفعل من الإدارة");
     const incomingItems = Array.isArray(payload?.items) ? payload.items : [];
     DATA = {
@@ -764,6 +807,21 @@
         setAuthBusy(false);
       }
     });
+    byId("accountEmailButton")?.addEventListener("click", async () => {
+      const nextEmail = byId("profileEmail")?.value.trim() || "";
+      if (!nextEmail || !state.firebase || !state.authUser || state.authUser.isAnonymous || state.authBusy) return;
+      setAuthBusy(true);
+      setAuthMessage("جاري إرسال تأكيد تغيير البريد…");
+      try {
+        await state.firebase.requestEmailChange(nextEmail);
+        setAuthMessage("تم إرسال رابط تأكيد إلى البريد الجديد. أكمل التحقق من الرسالة.", "success");
+      } catch (error) {
+        setAuthMessage(authErrorMessage(error), "error");
+      } finally {
+        setAuthBusy(false);
+      }
+    });
+
     byId("accountPasswordResetButton").addEventListener("click", async () => {
       const email = state.authUser?.email || "";
       if (!email || !state.firebase || state.authBusy) return;
@@ -1013,6 +1071,7 @@
     const genres = ["الكل", ...new Set(source.flatMap((item) => item.genres))];
     const filtered = source.filter((item) => config.genre === "الكل" || item.genres.includes(config.genre));
     const sorted = sortItems(filtered, config.sort);
+    const visible = sorted.slice(0, Math.max(30, asNumber(config.visible, 60)));
     const title = kind === "movie" ? "الأفلام" : "المسلسلات";
     const kicker = kind === "movie" ? "شاشة كبيرة في جيبك" : "مواسم تستحق المتابعة";
     const description = kind === "movie" ? "اكتشف الأفلام ورتّبها حسب الجديد أو التقييم أو المشاهدة." : "تصفّح المسلسلات وانتقل بين المواسم والحلقات بسهولة.";
@@ -1034,7 +1093,8 @@
           </select>
         </div>
         <div class="result-count">${sorted.length} ${kind === "movie" ? "فيلم" : "مسلسل"}</div>
-        <div class="media-grid">${mediaGrid(sorted, `لا يوجد ${title} ضمن هذا التصنيف.`)}</div>
+        <div class="media-grid">${mediaGrid(visible, `لا يوجد ${title} ضمن هذا التصنيف.`)}</div>
+        ${visible.length < sorted.length ? `<div class="load-more-wrap"><button class="button secondary" type="button" data-action="catalog-more" data-kind="${kind}">عرض المزيد (${sorted.length - visible.length})</button></div>` : ""}
       </div>`;
   }
 
@@ -1059,6 +1119,7 @@
     const clearButton = byId("clearSearchButton");
     if (!resultsNode || !countNode) return;
     const results = searchResults();
+    const visibleResults = results.slice(0, Math.max(30, state.searchLimit || 60));
     clearButton?.toggleAttribute("hidden", !state.searchQuery);
     if (!state.searchQuery.trim()) {
       countNode.textContent = "";
@@ -1066,7 +1127,12 @@
       return;
     }
     countNode.textContent = `${results.length} نتيجة`;
-    resultsNode.innerHTML = mediaGrid(results, "جرّب كتابة اسم مختلف أو اختر نوعًا آخر.");
+    if (!results.length) {
+      const requestKind = state.searchType === "series" ? "series" : "movie";
+      resultsNode.innerHTML = `<div class="request-empty-card search-request-card">${icon("search")}<h2>ما لقينا هذا المحتوى</h2><p>تقدر ترسل الاسم مباشرة إلى الإدارة حتى تضيفه للمكتبة.</p><button class="button primary" type="button" data-action="request-search" data-kind="${requestKind}" data-title="${escapeAttribute(state.searchQuery)}">${icon("film")} طلب هذا المحتوى</button></div>`;
+      return;
+    }
+    resultsNode.innerHTML = `${mediaGrid(visibleResults, "جرّب كتابة اسم مختلف أو اختر نوعًا آخر.")}${visibleResults.length < results.length ? `<div class="load-more-wrap"><button class="button secondary" type="button" data-action="search-more">عرض المزيد (${results.length - visibleResults.length})</button></div>` : ""}`;
   }
 
   function renderSearch() {
@@ -1150,9 +1216,10 @@
         ${rows.length ? rows.map((request) => {
           const status = requestStatusInfo(request.status);
           const note = String(request.adminNote || "").trim();
+          const linkedContent = request.contentId && itemMap.get(request.contentId);
           return `<article class="request-card">
             <div class="request-card-main"><span class="request-kind">${request.kind === "series" ? "مسلسل" : "فيلم"}</span><h3>${escapeHTML(request.title || "طلب محتوى")}</h3><p>${escapeHTML(request.notes || "بدون ملاحظات")}</p>${note ? `<small class="request-admin-note">ملاحظة الإدارة: ${escapeHTML(note)}</small>` : ""}</div>
-            <div class="request-card-meta"><span class="request-status ${status.className}">${status.label}</span><small>${escapeHTML(formatRequestDate(request.createdAt))}</small></div>
+            <div class="request-card-meta"><span class="request-status ${status.className}">${status.label}</span><small>${escapeHTML(formatRequestDate(request.createdAt))}</small><div class="request-card-actions">${linkedContent ? `<button class="button primary compact-button" type="button" data-route="details/${escapeAttribute(linkedContent.id)}">فتح المحتوى</button>` : ""}${request.status === "new" ? `<button class="button secondary compact-button" type="button" data-action="cancel-request" data-request-id="${escapeAttribute(request.id)}">إلغاء الطلب</button>` : ""}</div></div>
           </article>`;
         }).join("") : `<div class="request-empty-card compact">${icon("film")}<h2>ما عندك طلبات بعد</h2><p>أرسل أول طلب وسيظهر هنا مع حالته.</p></div>`}
       </div>`;
@@ -1455,7 +1522,7 @@
     });
   }
 
-  function openRequestSheet() {
+  function openRequestSheet(options = {}) {
     if (!state.firebase || !state.authUser || state.authUser.isAnonymous) {
       closeSheets();
       showAuth("login");
@@ -1463,6 +1530,8 @@
       return;
     }
     byId("requestForm")?.reset();
+    if (options.kind && byId("requestKind")) byId("requestKind").value = options.kind === "series" ? "series" : "movie";
+    if (options.title && byId("requestName")) byId("requestName").value = String(options.title).slice(0, 180);
     if (byId("requestMessage")) {
       byId("requestMessage").textContent = "";
       byId("requestMessage").className = "auth-message";
@@ -1616,8 +1685,9 @@
     player.error.hidden = true;
     player.loading.hidden = false;
     player.stage.classList.remove("is-playing", "controls-hidden");
-    player.speed.value = "1";
-    player.video.playbackRate = 1;
+    const savedRate = Math.max(.5, Math.min(2, Number(settings.playbackRate) || 1));
+    player.speed.value = String(savedRate);
+    player.video.playbackRate = savedRate;
 
     populateQualityOptions(media.sources);
     populateSubtitleTracks(media.subtitles);
@@ -1647,8 +1717,8 @@
   }
 
   function populateSubtitleTracks(tracks) {
-    $$('track[data-cinaro-track="true"]', player.video).forEach((track) => track.remove());
-    tracks.forEach((trackData) => {
+    $('track[data-cinaro-track="true"]', player.video).forEach((track) => track.remove());
+    tracks.forEach((trackData, index) => {
       const track = document.createElement("track");
       track.kind = "subtitles";
       track.label = trackData.label || trackData.srclang || "ترجمة";
@@ -1656,11 +1726,12 @@
       const trackUrl = safeMediaUrl(trackData.src, "");
       if (!trackUrl) return;
       track.src = trackUrl;
+      track.default = Boolean(settings.captionsEnabled && index === 0);
       track.dataset.cinaroTrack = "true";
       player.video.appendChild(track);
     });
     player.captions.hidden = tracks.length === 0;
-    player.captions.classList.remove("active");
+    player.captions.classList.toggle("active", Boolean(settings.captionsEnabled && tracks.length));
   }
 
   function destroyHls() {
@@ -1926,6 +1997,8 @@
     if (!tracks.length) return;
     const enable = tracks.every((track) => track.mode !== "showing");
     tracks.forEach((track, index) => { track.mode = enable && index === 0 ? "showing" : "disabled"; });
+    settings.captionsEnabled = enable;
+    saveSettings();
     player.captions.classList.toggle("active", enable);
     toast(enable ? "تم تشغيل الترجمة" : "تم إيقاف الترجمة");
   }
@@ -2111,9 +2184,20 @@
       byId("requestMessage").textContent = "جاري إرسال الطلب…";
       byId("requestMessage").className = "auth-message";
       try {
+        const requestedKind = byId("requestKind").value === "series" ? "series" : "movie";
+        const requestedTitle = byId("requestName").value.trim();
+        const normalizedTitle = normalizeArabic(requestedTitle);
+        const existingContent = DATA.items.find((item) => item.kind === requestedKind && [item.title, item.englishTitle].some((title) => normalizeArabic(title || "") === normalizedTitle));
+        if (existingContent) throw Object.assign(new Error("cinaro/request-exists"), { code: "cinaro/request-exists" });
+        const duplicate = state.requests.find((request) =>
+          request.kind === requestedKind &&
+          ["new", "reviewing"].includes(request.status) &&
+          normalizeArabic(request.title || "") === normalizedTitle
+        );
+        if (duplicate) throw Object.assign(new Error("cinaro/request-duplicate"), { code: "cinaro/request-duplicate" });
         await state.firebase.submitContentRequest({
-          kind: byId("requestKind").value,
-          title: byId("requestName").value,
+          kind: requestedKind,
+          title: requestedTitle,
           notes: byId("requestNotes").value
         });
         closeSheets();
@@ -2186,6 +2270,8 @@
     });
     player.speed.addEventListener("change", () => {
       player.video.playbackRate = Number(player.speed.value) || 1;
+      settings.playbackRate = player.video.playbackRate;
+      saveSettings();
       toast(`سرعة التشغيل ${player.video.playbackRate}×`);
     });
     player.quality.addEventListener("change", () => {
@@ -2227,13 +2313,25 @@
       const kind = button.dataset.kind;
       if (state.catalog[kind]) {
         state.catalog[kind].genre = button.dataset.genre;
+        state.catalog[kind].visible = 60;
+        renderCatalog(kind);
+      }
+    } else if (action === "catalog-more") {
+      const kind = button.dataset.kind;
+      if (state.catalog[kind]) {
+        state.catalog[kind].visible = (state.catalog[kind].visible || 60) + 60;
         renderCatalog(kind);
       }
     } else if (action === "search-type") {
       state.searchType = button.dataset.type;
+      state.searchLimit = 60;
       renderSearch();
+    } else if (action === "search-more") {
+      state.searchLimit += 60;
+      renderSearchResultsOnly();
     } else if (action === "clear-search") {
       state.searchQuery = "";
+      state.searchLimit = 60;
       const input = byId("searchInput");
       if (input) input.value = "";
       renderSearchResultsOnly();
@@ -2243,6 +2341,18 @@
       renderLibrary();
     } else if (action === "open-request-sheet") {
       openRequestSheet();
+    } else if (action === "request-search") {
+      openRequestSheet({ kind: button.dataset.kind, title: button.dataset.title });
+    } else if (action === "cancel-request") {
+      const requestId = button.dataset.requestId;
+      const request = state.requests.find((item) => item.id === requestId);
+      if (!request || request.status !== "new") return;
+      askConfirmation(`إلغاء طلب «${request.title}»؟`).then((accepted) => {
+        if (!accepted) return;
+        state.firebase?.cancelContentRequest?.(requestId)
+          .then(() => toast("تم إلغاء الطلب"))
+          .catch((error) => toast(authErrorMessage(error), "error"));
+      });
     } else if (action === "request-login") {
       showAuth("login");
       setAuthMessage("سجّل دخولك حتى ترسل طلب محتوى وتتابع حالته.");
@@ -2332,6 +2442,7 @@
     document.addEventListener("input", (event) => {
       if (event.target.id === "searchInput") {
         state.searchQuery = event.target.value;
+        state.searchLimit = 60;
         renderSearchResultsOnly();
       }
     });
@@ -2340,6 +2451,7 @@
       const sortKind = event.target.dataset.catalogSort;
       if (sortKind && state.catalog[sortKind]) {
         state.catalog[sortKind].sort = event.target.value;
+        state.catalog[sortKind].visible = 60;
         renderCatalog(sortKind);
       }
     });
@@ -2350,6 +2462,19 @@
       image.dataset.fallbackApplied = "true";
       image.src = image.dataset.fallback || IMAGE_FALLBACK;
     }, true);
+
+    window.addEventListener("error", (event) => {
+      if (!event?.error || state.runtimeErrorShown) return;
+      state.runtimeErrorShown = true;
+      console.error("CINARO runtime error", event.error);
+      toast("صار خطأ بالواجهة. إذا توقف زر عن العمل أعد فتح التطبيق.", "error");
+    });
+    window.addEventListener("unhandledrejection", (event) => {
+      if (state.runtimeErrorShown) return;
+      state.runtimeErrorShown = true;
+      console.error("CINARO unhandled promise", event.reason);
+      toast("تعذّرت عملية داخل التطبيق. تحقق من الإنترنت وحاول مرة ثانية.", "error");
+    });
 
     window.addEventListener("hashchange", renderRoute);
     window.addEventListener("scroll", () => elements.header.classList.toggle("is-scrolled", window.scrollY > 24), { passive: true });
@@ -2368,6 +2493,7 @@
 
     elements.settingsButton.addEventListener("click", () => {
       syncSettingsControls();
+      updateUpdateControl();
       openSheet(elements.settingsSheet);
     });
     elements.sheetBackdrop.addEventListener("click", closeSheets);
@@ -2401,6 +2527,7 @@
       toast("تم مسح سجل المشاهدة");
     });
     byId("installButton").addEventListener("click", installApp);
+    byId("checkUpdateButton")?.addEventListener("click", openAvailableUpdate);
 
     window.addEventListener("beforeinstallprompt", (event) => {
       event.preventDefault();
@@ -2437,7 +2564,7 @@
     if (!("serviceWorker" in navigator) || !/^https?:$/.test(location.protocol)) return;
     window.addEventListener("load", async () => {
       try {
-        const registration = await navigator.serviceWorker.register("./sw.js?v=2.3.2", { scope: "./", updateViaCache: "none" });
+        const registration = await navigator.serviceWorker.register("./sw.js?v=2.4.0", { scope: "./", updateViaCache: "none" });
         registration.addEventListener("updatefound", () => {
           const worker = registration.installing;
           worker?.addEventListener("statechange", () => {

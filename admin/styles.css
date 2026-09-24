@@ -218,6 +218,11 @@ code { color: #a8bad0; font-family: ui-monospace, SFMono-Regular, Menlo, monospa
 .permission-list { display: grid; gap: .55rem; padding: .85rem; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.02); }
 .permission-list > span { color: var(--text); font-size: .8rem; font-weight: 700; }
 .permission-list .check-field { border: 0; min-height: unset; padding: .25rem 0; background: transparent; }
+.section-picker-field { align-content: start; }
+.section-picker { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .15rem; }
+.section-choice { min-height: 34px; padding: .42rem .7rem; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); background: rgba(255,255,255,.025); font-size: .7rem; font-weight: 700; }
+.section-choice.active { border-color: rgba(83,165,255,.55); color: #fff; background: rgba(83,165,255,.16); }
+.picker-empty { color: var(--dim); }
 .settings-form { max-width: 800px; }
 .settings-stack { display: grid; gap: 1rem; max-width: 900px; }
 .content-create-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .55rem; }
@@ -244,6 +249,8 @@ button, a, [role="button"], .nav-item, .mini-row, .tmdb-result-card { touch-acti
 .tmdb-result-card em { color: var(--blue); font-size: .62rem; font-style: normal; }
 .tmdb-empty { padding: 1.2rem; border: 1px dashed var(--line-strong); border-radius: 12px; color: var(--dim); text-align: center; }
 .tmdb-token-actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1rem; }
+.backup-actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1rem; }
+.backup-actions .admin-button { flex: 1 1 12rem; }
 .tmdb-token-actions .admin-button { flex: 1 1 auto; }
 .tmdb-attribution { margin: .75rem 0 0; color: var(--dim); font-size: .62rem; line-height: 1.6; direction: ltr; text-align: left; }
 .tmdb-message { padding-inline: 0; }
@@ -280,6 +287,8 @@ img { -webkit-user-drag: none; user-drag: none; }
 .request-title-cell small, .request-user-cell small { margin-top: .28rem; color: var(--dim); font-size: .67rem; line-height: 1.5; overflow-wrap: anywhere; }
 .request-status-control, .request-note-control { width: 100%; min-width: 0; }
 .request-note-control { min-height: 2.35rem; }
+.requests-data-table .row-actions { display: flex; flex-wrap: wrap; gap: .3rem; }
+.requests-data-table .table-action { flex: 0 0 auto; }
 
 .report-content small, .report-content b { display: block; }
 .report-content small { margin-top: .25rem; color: var(--dim); }
@@ -354,10 +363,12 @@ img { -webkit-user-drag: none; user-drag: none; }
   .editor-form > .form-section { padding: 1rem; }
   .form-actions { padding-inline: 1rem; }
   .form-message { padding-inline: 1rem; }
-  .mobile-nav { position: fixed; inset: auto 0 0; z-index: 25; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); min-height: calc(4.6rem + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: rgba(9,11,17,.94); backdrop-filter: blur(18px); padding: .35rem .15rem env(safe-area-inset-bottom); }
-  .mobile-nav button { display: grid; place-content: center; gap: .25rem; border: 0; color: var(--dim); background: transparent; font-size: .58rem; }
+  .mobile-nav { position: fixed; inset: auto 0 0; z-index: 25; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); min-height: calc(4.6rem + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: rgba(9,11,17,.94); backdrop-filter: blur(18px); padding: .35rem .1rem env(safe-area-inset-bottom); }
+  .mobile-nav button { position: relative; display: grid; place-content: center; gap: .22rem; min-width: 0; border: 0; color: var(--dim); background: transparent; font-size: .52rem; }
   .mobile-nav button svg { width: 1.15rem; margin: auto; }
   .mobile-nav button.active { color: var(--red); }
+  .mobile-nav button em { position: absolute; inset-block-start: .15rem; inset-inline-end: .18rem; min-width: 1.05rem; padding: .05rem .25rem; border-radius: 999px; color: #fff; background: var(--red); font-size: .48rem; font-style: normal; line-height: 1.4; }
+  .mobile-nav button em[hidden] { display: none; }
   .supervisor-mode .mobile-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .toast-region { inset-inline: .9rem; bottom: 5.3rem; width: auto; }
 }
