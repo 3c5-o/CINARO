@@ -1,6 +1,6 @@
 "use strict";
 
-const VERSION = "cinaro-v2.3.0";
+const VERSION = "cinaro-v2.3.1";
 const SHELL_CACHE = `${VERSION}-shell`;
 const IMAGE_CACHE = `${VERSION}-images`;
 
@@ -57,6 +57,13 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  const freshAsset = ["script", "style", "worker"].includes(request.destination)
+    || /\.(?:js|css|json|webmanifest)(?:$|\?)/i.test(url.pathname + url.search);
+  if (freshAsset && url.origin === self.location.origin) {
+    event.respondWith(networkFirstAsset(request));
+    return;
+  }
+
   if (request.destination === "image") {
     event.respondWith(staleWhileRevalidateImage(request));
     return;
@@ -77,6 +84,19 @@ async function networkFirstPage(request) {
     return response;
   } catch (_) {
     return (await caches.match(request)) || (await caches.match("./index.html")) || caches.match("./offline.html");
+  }
+}
+
+async function networkFirstAsset(request) {
+  try {
+    const response = await fetch(request, { cache: "no-store" });
+    if (response.ok) {
+      const cache = await caches.open(SHELL_CACHE);
+      await cache.put(request, response.clone());
+    }
+    return response;
+  } catch (_) {
+    return (await caches.match(request)) || new Response("Offline", { status: 503, statusText: "Offline" });
   }
 }
 

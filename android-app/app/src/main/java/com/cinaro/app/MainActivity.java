@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.PictureInPictureParams;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.res.Configuration;
@@ -56,11 +57,23 @@ public class MainActivity extends Activity {
         setContentView(rootView);
 
         configureWebView();
-        if (savedInstanceState == null) {
+
+        SharedPreferences runtimePreferences = getSharedPreferences("cinaro_runtime", MODE_PRIVATE);
+        int lastVersionCode = runtimePreferences.getInt("last_version_code", -1);
+        boolean appUpdated = lastVersionCode != BuildConfig.VERSION_CODE;
+
+        if (appUpdated) {
+            webView.clearCache(true);
+            webView.clearHistory();
+        }
+
+        if (savedInstanceState == null || appUpdated) {
             webView.loadUrl(BuildConfig.ONLINE_APP_URL);
         } else {
             webView.restoreState(savedInstanceState);
         }
+
+        runtimePreferences.edit().putInt("last_version_code", BuildConfig.VERSION_CODE).apply();
     }
 
     private void configureWindow() {
@@ -102,7 +115,7 @@ public class MainActivity extends Activity {
         settings.setAllowUniversalAccessFromFileURLs(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setUserAgentString(settings.getUserAgentString() + " CINARO/2.3.0 AndroidApp");
+        settings.setUserAgentString(settings.getUserAgentString() + " CINARO/2.3.1 AndroidApp");
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.setSafeBrowsingEnabled(true);

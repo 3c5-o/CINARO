@@ -11,7 +11,7 @@ const ok = (condition, message) => { if (!condition) errors.push(message); };
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 const expectedVersion = packageJson.version;
-ok(expectedVersion === "2.3.0", "Package version must be CINARO 2.3.0");
+ok(expectedVersion === "2.3.1", "Package version must be CINARO 2.3.1");
 
 const requiredFiles = [
   "index.html",
@@ -110,7 +110,7 @@ const duplicateIds = htmlIds.filter((id, index) => htmlIds.indexOf(id) !== index
 ok(duplicateIds.length === 0, `Duplicate HTML IDs: ${[...new Set(duplicateIds)].join(", ")}`);
 ok(html.includes('dir="rtl"'), "HTML must use RTL direction");
 ok(html.includes('rel="manifest"'), "HTML must link the web manifest");
-ok(html.includes('src="firebase.js" type="module"'), "HTML must load Firebase as a module");
+ok(html.includes(`src="firebase.js?v=${expectedVersion}" type="module"`), "HTML must cache-bust Firebase with the current version");
 ok(html.includes('id="authView"'), "HTML must include the authentication view");
 ok(html.includes('id="serviceGate"'), "User app must include the maintenance/update gate");
 ok(html.includes('id="reportForm"'), "User app must include playback reports");
@@ -126,7 +126,7 @@ const adminIds = [...adminHtml.matchAll(/\sid="([^"]+)"/g)].map((match) => match
 const duplicateAdminIds = adminIds.filter((id, index) => adminIds.indexOf(id) !== index);
 ok(duplicateAdminIds.length === 0, `Duplicate admin HTML IDs: ${[...new Set(duplicateAdminIds)].join(", ")}`);
 ok(adminHtml.includes('dir="rtl"'), "Admin HTML must use RTL direction");
-ok(adminHtml.includes('src="firebase.js" type="module"'), "Admin HTML must load Firebase as a module");
+ok(adminHtml.includes(`src="firebase.js?v=${expectedVersion}" type="module"`), "Admin HTML must cache-bust Firebase with the current version");
 ok(adminHtml.includes('id="adminLoginForm"'), "Admin HTML must include the admin login form");
 ok(adminHtml.includes('id="mobileNav"'), "Admin HTML must include mobile navigation");
 ok(adminHtml.includes('id="seasonBuilder"'), "Admin must include the visual season builder");
@@ -172,6 +172,7 @@ ok(adminAppSource.includes("contentTmdbId"), "Admin must retain TMDb content IDs
 ok(adminAppSource.includes("const willPublish ="), "Admin must distinguish drafts from publish-time media requirements");
 ok(adminAppSource.includes("window.CINARO_HANDLE_BACK = handleNativeBack"), "Admin must handle Android back navigation in-app");
 ok(adminAppSource.includes("function bindCopyProtection("), "Admin must prevent casual content copying");
+ok(adminAppSource.includes(`sw.js?v=${expectedVersion}`), "Admin must cache-bust service worker registration");
 
 const adminStyles = fs.readFileSync(path.join(adminRoot, "styles.css"), "utf8");
 ok(adminStyles.includes('inset-inline-start: 0'), "Admin sidebar must use logical RTL positioning");
@@ -195,6 +196,9 @@ ok(androidActivity.includes('addJavascriptInterface(new NativeBridge(), "CinaroN
 ok(androidActivity.includes("enterPictureInPictureMode"), "Android must support native picture-in-picture");
 ok(androidActivity.includes("CINARO_HANDLE_BACK"), "Android back must delegate to the web app first");
 ok(androidActivity.includes("SCREEN_ORIENTATION_PORTRAIT"), "Android must restore portrait outside fullscreen playback");
+ok(androidActivity.includes('getSharedPreferences("cinaro_runtime"'), "Android must track installed version for fresh-shell upgrades");
+ok(androidActivity.includes("webView.clearCache(true)"), "Android must clear HTTP/WebView cache after app version upgrades");
+ok(androidActivity.includes("lastVersionCode != BuildConfig.VERSION_CODE"), "Android cache clearing must only run when the app version changes");
 const androidManifest = fs.readFileSync(path.join(root, "android-app", "app", "src", "main", "AndroidManifest.xml"), "utf8");
 ok(androidManifest.includes('android:allowBackup="false"'), "Android app data backups must be disabled");
 ok(androidManifest.includes('android:supportsPictureInPicture="true"'), "Android manifest must enable picture-in-picture");
@@ -203,7 +207,7 @@ const androidBuild = fs.readFileSync(path.join(root, "android-app", "app", "buil
 ok(androidBuild.includes('buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "true"'), "User Android flavor must block screen capture");
 ok(androidBuild.includes('buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "false"'), "Admin Android flavor must keep normal screen capture behavior");
 ok(androidBuild.includes(`versionName "${expectedVersion}"`), "Android versionName must match package.json");
-ok(androidBuild.includes('versionCode 7'), "Android versionCode must be 7 for CINARO 2.3.0");
+ok(androidBuild.includes('versionCode 8'), "Android versionCode must be 8 for CINARO 2.3.1");
 ok(fs.existsSync(path.join(root, "android-app", "app", "src", "admin", "res", "mipmap-xxxhdpi", "ic_launcher.png")), "Admin Android flavor must have a dedicated launcher icon");
 
 const firebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
@@ -260,6 +264,7 @@ ok(appSource.includes("window.CinaroNative?.requestPortrait?.()"), "Web player m
 ok(appSource.includes("window.CinaroNative.enterPictureInPicture()"), "Web player must use native Android PiP when available");
 ok(appSource.includes("window.CINARO_HANDLE_BACK = handleBackNavigation"), "User app must expose in-app Android back handling");
 ok(appSource.includes("function bindCopyProtection("), "User app must prevent casual content copying");
+ok(appSource.includes(`sw.js?v=${expectedVersion}`), "User app must cache-bust service worker registration");
 ok(!appSource.includes('["pointermove", "pointerdown"]'), "Player must not reveal controls on every pointerdown");
 ok(appSource.includes('event.pointerType === "mouse"'), "Player must only auto-reveal controls on mouse movement");
 ok(appSource.includes('storage.get(STORAGE.authChoice, "") === "account"'), "Saved accounts must not be replaced with guest mode while auth restores");
@@ -298,6 +303,13 @@ ok(firebaseRulesWorkflow.includes("FIREBASE_SERVICE_ACCOUNT_CINARO"), "Firebase 
 ok(firebaseRulesWorkflow.includes("FIREBASE_TOKEN"), "Firebase rules workflow must support a Firebase token fallback");
 
 const serviceWorker = fs.readFileSync(path.join(webRoot, "sw.js"), "utf8");
+const adminServiceWorker = fs.readFileSync(path.join(adminRoot, "sw.js"), "utf8");
+ok(serviceWorker.includes(`cinaro-v${expectedVersion}`), "User service worker cache version must match package version");
+ok(serviceWorker.includes("networkFirstAsset"), "User service worker must fetch scripts/styles network-first");
+ok(adminServiceWorker.includes(`cinaro-admin-v${expectedVersion}`), "Admin service worker cache version must match package version");
+ok(adminServiceWorker.includes('fetch(request, { cache: "no-store" })'), "Admin service worker must bypass cache for navigation and core assets");
+ok(html.includes(`styles.css?v=${expectedVersion}`) && html.includes(`app.js?v=${expectedVersion}`), "User shell must cache-bust CSS and app JS");
+ok(adminHtml.includes(`styles.css?v=${expectedVersion}`) && adminHtml.includes(`app.js?v=${expectedVersion}`), "Admin shell must cache-bust CSS and app JS");
 for (const requiredFile of requiredFiles.filter((file) => !["sw.js"].includes(file))) {
   if (["assets/images/poster-placeholder.webp", "assets/images/cinaro-hero.webp"].includes(requiredFile) || !requiredFile.startsWith("assets/")) {
     ok(serviceWorker.includes(requiredFile), `Service worker shell does not reference: ${requiredFile}`);

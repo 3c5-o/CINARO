@@ -7,10 +7,10 @@
   <meta name="description" content="لوحة إدارة CINARO للمحتوى والمستخدمين والمشرفين">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; connect-src 'self' https: wss:; frame-src 'self' https://cinaro.firebaseapp.com; style-src 'self' 'unsafe-inline'; script-src 'self' https://www.gstatic.com https://cdn.jsdelivr.net; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>CINARO Admin</title>
-  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="manifest" href="manifest.webmanifest?v=2.3.1">
   <link rel="icon" type="image/png" href="assets/icons/favicon-32.png">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=2.3.1">
 </head>
 <body class="admin-booting">
   <div id="loginView" class="admin-login-view">
@@ -128,7 +128,7 @@
             <label><span>معرّفات المحتوى المميز</span><textarea id="settingFeatured" rows="3" placeholder="movie-id, series-id"></textarea></label>
             <label><span>رسالة عامة للمستخدمين</span><textarea id="settingAnnouncement" rows="3" placeholder="اختياري"></textarea></label>
             <div class="form-grid two">
-              <label><span>الحد الأدنى لإصدار التطبيق</span><input id="settingMinVersion" value="2.3.0"></label>
+              <label><span>الحد الأدنى لإصدار التطبيق</span><input id="settingMinVersion" value="2.3.1"></label>
               <label><span>رابط تنزيل التحديث</span><input id="settingUpdateUrl" type="url" value="https://github.com/3c5-o/CINARO/releases"></label>
               <label class="check-field"><input id="settingMaintenance" type="checkbox"><span>وضع الصيانة</span></label>
               <label class="check-field"><input id="settingForceUpdate" type="checkbox"><span>إجبار التحديث</span></label>
@@ -192,8 +192,8 @@
     <symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
   </svg>
 
-  <script src="firebase.js" type="module"></script>
+  <script src="firebase.js?v=2.3.1" type="module"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="app.js" defer></script>
+  <script src="app.js?v=2.3.1" defer></script>
 </body>
 </html>
