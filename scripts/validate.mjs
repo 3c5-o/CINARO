@@ -145,7 +145,7 @@ ok(adminAppSource.includes('listen("contentRequests", "requests"'), "Admin must 
 ok(adminAppSource.includes("function saveContentRequest("), "Admin must update request statuses");
 ok(adminAppSource.includes('$("[data-request-select]").find'), "Admin request status control must use the selector helper");
 ok(adminAppSource.includes('$("[data-request-note]").find'), "Admin request note control must use the selector helper");
-ok(!adminAppSource.includes('$("[data-request-select]").find'), "Admin must not pass CSS selectors to the ID helper");
+ok(!adminAppSource.includes('const statusControl = $("[data-request-select]")'), "Admin must not pass CSS selectors to the ID helper");
 ok(adminAppSource.includes("function inferMediaType("), "Admin must infer MP4/HLS media types");
 ok(adminAppSource.includes("backupUrl"), "Admin episode editor must preserve backup sources");
 ok(adminAppSource.includes("subtitleUrl"), "Admin episode editor must preserve subtitles");
