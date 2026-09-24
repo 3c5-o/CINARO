@@ -151,6 +151,8 @@ ok(adminAppSource.includes("backupUrl"), "Admin episode editor must preserve bac
 ok(adminAppSource.includes("subtitleUrl"), "Admin episode editor must preserve subtitles");
 ok(adminAppSource.includes("extraSources: sources.slice(2)"), "Admin must preserve additional episode sources");
 ok(adminAppSource.includes("extraSubtitles: subtitles.slice(1)"), "Admin must preserve additional episode subtitles");
+ok(adminAppSource.includes("existingMovieSources.slice(2)"), "Admin must preserve additional movie sources");
+ok(adminAppSource.includes("existingMovieSubtitles.slice(1)"), "Admin must preserve additional movie subtitles");
 ok(adminAppSource.includes("thumbnail: validMediaUrl(episode.thumbnail"), "Admin must preserve episode thumbnails");
 
 const adminStyles = fs.readFileSync(path.join(adminRoot, "styles.css"), "utf8");
@@ -190,6 +192,10 @@ ok(firestoreRules.includes("function activeUser()"), "Firestore rules must defin
 ok(firestoreRules.includes("data.get('status', 'active')"), "Blocked-account rules must safely handle users without a status field");
 ok(firestoreRules.includes("uniqueViewIncrement"), "Firestore rules must protect unique view increments");
 ok(firestoreRules.includes("supervisorCanPublish"), "Firestore rules must enforce supervisor publishing permissions");
+ok(firestoreRules.includes("supervisorCanCreateContent"), "Firestore rules must constrain supervisor content creation");
+ok(firestoreRules.includes("supervisorCanUpdateContent"), "Firestore rules must constrain supervisor content updates");
+ok(firestoreRules.includes("data.views == 0"), "Supervisor-created content must start with zero views");
+ok(firestoreRules.includes("request.resource.data.get('views', 0) == resource.data.get('views', 0)"), "Supervisors must not change view counters");
 ok(firestoreRules.includes("match /contentRequests/{requestId}"), "Firestore rules must protect content requests");
 ok(firestoreRules.includes("request.resource.data.status == 'new'"), "Users must only create requests in the new state");
 ok(firestoreRules.includes("allow update, delete: if admin()"), "Only admins may update or delete content requests");
