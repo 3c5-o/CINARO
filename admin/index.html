@@ -162,6 +162,17 @@
             <p id="tmdbSettingsMessage" class="form-message" role="status"></p>
             <p class="tmdb-attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
           </form>
+          <section class="panel compact-form settings-form" data-admin-only>
+            <div class="panel-heading"><div><span>نسخ واستعادة</span><h2>أدوات النسخ الاحتياطي</h2></div></div>
+            <p class="field-help">التصدير يشمل المحتوى والأقسام وإعدادات التطبيق وتعيينات المشرفين فقط. لا يتضمن كلمات مرور أو TMDb Token.</p>
+            <input id="backupFileInput" type="file" accept="application/json,.json" hidden>
+            <div class="backup-actions">
+              <button id="exportBackupButton" class="admin-button ghost" type="button"><svg><use href="#i-download"></use></svg> تصدير Backup JSON</button>
+              <button id="importBackupButton" class="admin-button ghost" type="button"><svg><use href="#i-upload"></use></svg> استيراد Backup</button>
+              <button id="exportAuditButton" class="admin-button ghost" type="button"><svg><use href="#i-download"></use></svg> تصدير سجل العمليات CSV</button>
+            </div>
+            <p id="backupMessage" class="form-message" role="status"></p>
+          </section>
         </div>
       </section>
 
