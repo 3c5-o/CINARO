@@ -30,7 +30,7 @@
     dataListenersStarted: false,
     previewHls: null,
     tmdb: { importMode: "manual", results: [], configuration: null, busy: false },
-    filters: { contentSearch: "", contentKind: "all", contentStatus: "all", userSearch: "", userStatus: "all", reportStatus: "open", requestStatus: "pending" }
+    filters: { contentSearch: "", contentKind: "all", contentStatus: "all", userSearch: "", userStatus: "all", reportStatus: "active", requestStatus: "pending" }
   };
 
   const $ = (id) => document.getElementById(id);
@@ -409,10 +409,10 @@
     $("statViews").textContent = formatNumber(views);
     $("statSupervisors").textContent = formatNumber(state.supervisors.filter((item) => item.active !== false).length);
     if ($("statRequests")) $("statRequests").textContent = formatNumber(state.requests.filter((item) => ["new", "reviewing"].includes(item.status)).length);
-    if ($("statReports")) $("statReports").textContent = formatNumber(state.reports.filter((item) => item.status !== "resolved").length);
+    if ($("statReports")) $("statReports").textContent = formatNumber(state.reports.filter((item) => ["open", "reviewing"].includes(item.status)).length);
     $("navContentCount").textContent = formatNumber(state.content.length);
     $("navUsersCount").textContent = formatNumber(state.users.length);
-    if ($("navReportsCount")) $("navReportsCount").textContent = formatNumber(state.reports.filter((item) => item.status !== "resolved").length);
+    if ($("navReportsCount")) $("navReportsCount").textContent = formatNumber(state.reports.filter((item) => ["open", "reviewing"].includes(item.status)).length);
     if ($("navRequestsCount")) $("navRequestsCount").textContent = formatNumber(state.requests.filter((item) => ["new", "reviewing"].includes(item.status)).length);
     if ($("mobileRequestsCount")) {
       const requestCount = state.requests.filter((item) => ["new", "reviewing"].includes(item.status)).length;
