@@ -1071,7 +1071,8 @@
     const genres = ["الكل", ...new Set(source.flatMap((item) => item.genres))];
     const filtered = source.filter((item) => config.genre === "الكل" || item.genres.includes(config.genre));
     const sorted = sortItems(filtered, config.sort);
-    const visible = sorted.slice(0, Math.max(30, asNumber(config.visible, 60)));
+    const visibleCount = Number.isFinite(Number(config.visible)) ? Number(config.visible) : 60;
+    const visible = sorted.slice(0, Math.max(30, visibleCount));
     const title = kind === "movie" ? "الأفلام" : "المسلسلات";
     const kicker = kind === "movie" ? "شاشة كبيرة في جيبك" : "مواسم تستحق المتابعة";
     const description = kind === "movie" ? "اكتشف الأفلام ورتّبها حسب الجديد أو التقييم أو المشاهدة." : "تصفّح المسلسلات وانتقل بين المواسم والحلقات بسهولة.";
