@@ -532,6 +532,7 @@
 
   function updateServiceGate() {
     const minimumVersion = String(state.remoteConfig.minimumVersion || "").trim();
+    const latestVersion = String(state.remoteConfig.latestVersion || minimumVersion || "").trim();
     const needsUpdate = Boolean(minimumVersion && compareVersions(APP_VERSION, minimumVersion) < 0);
     const maintenance = state.remoteConfig.maintenance === true;
     const forcedUpdate = needsUpdate && state.remoteConfig.forceUpdate === true;
@@ -549,8 +550,8 @@
       byId("serviceGateAction").hidden = true;
     } else {
       byId("serviceGateKicker").textContent = "تحديث ضروري";
-      byId("serviceGateTitle").textContent = `حدّث CINARO إلى ${minimumVersion}`;
-      byId("serviceGateText").textContent = "هذه النسخة لم تعد مدعومة. نزّل الإصدار الجديد حتى تواصل المشاهدة بأمان.";
+      byId("serviceGateTitle").textContent = `حدّث CINARO إلى ${latestVersion || minimumVersion}`;
+      byId("serviceGateText").textContent = String(state.remoteConfig.updateNotes || "هذه النسخة لم تعد مدعومة. نزّل الإصدار الجديد حتى تواصل المشاهدة بأمان.").trim();
       byId("serviceGateAction").href = safeMediaUrl(state.remoteConfig.updateUrl, "https://github.com/3c5-o/CINARO/releases");
       byId("serviceGateAction").hidden = false;
     }
@@ -562,9 +563,11 @@
     state.sections = Array.isArray(payload?.sections) ? payload.sections : [];
     if (elements.remoteNotice) {
       const minimumVersion = String(state.remoteConfig.minimumVersion || "").trim();
+      const latestVersion = String(state.remoteConfig.latestVersion || minimumVersion || "").trim();
       const needsUpdate = minimumVersion && compareVersions(APP_VERSION, minimumVersion) < 0;
-      const updateMessage = needsUpdate
-        ? `يتوفر إصدار أحدث من CINARO (${minimumVersion}). حدّث التطبيق للحصول على آخر المميزات.`
+      const hasOptionalUpdate = latestVersion && compareVersions(APP_VERSION, latestVersion) < 0;
+      const updateMessage = (needsUpdate || hasOptionalUpdate)
+        ? `يتوفر إصدار أحدث من CINARO (${latestVersion || minimumVersion}). ${String(state.remoteConfig.updateNotes || "حدّث التطبيق للحصول على آخر المميزات.").trim()}`
         : "";
       const message = state.remoteConfig.maintenance
         ? "CINARO تحت الصيانة حالياً. سيعود العرض قريباً."
@@ -1641,8 +1644,9 @@
     player.error.hidden = true;
     player.loading.hidden = false;
     player.stage.classList.remove("is-playing", "controls-hidden");
-    player.speed.value = "1";
-    player.video.playbackRate = 1;
+    const savedRate = Math.max(.5, Math.min(2, Number(settings.playbackRate) || 1));
+    player.speed.value = String(savedRate);
+    player.video.playbackRate = savedRate;
 
     populateQualityOptions(media.sources);
     populateSubtitleTracks(media.subtitles);
@@ -1672,8 +1676,8 @@
   }
 
   function populateSubtitleTracks(tracks) {
-    $$('track[data-cinaro-track="true"]', player.video).forEach((track) => track.remove());
-    tracks.forEach((trackData) => {
+    $('track[data-cinaro-track="true"]', player.video).forEach((track) => track.remove());
+    tracks.forEach((trackData, index) => {
       const track = document.createElement("track");
       track.kind = "subtitles";
       track.label = trackData.label || trackData.srclang || "ترجمة";
@@ -1681,11 +1685,12 @@
       const trackUrl = safeMediaUrl(trackData.src, "");
       if (!trackUrl) return;
       track.src = trackUrl;
+      track.default = Boolean(settings.captionsEnabled && index === 0);
       track.dataset.cinaroTrack = "true";
       player.video.appendChild(track);
     });
     player.captions.hidden = tracks.length === 0;
-    player.captions.classList.remove("active");
+    player.captions.classList.toggle("active", Boolean(settings.captionsEnabled && tracks.length));
   }
 
   function destroyHls() {
@@ -1951,6 +1956,8 @@
     if (!tracks.length) return;
     const enable = tracks.every((track) => track.mode !== "showing");
     tracks.forEach((track, index) => { track.mode = enable && index === 0 ? "showing" : "disabled"; });
+    settings.captionsEnabled = enable;
+    saveSettings();
     player.captions.classList.toggle("active", enable);
     toast(enable ? "تم تشغيل الترجمة" : "تم إيقاف الترجمة");
   }
@@ -2220,6 +2227,8 @@
     });
     player.speed.addEventListener("change", () => {
       player.video.playbackRate = Number(player.speed.value) || 1;
+      settings.playbackRate = player.video.playbackRate;
+      saveSettings();
       toast(`سرعة التشغيل ${player.video.playbackRate}×`);
     });
     player.quality.addEventListener("change", () => {
