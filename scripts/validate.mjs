@@ -143,8 +143,8 @@ ok(adminAppSource.includes("HlsRuntime?.isSupported?.()"), "Admin must explicitl
 ok(adminAppSource.includes("function renderRequests("), "Admin must render content requests");
 ok(adminAppSource.includes('listen("contentRequests", "requests"'), "Admin must listen to content requests");
 ok(adminAppSource.includes("function saveContentRequest("), "Admin must update request statuses");
-ok(adminAppSource.includes('$("[data-request-select]").find'), "Admin request status control must use the selector helper");
-ok(adminAppSource.includes('$("[data-request-note]").find'), "Admin request note control must use the selector helper");
+ok(adminAppSource.includes('document.querySelectorAll("[data-request-select]")'), "Admin request status control must use a CSS selector query");
+ok(adminAppSource.includes('document.querySelectorAll("[data-request-note]")'), "Admin request note control must use a CSS selector query");
 ok(!adminAppSource.includes('const statusControl = $("[data-request-select]")'), "Admin must not pass CSS selectors to the ID helper");
 ok(adminAppSource.includes("function inferMediaType("), "Admin must infer MP4/HLS media types");
 ok(adminAppSource.includes("backupUrl"), "Admin episode editor must preserve backup sources");
