@@ -448,6 +448,11 @@ img {
   user-drag: none;
 }
 
+button, a, [role="button"], [data-route], [data-action] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 main {
   min-height: 100vh;
   min-height: 100dvh;
