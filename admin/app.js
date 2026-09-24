@@ -675,13 +675,39 @@
       const poster = validMediaUrl($("contentPoster").value);
       const backdrop = validMediaUrl($("contentBackdrop").value) || poster;
       if (!poster) throw new Error("رابط البوستر يجب أن يكون HTTPS.");
-      const movieSourceCandidates = [
-        { label: "تلقائي", url: $("movieSourceUrl").value, type: inferMediaType($("movieSourceUrl").value) },
-        { label: "احتياطي", url: $("movieBackupUrl").value, type: inferMediaType($("movieBackupUrl").value) }
-      ].filter((source) => asString(source.url));
+      const existingMovieSources = kind === "movie" ? toArray(existing?.sources) : [];
+      const primaryMovieUrl = asString($("movieSourceUrl").value);
+      const backupMovieUrl = asString($("movieBackupUrl").value);
+      const movieSourceCandidates = [];
+      if (primaryMovieUrl) {
+        movieSourceCandidates.push({
+          label: asString(existingMovieSources[0]?.label, "تلقائي"),
+          url: primaryMovieUrl,
+          type: inferMediaType(primaryMovieUrl, existingMovieSources[0]?.type)
+        });
+      }
+      if (backupMovieUrl) {
+        movieSourceCandidates.push({
+          label: asString(existingMovieSources[1]?.label, "احتياطي"),
+          url: backupMovieUrl,
+          type: inferMediaType(backupMovieUrl, existingMovieSources[1]?.type)
+        });
+      }
+      movieSourceCandidates.push(...existingMovieSources.slice(2));
       const sources = kind === "movie" ? normalizeSources(movieSourceCandidates) : [];
+
+      const existingMovieSubtitles = kind === "movie" ? toArray(existing?.subtitles) : [];
       const subtitleUrl = asString($("movieSubtitleUrl").value);
-      const subtitles = kind === "movie" && subtitleUrl ? normalizeSubtitles([{ label: "العربية", srclang: "ar", src: subtitleUrl }]) : [];
+      const movieSubtitleCandidates = [];
+      if (subtitleUrl) {
+        movieSubtitleCandidates.push({
+          label: asString(existingMovieSubtitles[0]?.label, "العربية"),
+          srclang: asString(existingMovieSubtitles[0]?.srclang, "ar"),
+          src: subtitleUrl
+        });
+      }
+      movieSubtitleCandidates.push(...existingMovieSubtitles.slice(1));
+      const subtitles = kind === "movie" ? normalizeSubtitles(movieSubtitleCandidates) : [];
       const seasons = kind === "series" ? normalizeSeasons(seasonsFromEditor()) : [];
       if (kind === "movie" && !sources.length) throw new Error("أضف مصدراً واحداً على الأقل للفيلم.");
       if (kind === "series" && !seasons.length) throw new Error("أضف موسماً واحداً على الأقل للمسلسل.");
