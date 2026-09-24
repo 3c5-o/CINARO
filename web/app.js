@@ -321,7 +321,8 @@
       "cinaro/name-too-short": "الاسم يجب أن يحتوي حرفين على الأقل.",
       "cinaro/request-duplicate": "عندك طلب مشابه ما زال جديداً أو قيد المراجعة.",
       "cinaro/request-exists": "هذا المحتوى موجود بالفعل داخل CINARO.",
-      "cinaro/request-title-too-short": "اكتب اسم الفيلم أو المسلسل بصورة أوضح."
+      "cinaro/request-title-too-short": "اكتب اسم الفيلم أو المسلسل بصورة أوضح.",
+      "cinaro/email-unchanged": "اكتب بريداً جديداً مختلفاً عن بريد حسابك الحالي."
     };
     return messages[code] || "تعذّر إكمال العملية. تحقق من البيانات والاتصال.";
   }
@@ -391,6 +392,7 @@
     if (byId("accountPanelName")) byId("accountPanelName").textContent = name;
     if (byId("accountPanelEmail")) byId("accountPanelEmail").textContent = email || (isGuest ? "بياناتك محفوظة على هذا الجهاز" : "");
     if (byId("profileName") && document.activeElement !== byId("profileName")) byId("profileName").value = user?.displayName || "";
+    if (byId("profileEmail") && document.activeElement !== byId("profileEmail")) byId("profileEmail").value = email;
     const verification = byId("emailVerificationStatus")?.closest(".account-verification");
     if (byId("emailVerificationStatus")) {
       byId("emailVerificationStatus").textContent = user?.emailVerified ? "البريد الإلكتروني موثّق" : "البريد الإلكتروني غير موثّق";
@@ -805,6 +807,21 @@
         setAuthBusy(false);
       }
     });
+    byId("accountEmailButton")?.addEventListener("click", async () => {
+      const nextEmail = byId("profileEmail")?.value.trim() || "";
+      if (!nextEmail || !state.firebase || !state.authUser || state.authUser.isAnonymous || state.authBusy) return;
+      setAuthBusy(true);
+      setAuthMessage("جاري إرسال تأكيد تغيير البريد…");
+      try {
+        await state.firebase.requestEmailChange(nextEmail);
+        setAuthMessage("تم إرسال رابط تأكيد إلى البريد الجديد. أكمل التحقق من الرسالة.", "success");
+      } catch (error) {
+        setAuthMessage(authErrorMessage(error), "error");
+      } finally {
+        setAuthBusy(false);
+      }
+    });
+
     byId("accountPasswordResetButton").addEventListener("click", async () => {
       const email = state.authUser?.email || "";
       if (!email || !state.firebase || state.authBusy) return;
