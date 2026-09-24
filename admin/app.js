@@ -1437,6 +1437,116 @@
     finally { setBusy(form, false); }
   }
 
+  function downloadTextFile(filename, content, mimeType = "text/plain;charset=utf-8") {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
+  function exportBackup() {
+    if (!isAdmin()) return;
+    const payload = {
+      schema: "cinaro-backup-v1",
+      appVersion: "2.4.0",
+      exportedAt: new Date().toISOString(),
+      content: state.content.map((item) => ({ ...item })),
+      sections: state.sections.map((item) => ({ ...item })),
+      config: { ...state.config },
+      supervisors: state.supervisors.map((item) => ({ ...item }))
+    };
+    downloadTextFile(`CINARO-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(payload, null, 2), "application/json;charset=utf-8");
+    setMessage("backupMessage", "تم تجهيز نسخة Backup. احتفظ بها في مكان آمن.", "success");
+    toast("تم تصدير النسخة الاحتياطية");
+  }
+
+  function csvCell(value) {
+    return `"${String(value == null ? "" : value).replaceAll('"', '""')}"`;
+  }
+
+  function exportAuditCsv() {
+    if (!isAdmin()) return;
+    const header = ["العملية", "الهدف", "المنفذ", "التفاصيل", "الوقت"];
+    const rows = [...state.logs]
+      .sort((a, b) => asNumber(b.createdAt) - asNumber(a.createdAt))
+      .map((item) => [item.action, item.target, item.actorEmail || item.actorUid, item.details, formatDate(item.createdAt)]);
+    const csv = "\uFEFF" + [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+    downloadTextFile(`CINARO-audit-${new Date().toISOString().slice(0, 10)}.csv`, csv, "text/csv;charset=utf-8");
+    setMessage("backupMessage", "تم تجهيز سجل العمليات CSV.", "success");
+  }
+
+  async function importBackupFile(file) {
+    if (!isAdmin() || !state.firebase || !file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setMessage("backupMessage", "ملف النسخة الاحتياطية أكبر من 10MB.", "error");
+      return;
+    }
+    let payload;
+    try {
+      payload = JSON.parse(await file.text());
+    } catch (_) {
+      setMessage("backupMessage", "ملف JSON غير صالح.", "error");
+      return;
+    }
+    if (!payload || payload.schema !== "cinaro-backup-v1" || !Array.isArray(payload.content) || !Array.isArray(payload.sections)) {
+      setMessage("backupMessage", "هذا الملف ليس Backup صالحاً لـCINARO.", "error");
+      return;
+    }
+    const summary = `${payload.content.length} محتوى، ${payload.sections.length} قسم، ${Array.isArray(payload.supervisors) ? payload.supervisors.length : 0} مشرف. سيتم الدمج بدون حذف البيانات الحالية. متابعة؟`;
+    if (!window.confirm(summary)) return;
+
+    const importButton = $("importBackupButton");
+    importButton.disabled = true;
+    setMessage("backupMessage", "جاري استعادة النسخة الاحتياطية…", "pending");
+    try {
+      for (const section of payload.sections.slice(0, 500)) {
+        const id = asString(section?.id).toLowerCase();
+        if (!/^[a-z0-9-]+$/.test(id)) continue;
+        await state.firebase.saveDocument("sections", id, {
+          ...section,
+          id,
+          updatedBy: state.authUser.uid
+        });
+      }
+      for (const item of payload.content.slice(0, 3000)) {
+        const id = asString(item?.id).toLowerCase();
+        if (!/^[a-z0-9-]+$/.test(id)) continue;
+        const sectionIds = toArray(item.sectionIds).map((entry) => asString(entry)).filter(Boolean).slice(0, 30);
+        await state.firebase.saveDocument("content", id, {
+          ...item,
+          id,
+          sectionIds,
+          managementSectionId: asString(item.managementSectionId, sectionIds[0] || ""),
+          updatedBy: state.authUser.uid
+        });
+      }
+      if (payload.config && typeof payload.config === "object") {
+        const { tmdbToken, ...safeConfig } = payload.config;
+        await state.firebase.saveDocument("appConfig", "public", { ...safeConfig, updatedBy: state.authUser.uid });
+      }
+      for (const assignment of toArray(payload.supervisors).slice(0, 200)) {
+        const uid = asString(assignment?.uid || assignment?.id);
+        if (!uid) continue;
+        await state.firebase.saveDocument("supervisorAssignments", uid, { ...assignment, uid });
+      }
+      await state.firebase.logAudit("استعادة Backup", "system", summary, state.authUser);
+      setMessage("backupMessage", "تم دمج النسخة الاحتياطية بنجاح.", "success");
+      toast("تم استعادة Backup");
+    } catch (error) {
+      console.error("CINARO backup import failed", error);
+      setMessage("backupMessage", errorMessage(error), "error");
+    } finally {
+      importButton.disabled = false;
+      $("backupFileInput").value = "";
+    }
+  }
+
   function destroyPreviewHls() {
     if (!state.previewHls) return;
     try { state.previewHls.destroy(); } catch (_) {}
@@ -1781,6 +1891,10 @@
     $("supervisorForm")?.addEventListener("submit", saveSupervisor);
     $("sectionForm")?.addEventListener("submit", saveSection);
     $("settingsForm")?.addEventListener("submit", saveSettings);
+    $("exportBackupButton")?.addEventListener("click", exportBackup);
+    $("exportAuditButton")?.addEventListener("click", exportAuditCsv);
+    $("importBackupButton")?.addEventListener("click", () => $("backupFileInput")?.click());
+    $("backupFileInput")?.addEventListener("change", (event) => importBackupFile(event.target.files?.[0]));
     $("resetSupervisorButton")?.addEventListener("click", resetSupervisorForm);
     $("resetSectionButton")?.addEventListener("click", resetSectionForm);
     $("contentSearch")?.addEventListener("input", (event) => { state.filters.contentSearch = event.target.value; renderContent(); });
