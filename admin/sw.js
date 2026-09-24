@@ -1,4 +1,4 @@
-const CACHE = "cinaro-admin-v2.3.0";
+const CACHE = "cinaro-admin-v2.3.1";
 const SHELL = [
   "./",
   "./index.html",
@@ -24,10 +24,25 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const request = event.request;
-  if (request.method !== "GET" || new URL(request.url).origin !== self.location.origin) return;
+  const url = new URL(request.url);
+  if (request.method !== "GET" || url.origin !== self.location.origin) return;
+
+  const freshAsset = request.mode === "navigate"
+    || ["script", "style", "worker"].includes(request.destination)
+    || /\.(?:js|css|json|webmanifest)(?:$|\?)/i.test(url.pathname + url.search);
+
+  if (freshAsset) {
+    event.respondWith(fetch(request, { cache: "no-store" }).then((response) => {
+      const copy = response.clone();
+      caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
+      return response;
+    }).catch(() => caches.match(request).then((cached) => cached || caches.match("./index.html"))));
+    return;
+  }
+
   event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => {
     const copy = response.clone();
     caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
     return response;
-  }).catch(() => caches.match("./index.html"))));
+  })));
 });
