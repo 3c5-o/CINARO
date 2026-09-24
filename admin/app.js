@@ -925,8 +925,8 @@
   function fillSettings() {
     $("settingFeatured").value = toArray(state.config.featured).join(", ");
     $("settingAnnouncement").value = asString(state.config.announcement);
-    $("settingLatestVersion").value = asString(state.config.latestVersion, "2.4.0");
-    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.4.0");
+    $("settingLatestVersion").value = asString(state.config.latestVersion, "2.4.1");
+    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.4.1");
     $("settingUpdateUrl").value = asString(state.config.updateUrl, "https://github.com/3c5-o/CINARO/releases");
     $("settingUpdateNotes").value = asString(state.config.updateNotes);
     $("settingMaintenance").checked = state.config.maintenance === true;
@@ -1474,8 +1474,8 @@
       const payload = {
         featured: parseCsv($("settingFeatured").value),
         announcement: asString($("settingAnnouncement").value).slice(0, 500),
-        latestVersion: asString($("settingLatestVersion").value, "2.4.0").slice(0, 20),
-        minimumVersion: asString($("settingMinVersion").value, "2.4.0").slice(0, 20),
+        latestVersion: asString($("settingLatestVersion").value, "2.4.1").slice(0, 20),
+        minimumVersion: asString($("settingMinVersion").value, "2.4.1").slice(0, 20),
         updateNotes: asString($("settingUpdateNotes").value).slice(0, 1000),
         updateUrl: validMediaUrl($("settingUpdateUrl").value) || "https://github.com/3c5-o/CINARO/releases",
         maintenance: $("settingMaintenance").checked,
@@ -1506,7 +1506,7 @@
     if (!isAdmin()) return;
     const payload = {
       schema: "cinaro-backup-v1",
-      appVersion: "2.4.0",
+      appVersion: "2.4.1",
       exportedAt: new Date().toISOString(),
       content: state.content.map((item) => ({ ...item })),
       sections: state.sections.map((item) => ({ ...item })),
@@ -2024,6 +2024,6 @@
   renderDashboard();
   if (window.CINARO_ADMIN_FIREBASE) connectFirebase(window.CINARO_ADMIN_FIREBASE);
   if (!window.CinaroNative && "serviceWorker" in navigator && location.protocol === "https:") {
-    navigator.serviceWorker.register("sw.js?v=2.4.0", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
+    navigator.serviceWorker.register("sw.js?v=2.4.1", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
   }
 })();
