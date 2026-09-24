@@ -72,7 +72,11 @@ service cloud.firestore {
         && data.id == contentId
         && data.updatedBy == request.auth.uid
         && data.views is int
-        && data.views == 0;
+        && data.views == 0
+        && (
+          data.get('published', false) == false ||
+          supervisorCanPublish()
+        );
     }
 
     function supervisorCanUpdateContent(contentId) {
@@ -147,7 +151,8 @@ service cloud.firestore {
       allow delete: if owner(userId) || admin();
 
       match /private/{documentId} {
-        allow read, write: if owner(userId) || admin();
+        allow read: if owner(userId) || admin();
+        allow write: if admin() || (owner(userId) && activeUser());
       }
     }
 
