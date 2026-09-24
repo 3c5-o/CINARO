@@ -2406,6 +2406,19 @@
       image.src = image.dataset.fallback || IMAGE_FALLBACK;
     }, true);
 
+    window.addEventListener("error", (event) => {
+      if (!event?.error || state.runtimeErrorShown) return;
+      state.runtimeErrorShown = true;
+      console.error("CINARO runtime error", event.error);
+      toast("صار خطأ بالواجهة. إذا توقف زر عن العمل أعد فتح التطبيق.", "error");
+    });
+    window.addEventListener("unhandledrejection", (event) => {
+      if (state.runtimeErrorShown) return;
+      state.runtimeErrorShown = true;
+      console.error("CINARO unhandled promise", event.reason);
+      toast("تعذّرت عملية داخل التطبيق. تحقق من الإنترنت وحاول مرة ثانية.", "error");
+    });
+
     window.addEventListener("hashchange", renderRoute);
     window.addEventListener("scroll", () => elements.header.classList.toggle("is-scrolled", window.scrollY > 24), { passive: true });
     window.addEventListener("online", updateNetworkStatus);
