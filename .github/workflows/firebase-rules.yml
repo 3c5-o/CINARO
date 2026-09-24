@@ -28,7 +28,8 @@ jobs:
       - name: Validate protected rule markers
         run: |
           grep -q "supervisorCanReadContent" firestore.rules
-          grep -q "data.sectionIds.hasAny(currentAssignment().data.sectionIds)" firestore.rules
+          grep -q "data.managementSectionId in currentAssignment().data.sectionIds" firestore.rules
+          grep -q "resource.data.status == 'new'" firestore.rules
           grep -q "allow read, write: if false" firestore.rules
 
   deploy-firestore-rules:
