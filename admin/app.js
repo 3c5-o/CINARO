@@ -488,7 +488,7 @@
   function setImportMode(mode) {
     const next = mode === "tmdb" && isAdmin() ? "tmdb" : "manual";
     state.tmdb.importMode = next;
-    $("[data-import-mode]").forEach((button) => button.classList.toggle("active", button.dataset.importMode === next));
+    $$("[data-import-mode]").forEach((button) => button.classList.toggle("active", button.dataset.importMode === next));
     $("tmdbImportPanel")?.classList.toggle("is-hidden", next !== "tmdb");
     if (next === "tmdb" && !readTmdbToken()) {
       setTmdbMessage("أضف TMDb Read Access Token من إعدادات التطبيق أولاً.", "error");
@@ -1515,7 +1515,7 @@
         setTmdbMessage("نوع البحث تغيّر. نفّذ البحث من جديد.");
       }
     });
-    $("[data-import-mode]").forEach((button) => button.addEventListener("click", () => setImportMode(button.dataset.importMode)));
+    $$("[data-import-mode]").forEach((button) => button.addEventListener("click", () => setImportMode(button.dataset.importMode)));
     $("tmdbSearchButton")?.addEventListener("click", searchTmdb);
     $("tmdbSearchInput")?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
