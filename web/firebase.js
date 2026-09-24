@@ -276,6 +276,20 @@ async function bootFirebase() {
       return publicUser(user);
     },
 
+    requestEmailChange: async function (newEmail) {
+      const user = auth.currentUser;
+      if (!user || user.isAnonymous) throw new Error("auth/requires-login");
+      const email = textValue(newEmail, "", 180).toLowerCase();
+      if (!email || email === String(user.email || "").toLowerCase()) throw new Error("cinaro/email-unchanged");
+      if (typeof authSdk.verifyBeforeUpdateEmail === "function") {
+        await authSdk.verifyBeforeUpdateEmail(user, email);
+      } else {
+        await authSdk.updateEmail(user, email);
+        await authSdk.sendEmailVerification(user);
+      }
+      return true;
+    },
+
     sendVerification: async function () {
       const user = auth.currentUser;
       if (!user || user.isAnonymous) throw new Error("auth/requires-login");
