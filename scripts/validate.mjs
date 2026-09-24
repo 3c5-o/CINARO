@@ -9,6 +9,10 @@ const adminRoot = path.join(root, "admin");
 const errors = [];
 const ok = (condition, message) => { if (!condition) errors.push(message); };
 
+const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+const expectedVersion = packageJson.version;
+ok(expectedVersion === "2.2.0", "Package version must be CINARO 2.2.0");
+
 const requiredFiles = [
   "index.html",
   "styles.css",
@@ -139,6 +143,9 @@ ok(adminAppSource.includes("HlsRuntime?.isSupported?.()"), "Admin must explicitl
 ok(adminAppSource.includes("function renderRequests("), "Admin must render content requests");
 ok(adminAppSource.includes('listen("contentRequests", "requests"'), "Admin must listen to content requests");
 ok(adminAppSource.includes("function saveContentRequest("), "Admin must update request statuses");
+ok(adminAppSource.includes('$("[data-request-select]").find'), "Admin request status control must use the selector helper");
+ok(adminAppSource.includes('$("[data-request-note]").find'), "Admin request note control must use the selector helper");
+ok(!adminAppSource.includes('$("[data-request-select]").find'), "Admin must not pass CSS selectors to the ID helper");
 ok(adminAppSource.includes("function inferMediaType("), "Admin must infer MP4/HLS media types");
 ok(adminAppSource.includes("backupUrl"), "Admin episode editor must preserve backup sources");
 ok(adminAppSource.includes("subtitleUrl"), "Admin episode editor must preserve subtitles");
@@ -161,11 +168,14 @@ ok(adminHtml.includes('assets/icons/icon-192.png'), "Admin interface must use it
 const androidActivity = fs.readFileSync(path.join(root, "android-app", "app", "src", "main", "java", "com", "cinaro", "app", "MainActivity.java"), "utf8");
 ok(androidActivity.includes('settings.setLoadWithOverviewMode(false)'), "Android WebView must not shrink the app into a wide overview");
 ok(androidActivity.includes('WindowManager.LayoutParams.FLAG_SECURE'), "Android user edition must support secure-screen protection");
+ok(androidActivity.includes(`CINARO/${expectedVersion} AndroidApp`), "Android user agent must match the package version");
 const androidManifest = fs.readFileSync(path.join(root, "android-app", "app", "src", "main", "AndroidManifest.xml"), "utf8");
 ok(androidManifest.includes('android:allowBackup="false"'), "Android app data backups must be disabled");
 const androidBuild = fs.readFileSync(path.join(root, "android-app", "app", "build.gradle"), "utf8");
 ok(androidBuild.includes('buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "true"'), "User Android flavor must block screen capture");
 ok(androidBuild.includes('buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "false"'), "Admin Android flavor must keep normal screen capture behavior");
+ok(androidBuild.includes(`versionName "${expectedVersion}"`), "Android versionName must match package.json");
+ok(androidBuild.includes('versionCode 5'), "Android versionCode must be 5 for CINARO 2.2.0");
 ok(fs.existsSync(path.join(root, "android-app", "app", "src", "admin", "res", "mipmap-xxxhdpi", "ic_launcher.png")), "Admin Android flavor must have a dedicated launcher icon");
 
 const firebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
@@ -193,6 +203,7 @@ ok(
 );
 
 const appSource = fs.readFileSync(path.join(webRoot, "app.js"), "utf8");
+ok(appSource.includes(`const APP_VERSION = "${expectedVersion}"`), "Web app version must match package.json");
 ok(appSource.includes("function previousEpisode("), "Player must resolve previous episodes");
 ok(appSource.includes("function renderRequestList("), "User app must render request history");
 ok(appSource.includes("state.firebase.submitContentRequest"), "User app must submit content requests through Firebase");
@@ -211,6 +222,8 @@ ok(appSource.includes("clearInterval(player.endedTimer)"), "Autoplay countdown m
 const userFirebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
 ok(userFirebaseSource.includes("submitContentRequest: async function"), "Firebase client must support request submission");
 ok(userFirebaseSource.includes("listenMyRequests: function"), "Firebase client must support request history");
+ok(userFirebaseSource.includes(`app_version: "${expectedVersion}"`), "Firebase analytics version must match package.json");
+ok(userFirebaseSource.includes(`minimumVersion: textValue(data.minimumVersion, "${expectedVersion}"`), "Firebase minimum-version fallback must match package.json");
 ok(userFirebaseSource.includes('where("userId", "==", user.uid)'), "Request history must be scoped to the signed-in user");
 
 const adminFirebaseSource = fs.readFileSync(path.join(adminRoot, "firebase.js"), "utf8");
@@ -222,6 +235,10 @@ ok(adminFirebaseSource.includes('role = "supervisor"'), "Admin Firebase must sup
 const androidWorkflow = fs.readFileSync(path.join(root, ".github", "workflows", "android-apk.yml"), "utf8");
 ok(androidWorkflow.includes("CINARO_KEYSTORE_BASE64"), "Android workflow must support the stable signing keystore");
 ok(androidWorkflow.includes("apksigner\" verify --verbose --print-certs"), "Android workflow must verify and print APK certificates");
+ok(androidWorkflow.includes(`CINARO-User-v${expectedVersion}.apk`), "Android workflow user APK name must match package.json");
+ok(androidWorkflow.includes(`CINARO-Admin-v${expectedVersion}.apk`), "Android workflow admin APK name must match package.json");
+ok(androidWorkflow.includes(`TAG="v${expectedVersion}"`), "Android workflow release tag must match package.json");
+ok(!androidWorkflow.includes("v2.1.0"), "Android workflow must not publish stale 2.1.0 artifacts");
 
 const serviceWorker = fs.readFileSync(path.join(webRoot, "sw.js"), "utf8");
 for (const requiredFile of requiredFiles.filter((file) => !["sw.js"].includes(file))) {
