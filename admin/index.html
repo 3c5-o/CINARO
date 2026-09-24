@@ -64,6 +64,8 @@
           <article class="stat-card" data-admin-only><span class="stat-icon blue"><svg><use href="#i-users"></use></svg></span><div><small>المستخدمون</small><strong id="statUsers">0</strong><span id="statActiveUsers">0 نشط</span></div></article>
           <article class="stat-card"><span class="stat-icon gold"><svg><use href="#i-eye"></use></svg></span><div><small>المشاهدات</small><strong id="statViews">0</strong><span>من حقول المحتوى</span></div></article>
           <article class="stat-card" data-admin-only><span class="stat-icon green"><svg><use href="#i-user-star"></use></svg></span><div><small>المشرفون</small><strong id="statSupervisors">0</strong><span>صلاحيات مخصصة</span></div></article>
+          <article class="stat-card" data-admin-only><span class="stat-icon blue"><svg><use href="#i-film"></use></svg></span><div><small>طلبات المحتوى</small><strong id="statRequests">0</strong><span>جديد أو قيد المراجعة</span></div></article>
+          <article class="stat-card" data-admin-only><span class="stat-icon red"><svg><use href="#i-alert"></use></svg></span><div><small>البلاغات</small><strong id="statReports">0</strong><span>بلاغات مفتوحة</span></div></article>
         </div>
         <div class="dashboard-columns"><article class="panel"><div class="panel-heading"><div><span>آخر ما أُضيف</span><h2>المحتوى الأخير</h2></div><button class="text-action" type="button" data-view="content">إدارة المحتوى <svg><use href="#i-arrow-left"></use></svg></button></div><div id="recentContent" class="mini-list"></div></article><article class="panel" data-admin-only><div class="panel-heading"><div><span>مراقبة النظام</span><h2>آخر العمليات</h2></div><button class="text-action" type="button" data-view="activity">السجل الكامل <svg><use href="#i-arrow-left"></use></svg></button></div><div id="recentActivity" class="mini-list"></div></article></div>
       </section>
@@ -138,8 +140,10 @@
             <label><span>معرّفات المحتوى المميز</span><textarea id="settingFeatured" rows="3" placeholder="movie-id, series-id"></textarea></label>
             <label><span>رسالة عامة للمستخدمين</span><textarea id="settingAnnouncement" rows="3" placeholder="اختياري"></textarea></label>
             <div class="form-grid two">
-              <label><span>الحد الأدنى لإصدار التطبيق</span><input id="settingMinVersion" value="2.3.2"></label>
-              <label><span>رابط تنزيل التحديث</span><input id="settingUpdateUrl" type="url" value="https://github.com/3c5-o/CINARO/releases"></label>
+              <label><span>أحدث إصدار متاح</span><input id="settingLatestVersion" value="2.4.0"></label>
+              <label><span>الحد الأدنى للإصدار المدعوم</span><input id="settingMinVersion" value="2.4.0"></label>
+              <label><span>رابط تنزيل تحديث المستخدم</span><input id="settingUpdateUrl" type="url" value="https://github.com/3c5-o/CINARO/releases"></label>
+              <label><span>ملاحظات التحديث</span><textarea id="settingUpdateNotes" rows="3" placeholder="مثلاً: إصلاح المشغل وإضافة طلبات المحتوى"></textarea></label>
               <label class="check-field"><input id="settingMaintenance" type="checkbox"><span>وضع الصيانة</span></label>
               <label class="check-field"><input id="settingForceUpdate" type="checkbox"><span>إجبار التحديث</span></label>
             </div>
@@ -164,7 +168,7 @@
       <section id="view-activity" class="admin-view" data-title="سجل العمليات"><div class="section-toolbar"><div><span>التدقيق والأمان</span><h2>سجل العمليات</h2><p>كل عملية إدارية مهمة تُحفظ مع منفذها ووقتها.</p></div></div><div class="panel table-panel"><div id="activityTable" class="data-table-wrap"></div></div></section>
     </main>
 
-    <nav id="mobileNav" class="mobile-nav" aria-label="تنقل الإدارة"><button class="active" type="button" data-view="dashboard"><svg><use href="#i-grid"></use></svg><span>الرئيسية</span></button><button type="button" data-view="content"><svg><use href="#i-film"></use></svg><span>المحتوى</span></button><button type="button" data-view="reports" data-admin-only><svg><use href="#i-alert"></use></svg><span>البلاغات</span></button><button type="button" data-view="users" data-admin-only><svg><use href="#i-users"></use></svg><span>المستخدمون</span></button><button type="button" data-view="settings" data-admin-only><svg><use href="#i-settings"></use></svg><span>الإعدادات</span></button></nav>
+    <nav id="mobileNav" class="mobile-nav" aria-label="تنقل الإدارة"><button class="active" type="button" data-view="dashboard"><svg><use href="#i-grid"></use></svg><span>الرئيسية</span></button><button type="button" data-view="content"><svg><use href="#i-film"></use></svg><span>المحتوى</span></button><button type="button" data-view="requests" data-admin-only><svg><use href="#i-film"></use></svg><span>الطلبات</span><em id="mobileRequestsCount">0</em></button><button type="button" data-view="reports" data-admin-only><svg><use href="#i-alert"></use></svg><span>البلاغات</span></button><button type="button" data-view="users" data-admin-only><svg><use href="#i-users"></use></svg><span>المستخدمون</span></button><button type="button" data-view="settings" data-admin-only><svg><use href="#i-settings"></use></svg><span>الإعدادات</span></button></nav>
   </div>
 
   <div id="mediaPreviewDialog" class="preview-dialog" hidden>
