@@ -431,8 +431,8 @@
 
   async function saveContentRequest(id) {
     if (!isAdmin() || !state.firebase) return;
-    const statusControl = $("[data-request-select]").find((element) => element.dataset.requestSelect === id);
-    const noteControl = $("[data-request-note]").find((element) => element.dataset.requestNote === id);
+    const statusControl = Array.from(document.querySelectorAll("[data-request-select]")).find((element) => element.dataset.requestSelect === id);
+    const noteControl = Array.from(document.querySelectorAll("[data-request-note]")).find((element) => element.dataset.requestNote === id);
     const status = ["new", "reviewing", "added", "rejected"].includes(statusControl?.value) ? statusControl.value : "new";
     const adminNote = asString(noteControl?.value).slice(0, 600);
 
