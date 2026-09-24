@@ -2,7 +2,7 @@
   "use strict";
 
   let DATA = window.CINARO_DATA;
-  const APP_VERSION = "2.2.1";
+  const APP_VERSION = "2.3.0";
   const IMAGE_FALLBACK = "assets/images/poster-placeholder.webp";
 
   if (!DATA || !Array.isArray(DATA.items)) {
