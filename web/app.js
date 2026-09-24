@@ -317,7 +317,9 @@
       "auth/operation-not-allowed": "طريقة الدخول غير مفعّلة من Firebase Console.",
       "auth/requires-login": "سجّل الدخول بحسابك لإكمال هذه العملية.",
       "auth/requires-recent-login": "لحماية حسابك، سجّل الخروج ثم ادخل مجددًا وأعد المحاولة.",
-      "cinaro/name-too-short": "الاسم يجب أن يحتوي حرفين على الأقل."
+      "cinaro/name-too-short": "الاسم يجب أن يحتوي حرفين على الأقل.",
+      "cinaro/request-duplicate": "عندك طلب مشابه ما زال جديداً أو قيد المراجعة.",
+      "cinaro/request-title-too-short": "اكتب اسم الفيلم أو المسلسل بصورة أوضح."
     };
     return messages[code] || "تعذّر إكمال العملية. تحقق من البيانات والاتصال.";
   }
@@ -2134,9 +2136,18 @@
       byId("requestMessage").textContent = "جاري إرسال الطلب…";
       byId("requestMessage").className = "auth-message";
       try {
+        const requestedKind = byId("requestKind").value === "series" ? "series" : "movie";
+        const requestedTitle = byId("requestName").value.trim();
+        const normalizedTitle = normalizeArabic(requestedTitle);
+        const duplicate = state.requests.find((request) =>
+          request.kind === requestedKind &&
+          ["new", "reviewing"].includes(request.status) &&
+          normalizeArabic(request.title || "") === normalizedTitle
+        );
+        if (duplicate) throw Object.assign(new Error("cinaro/request-duplicate"), { code: "cinaro/request-duplicate" });
         await state.firebase.submitContentRequest({
-          kind: byId("requestKind").value,
-          title: byId("requestName").value,
+          kind: requestedKind,
+          title: requestedTitle,
           notes: byId("requestNotes").value
         });
         closeSheets();
