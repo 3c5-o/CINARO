@@ -102,7 +102,10 @@
                 <label class="check-field"><input id="tmdbImportGenres" type="checkbox" checked><span>التصنيفات والتصنيف العمري</span></label>
                 <label class="check-field"><input id="tmdbImportEpisodes" type="checkbox" checked><span>المواسم والحلقات للمسلسلات</span></label>
               </div>
-              <p id="tmdbImportMessage" class="form-message tmdb-message" role="status"></p>
+              <div class="tmdb-import-status-row">
+                <p id="tmdbImportMessage" class="form-message tmdb-message" role="status"></p>
+                <button class="admin-button ghost compact" type="button" data-view="settings">إعداد TMDb</button>
+              </div>
               <div id="tmdbSearchResults" class="tmdb-results"></div>
               <p class="tmdb-attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
             </div>
