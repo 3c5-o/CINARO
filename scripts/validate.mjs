@@ -175,7 +175,7 @@ ok(adminAppSource.includes("contentTmdbId"), "Admin must retain TMDb content IDs
 ok(adminAppSource.includes("const willPublish ="), "Admin must distinguish drafts from publish-time media requirements");
 ok(adminAppSource.includes("window.CINARO_HANDLE_BACK = handleNativeBack"), "Admin must handle Android back navigation in-app");
 ok(adminAppSource.includes("function bindCopyProtection("), "Admin must prevent casual content copying");
-ok(!adminAppSource.includes('$("[data-import-mode]")'), "Admin must not pass selector strings to the ID helper");
+ok(adminAppSource.split('$("[data-import-mode]")').length >= 3, "Admin TMDb mode buttons must use the selector helper in both bindings");
 ok(adminAppSource.includes('$("[data-import-mode]")'), "Admin TMDb mode buttons must use the selector helper");
 ok(adminAppSource.includes('function openNewContent('), "Admin must expose a reliable new-content launcher");
 ok(adminAppSource.includes('action === "new-tmdb"'), "Admin must support direct TMDb movie/series actions");
