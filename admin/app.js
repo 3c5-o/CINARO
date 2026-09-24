@@ -901,7 +901,7 @@
     toggleKindFields();
   }
 
-  function openNewContent(kind = "movie", importMode = "manual") {
+  function openNewContent(kind = "movie", importMode = "manual", options = {}) {
     if (!hasPermission("createContent")) {
       toast("لا تملك صلاحية إضافة محتوى", "error");
       return;
@@ -909,6 +909,14 @@
     resetContentForm();
     $("contentKind").value = kind === "series" ? "series" : "movie";
     toggleKindFields();
+    state.pendingRequestId = asString(options.requestId);
+    state.pendingRequestTitle = asString(options.title);
+    if (state.pendingRequestTitle) {
+      $("contentTitle").value = state.pendingRequestTitle;
+      $("tmdbSearchInput").value = state.pendingRequestTitle;
+      $("editorKicker").textContent = "تنفيذ طلب مستخدم";
+      $("editorTitle").textContent = state.pendingRequestTitle;
+    }
     if (!isAdmin()) {
       $("contentSections").value = assignedSectionIds()[0] || "";
       setImportMode("manual");
@@ -917,8 +925,20 @@
     }
     setView("editor");
     if (importMode === "tmdb" && isAdmin()) {
-      window.setTimeout(() => $("tmdbSearchInput")?.focus(), 60);
+      window.setTimeout(() => {
+        $("tmdbSearchInput")?.focus();
+        if (state.pendingRequestTitle) searchTmdb();
+      }, 80);
     }
+  }
+
+  function openRequestAsContent(requestId, importMode = "manual") {
+    const request = state.requests.find((item) => item.id === requestId);
+    if (!request) return toast("تعذّر العثور على الطلب", "error");
+    openNewContent(request.kind, importMode, {
+      requestId: request.id,
+      title: request.title
+    });
   }
 
   function openContentEditor(id) {
