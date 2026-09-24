@@ -488,19 +488,35 @@
       subtitles: "مشكلة ترجمة",
       other: "أخرى"
     };
-    const rows = [...state.reports].filter((report) => (
-      state.filters.reportStatus === "all" ||
-      (state.filters.reportStatus === "resolved" ? report.status === "resolved" : report.status !== "resolved")
-    )).sort((a, b) => asNumber(b.createdAt) - asNumber(a.createdAt));
+    const statusLabels = {
+      open: "مفتوح",
+      reviewing: "قيد المعالجة",
+      resolved: "تم الحل",
+      rejected: "مرفوض"
+    };
+    const requestedStatus = state.filters.reportStatus;
+    const rows = [...state.reports].filter((report) => {
+      if (requestedStatus === "all") return true;
+      if (requestedStatus === "active") return ["open", "reviewing"].includes(report.status);
+      return report.status === requestedStatus;
+    }).sort((a, b) => asNumber(b.createdAt) - asNumber(a.createdAt));
     if (!rows.length) {
       $("reportsTable").innerHTML = emptyTable("لا توجد بلاغات ضمن هذه الحالة", "ستظهر هنا بلاغات المستخدمين من مشغل الفيديو.");
       return;
     }
-    $("reportsTable").innerHTML = `<div class="data-table reports-data-table"><div class="data-head"><span>المحتوى</span><span>المشكلة</span><span>التفاصيل والمستخدم</span><span>الحالة</span><span>إجراءات</span></div>${rows.map((report) => {
-      const resolved = report.status === "resolved";
+    $("reportsTable").innerHTML = `<div class="data-table reports-data-table"><div class="data-head"><span>المحتوى</span><span>المشكلة</span><span>الحالة</span><span>ملاحظة الإدارة</span><span>إجراءات</span></div>${rows.map((report) => {
+      const status = ["open", "reviewing", "resolved", "rejected"].includes(report.status) ? report.status : "open";
       const episode = report.kind === "series" ? ` · م${asNumber(report.season)} ح${asNumber(report.episode)}` : "";
       const preview = report.sourceUrl ? `<button class="table-action" type="button" data-action="preview-url" data-url="${escapeHTML(report.sourceUrl)}" title="معاينة المصدر"><svg><use href="#i-eye"></use></svg></button>` : "";
-      return `<div class="data-row"><span class="report-content"><b>${escapeHTML(report.contentTitle || report.contentId || "محتوى محذوف")}</b><small>${escapeHTML(report.contentId || "—")}${escapeHTML(episode)}</small></span><span class="kind-chip">${escapeHTML(categoryNames[report.category] || report.category || "أخرى")}</span><span class="report-details">${escapeHTML(report.details || "بلا تفاصيل")}<small>${escapeHTML(report.userEmail || report.userId || "مستخدم")}</small></span><span>${resolved ? '<span class="status-chip published">تمت المعالجة</span>' : '<span class="status-chip blocked">مفتوح</span>'}</span><span class="row-actions">${preview}<button class="table-action ${resolved ? "" : "success-action"}" type="button" data-action="toggle-report" data-id="${escapeHTML(report.id)}" data-status="${resolved ? "open" : "resolved"}" title="${resolved ? "إعادة فتح" : "وضع كمعالج"}"><svg><use href="#i-${resolved ? "activity" : "check"}"></use></svg></button></span></div>`;
+      const edit = state.content.some((item) => item.id === report.contentId) ? `<button class="table-action" type="button" data-action="edit-content" data-id="${escapeHTML(report.contentId)}" title="فتح المحتوى"><svg><use href="#i-edit"></use></svg></button>` : "";
+      const options = Object.entries(statusLabels).map(([value, label]) => `<option value="${value}" ${value === status ? "selected" : ""}>${label}</option>`).join("");
+      return `<div class="data-row">
+        <span class="report-content"><b>${escapeHTML(report.contentTitle || report.contentId || "محتوى محذوف")}</b><small>${escapeHTML(report.contentId || "—")}${escapeHTML(episode)}</small><small>${escapeHTML(report.details || "بلا تفاصيل")} · ${escapeHTML(report.userEmail || report.userId || "مستخدم")}</small></span>
+        <span class="kind-chip">${escapeHTML(categoryNames[report.category] || report.category || "أخرى")}</span>
+        <select class="request-status-control" data-report-select="${escapeHTML(report.id)}">${options}</select>
+        <input class="request-note-control" data-report-note="${escapeHTML(report.id)}" maxlength="600" value="${escapeHTML(report.adminNote || "")}" placeholder="ملاحظة داخلية اختيارية">
+        <span class="row-actions">${edit}${preview}<button class="table-action success-action" type="button" data-action="save-report" data-id="${escapeHTML(report.id)}" title="حفظ البلاغ"><svg><use href="#i-save"></use></svg></button></span>
+      </div>`;
     }).join("")}</div>`;
   }
 
@@ -1472,6 +1488,25 @@
     $("mediaPreviewDialog").hidden = true;
   }
 
+  async function saveReport(id) {
+    if (!isAdmin() || !state.firebase || !id) return;
+    const statusControl = Array.from(document.querySelectorAll("[data-report-select]")).find((element) => element.dataset.reportSelect === id);
+    const noteControl = Array.from(document.querySelectorAll("[data-report-note]")).find((element) => element.dataset.reportNote === id);
+    const status = ["open", "reviewing", "resolved", "rejected"].includes(statusControl?.value) ? statusControl.value : "open";
+    const adminNote = asString(noteControl?.value).slice(0, 600);
+    try {
+      await state.firebase.saveDocument("reports", id, {
+        status,
+        adminNote,
+        handledBy: state.authUser.uid
+      });
+      await state.firebase.logAudit("تحديث بلاغ", id, `${status} · ${adminNote || "بدون ملاحظة"}`, state.authUser);
+      toast("تم تحديث البلاغ");
+    } catch (error) {
+      toast(errorMessage(error), "error");
+    }
+  }
+
   async function toggleReport(id, status) {
     if (!isAdmin() || !state.firebase || !id) return;
     try {
@@ -1496,6 +1531,7 @@
     else if (action === "edit-section") editSection(id);
     else if (action === "delete-section") deleteSection(id);
     else if (action === "toggle-report") toggleReport(id, button.dataset.status);
+    else if (action === "save-report") saveReport(id);
     else if (action === "save-request") saveContentRequest(id);
     else if (action === "request-add-manual") openRequestAsContent(id, "manual");
     else if (action === "request-add-tmdb") openRequestAsContent(id, "tmdb");
