@@ -2,6 +2,8 @@
   "use strict";
 
   const ADMIN_EMAIL = "ffkyyr@gmail.com";
+  const TMDB_STORAGE_KEY = "cinaro:admin:tmdb-token:v1";
+  const TMDB_API_ROOT = "https://api.themoviedb.org/3";
   const state = {
     firebase: null,
     authUser: null,
@@ -24,6 +26,7 @@
     unsubscribers: [],
     dataListenersStarted: false,
     previewHls: null,
+    tmdb: { importMode: "manual", results: [], configuration: null, busy: false },
     filters: { contentSearch: "", contentKind: "all", contentStatus: "all", userSearch: "", userStatus: "all", reportStatus: "open", requestStatus: "pending" }
   };
 
@@ -230,7 +233,7 @@
     });
   }
 
-  function normalizeSeasons(value) {
+  function normalizeSeasons(value, requireSources = true) {
     return toArray(value).slice(0, 100).map((season, seasonIndex) => {
       const number = Math.max(1, Math.round(asNumber(season.number, seasonIndex + 1)));
       const episodes = toArray(season.episodes).slice(0, 500).map((episode, episodeIndex) => ({
@@ -243,7 +246,7 @@
         subtitles: normalizeSubtitles(episode.subtitles)
       }));
       if (!episodes.length) throw new Error(`الموسم ${number} لا يحتوي حلقات.`);
-      if (episodes.some((episode) => !episode.sources.length)) throw new Error(`كل حلقة في الموسم ${number} تحتاج مصدراً واحداً على الأقل.`);
+      if (requireSources && episodes.some((episode) => !episode.sources.length)) throw new Error(`كل حلقة في الموسم ${number} تحتاج مصدراً واحداً على الأقل قبل النشر.`);
       return { number, title: asString(season.title, `الموسم ${number}`).slice(0, 120), episodes };
     });
   }
@@ -454,13 +457,300 @@
     $("activityTable").innerHTML = rows.length ? `<div class="data-table activity-data-table"><div class="data-head"><span>العملية</span><span>الهدف</span><span>المنفذ</span><span>التفاصيل</span><span>الوقت</span></div>${rows.map((item) => `<div class="data-row"><span class="activity-action"><span class="log-dot"></span><b>${escapeHTML(item.action || "عملية")}</b></span><code>${escapeHTML(item.target || "—")}</code><span>${escapeHTML(item.actorEmail || item.actorUid || "—")}</span><span>${escapeHTML(item.details || "—")}</span><span>${escapeHTML(formatDate(item.createdAt))}</span></div>`).join("")}</div>` : emptyTable("سجل العمليات فارغ", "تُحفظ هنا عمليات المحتوى والأقسام والحسابات.");
   }
 
+  function readTmdbToken() {
+    try { return String(localStorage.getItem(TMDB_STORAGE_KEY) || "").trim(); }
+    catch (_) { return ""; }
+  }
+
+  function writeTmdbToken(token) {
+    const value = asString(token);
+    try {
+      if (value) localStorage.setItem(TMDB_STORAGE_KEY, value);
+      else localStorage.removeItem(TMDB_STORAGE_KEY);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function setTmdbMessage(message = "", type = "") {
+    setMessage("tmdbImportMessage", message, type);
+  }
+
+  function fillTmdbSettings() {
+    const input = $("tmdbTokenInput");
+    if (!input) return;
+    const token = readTmdbToken();
+    input.value = token;
+    setMessage("tmdbSettingsMessage", token ? "التوكن محفوظ محلياً داخل تطبيق الإدارة." : "لم تتم إضافة TMDb Token بعد.", token ? "success" : "");
+  }
+
+  function setImportMode(mode) {
+    const next = mode === "tmdb" && isAdmin() ? "tmdb" : "manual";
+    state.tmdb.importMode = next;
+    $("[data-import-mode]").forEach((button) => button.classList.toggle("active", button.dataset.importMode === next));
+    $("tmdbImportPanel")?.classList.toggle("is-hidden", next !== "tmdb");
+    if (next === "tmdb" && !readTmdbToken()) {
+      setTmdbMessage("أضف TMDb Read Access Token من إعدادات التطبيق أولاً.", "error");
+    } else if (next === "tmdb") {
+      setTmdbMessage("ابحث عن الفيلم أو المسلسل ثم اختر النتيجة الصحيحة.");
+    } else {
+      setTmdbMessage("");
+    }
+  }
+
+  async function tmdbRequest(pathname, query = {}) {
+    const token = readTmdbToken();
+    if (!token) throw new Error("أضف TMDb Read Access Token من إعدادات التطبيق أولاً.");
+    const url = new URL(TMDB_API_ROOT + pathname);
+    Object.entries(query || {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
+    });
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      cache: "no-store"
+    });
+    if (response.status === 401) throw new Error("TMDb Token غير صالح أو انتهت صلاحيته.");
+    if (response.status === 429) throw new Error("TMDb طلبات كثيرة حالياً. حاول بعد قليل.");
+    if (!response.ok) throw new Error(`تعذّر الاتصال بـTMDb (HTTP ${response.status}).`);
+    return response.json();
+  }
+
+  async function ensureTmdbConfiguration(force = false) {
+    if (state.tmdb.configuration && !force) return state.tmdb.configuration;
+    const configuration = await tmdbRequest("/configuration");
+    if (!configuration?.images?.secure_base_url) throw new Error("تعذّر قراءة إعدادات صور TMDb.");
+    state.tmdb.configuration = configuration;
+    return configuration;
+  }
+
+  function tmdbImage(filePath, preferredSize = "w500") {
+    if (!filePath) return "";
+    const images = state.tmdb.configuration?.images;
+    const base = asString(images?.secure_base_url, "https://image.tmdb.org/t/p/");
+    const sizes = [...toArray(images?.poster_sizes), ...toArray(images?.backdrop_sizes), ...toArray(images?.still_sizes)];
+    const size = sizes.includes(preferredSize) ? preferredSize : (sizes.includes("original") ? "original" : preferredSize);
+    return `${base}${size}${filePath}`;
+  }
+
+  function tmdbDateYear(value) {
+    const match = String(value || "").match(/^(\d{4})/);
+    return match ? Number(match[1]) : new Date().getFullYear();
+  }
+
+  function tmdbCertification(details, kind) {
+    if (kind === "movie") {
+      const rows = toArray(details?.release_dates?.results);
+      for (const country of ["IQ", "US", "GB"]) {
+        const certification = toArray(rows.find((row) => row.iso_3166_1 === country)?.release_dates)
+          .map((item) => asString(item.certification))
+          .find(Boolean);
+        if (certification) return certification;
+      }
+    } else {
+      const rows = toArray(details?.content_ratings?.results);
+      for (const country of ["IQ", "US", "GB"]) {
+        const rating = asString(rows.find((row) => row.iso_3166_1 === country)?.rating);
+        if (rating) return rating;
+      }
+    }
+    return "عام";
+  }
+
+  function renderTmdbResults(kind, rows) {
+    state.tmdb.results = rows;
+    const root = $("tmdbSearchResults");
+    if (!root) return;
+    if (!rows.length) {
+      root.innerHTML = '<div class="tmdb-empty">لا توجد نتائج مطابقة. جرّب اسماً آخر.</div>';
+      return;
+    }
+    root.innerHTML = rows.slice(0, 20).map((item) => {
+      const title = kind === "movie" ? item.title : item.name;
+      const original = kind === "movie" ? item.original_title : item.original_name;
+      const date = kind === "movie" ? item.release_date : item.first_air_date;
+      const poster = tmdbImage(item.poster_path, "w342") || "../web/assets/images/poster-placeholder.webp";
+      return `<button class="tmdb-result-card" type="button" data-action="tmdb-select" data-tmdb-id="${escapeHTML(item.id)}" data-tmdb-kind="${escapeHTML(kind)}">
+        <img src="${escapeHTML(poster)}" alt="">
+        <span><b>${escapeHTML(title || original || "بدون عنوان")}</b><small>${escapeHTML(original && original !== title ? original : "")}</small><em>${escapeHTML(date ? String(date).slice(0, 4) : "—")} · TMDb ${escapeHTML(asNumber(item.vote_average).toFixed(1))}</em></span>
+      </button>`;
+    }).join("");
+  }
+
+  async function searchTmdb() {
+    if (!isAdmin() || state.tmdb.busy) return;
+    const query = asString($("tmdbSearchInput")?.value);
+    if (query.length < 2) {
+      setTmdbMessage("اكتب حرفين على الأقل للبحث.", "error");
+      return;
+    }
+    const kind = $("contentKind").value === "series" ? "series" : "movie";
+    state.tmdb.busy = true;
+    $("tmdbSearchButton").disabled = true;
+    setTmdbMessage("جاري البحث في TMDb…", "pending");
+    try {
+      await ensureTmdbConfiguration();
+      const payload = await tmdbRequest(kind === "movie" ? "/search/movie" : "/search/tv", {
+        query,
+        language: "ar-IQ",
+        include_adult: "false",
+        page: 1
+      });
+      const rows = toArray(payload?.results);
+      renderTmdbResults(kind, rows);
+      setTmdbMessage(rows.length ? `تم العثور على ${Math.min(rows.length, 20)} نتيجة. اختر النتيجة الصحيحة.` : "لم يتم العثور على نتائج.", rows.length ? "success" : "");
+    } catch (error) {
+      renderTmdbResults(kind, []);
+      setTmdbMessage(errorMessage(error), "error");
+    } finally {
+      state.tmdb.busy = false;
+      $("tmdbSearchButton").disabled = false;
+    }
+  }
+
+  async function fetchTmdbSeriesSeasons(seriesId, seasons) {
+    const source = toArray(seasons).filter((season) => asNumber(season.season_number) > 0 && asNumber(season.episode_count) > 0).slice(0, 100);
+    const output = [];
+    for (let offset = 0; offset < source.length; offset += 4) {
+      const batch = source.slice(offset, offset + 4);
+      const rows = await Promise.all(batch.map(async (season) => {
+        try {
+          const details = await tmdbRequest(`/tv/${seriesId}/season/${season.season_number}`, { language: "ar-IQ" });
+          return {
+            number: Math.max(1, asNumber(details.season_number, season.season_number)),
+            title: asString(details.name, `الموسم ${season.season_number}`),
+            episodes: toArray(details.episodes).map((episode) => ({
+              id: `e${Math.max(1, asNumber(episode.episode_number, 1))}`,
+              number: Math.max(1, asNumber(episode.episode_number, 1)),
+              title: asString(episode.name, `الحلقة ${episode.episode_number}`),
+              duration: Math.max(0, asNumber(episode.runtime, 0)),
+              thumbnail: tmdbImage(episode.still_path, "w780"),
+              url: "",
+              backupUrl: "",
+              subtitleUrl: "",
+              primarySource: null,
+              backupSource: null,
+              extraSources: [],
+              primarySubtitle: null,
+              extraSubtitles: []
+            }))
+          };
+        } catch (error) {
+          console.warn("CINARO TMDb season import failed", season.season_number, error);
+          return null;
+        }
+      }));
+      output.push(...rows.filter(Boolean));
+      setTmdbMessage(`جاري استيراد المواسم… ${Math.min(offset + batch.length, source.length)}/${source.length}`, "pending");
+    }
+    return output;
+  }
+
+  async function importTmdbItem(id, kind) {
+    if (!isAdmin() || state.tmdb.busy) return;
+    const tmdbId = Math.max(1, Math.round(asNumber(id, 0)));
+    const normalizedKind = kind === "series" ? "series" : "movie";
+    state.tmdb.busy = true;
+    setTmdbMessage("جاري تحميل تفاصيل TMDb…", "pending");
+    try {
+      await ensureTmdbConfiguration();
+      const namespace = normalizedKind === "movie" ? "movie" : "tv";
+      const append = normalizedKind === "movie" ? "release_dates" : "content_ratings";
+      const [detailsAr, detailsEn] = await Promise.all([
+        tmdbRequest(`/${namespace}/${tmdbId}`, { language: "ar-IQ", append_to_response: append }),
+        tmdbRequest(`/${namespace}/${tmdbId}`, { language: "en-US" })
+      ]);
+      $("contentKind").value = normalizedKind;
+      $("contentTmdbId").value = String(tmdbId);
+
+      const titleAr = normalizedKind === "movie" ? detailsAr.title : detailsAr.name;
+      const titleEn = normalizedKind === "movie" ? detailsEn.title : detailsEn.name;
+      const original = normalizedKind === "movie" ? detailsAr.original_title : detailsAr.original_name;
+      const releaseDate = normalizedKind === "movie" ? detailsAr.release_date : detailsAr.first_air_date;
+
+      if ($("tmdbImportBasic").checked) {
+        $("contentTitle").value = asString(titleAr, asString(titleEn, original));
+        $("contentEnglishTitle").value = asString(titleEn, original);
+        $("contentYear").value = tmdbDateYear(releaseDate);
+        $("contentRating").value = Math.max(0, Math.min(10, asNumber(detailsAr.vote_average, 0))).toFixed(1);
+        $("contentDuration").value = normalizedKind === "movie"
+          ? Math.max(0, Math.round(asNumber(detailsAr.runtime, 0)))
+          : Math.max(0, Math.round(asNumber(toArray(detailsAr.episode_run_time)[0], 0)));
+        if (!$("contentId").value.trim()) $("contentId").value = `tmdb-${normalizedKind}-${tmdbId}`;
+      }
+      if ($("tmdbImportDescription").checked) {
+        $("contentDescription").value = asString(detailsAr.overview, asString(detailsEn.overview));
+      }
+      if ($("tmdbImportImages").checked) {
+        const poster = tmdbImage(detailsAr.poster_path || detailsEn.poster_path, "w500");
+        const backdrop = tmdbImage(detailsAr.backdrop_path || detailsEn.backdrop_path, "w1280");
+        if (poster) $("contentPoster").value = poster;
+        if (backdrop) $("contentBackdrop").value = backdrop;
+        $("posterPreview").src = poster || "../web/assets/images/poster-placeholder.webp";
+        $("backdropPreview").src = backdrop || poster || "../web/assets/images/poster-placeholder.webp";
+      }
+      if ($("tmdbImportGenres").checked) {
+        $("contentGenres").value = toArray(detailsAr.genres).map((genre) => asString(genre.name)).filter(Boolean).join(", ");
+        $("contentAgeRating").value = tmdbCertification(detailsAr, normalizedKind);
+      }
+      if (normalizedKind === "series" && $("tmdbImportEpisodes").checked) {
+        state.seasonDraft = await fetchTmdbSeriesSeasons(tmdbId, detailsAr.seasons);
+        renderSeasonBuilder();
+      }
+      toggleKindFields();
+      setTmdbMessage("تم استيراد البيانات. راجع الحقول وأضف روابط التشغيل قبل النشر.", "success");
+      $("contentTitle")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (error) {
+      setTmdbMessage(errorMessage(error), "error");
+    } finally {
+      state.tmdb.busy = false;
+    }
+  }
+
+  async function testTmdbToken() {
+    const candidate = asString($("tmdbTokenInput")?.value);
+    if (!candidate) {
+      setMessage("tmdbSettingsMessage", "ألصق TMDb Token أولاً.", "error");
+      return;
+    }
+    const previous = readTmdbToken();
+    if (!writeTmdbToken(candidate)) {
+      setMessage("tmdbSettingsMessage", "تعذّر حفظ التوكن على هذا الجهاز.", "error");
+      return;
+    }
+    state.tmdb.configuration = null;
+    setMessage("tmdbSettingsMessage", "جاري اختبار الاتصال…", "pending");
+    try {
+      await ensureTmdbConfiguration(true);
+      setMessage("tmdbSettingsMessage", "الاتصال بـTMDb ناجح والتوكن صالح.", "success");
+    } catch (error) {
+      if (previous) writeTmdbToken(previous); else writeTmdbToken("");
+      state.tmdb.configuration = null;
+      setMessage("tmdbSettingsMessage", errorMessage(error), "error");
+    }
+  }
+
+  function bindCopyProtection() {
+    const isEditable = (target) => Boolean(target?.closest?.("input, textarea, select, [contenteditable='true'], .allow-select"));
+    ["copy", "cut", "contextmenu"].forEach((eventName) => {
+      document.addEventListener(eventName, (event) => {
+        if (isEditable(event.target)) return;
+        event.preventDefault();
+      });
+    });
+    document.addEventListener("dragstart", (event) => {
+      if (event.target instanceof HTMLImageElement) event.preventDefault();
+    });
+  }
+
   function fillSettings() {
     $("settingFeatured").value = toArray(state.config.featured).join(", ");
     $("settingAnnouncement").value = asString(state.config.announcement);
-    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.2.1");
+    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.3.0");
     $("settingUpdateUrl").value = asString(state.config.updateUrl, "https://github.com/3c5-o/CINARO/releases");
     $("settingMaintenance").checked = state.config.maintenance === true;
     $("settingForceUpdate").checked = state.config.forceUpdate === true;
+    fillTmdbSettings();
   }
 
   function newEpisode(number = 1) {
@@ -576,6 +866,11 @@
   function resetContentForm() {
     state.editingContentId = "";
     $("contentForm")?.reset();
+    $("contentTmdbId").value = "";
+    $("tmdbSearchInput").value = "";
+    $("tmdbSearchResults").innerHTML = "";
+    state.tmdb.results = [];
+    setImportMode("manual");
     $("contentYear").value = new Date().getFullYear();
     $("contentAgeRating").value = "عام";
     $("contentKind").value = "movie";
@@ -606,6 +901,7 @@
     }
     state.editingContentId = item.id;
     $("contentId").value = item.id;
+    $("contentTmdbId").value = item.tmdbId ? String(item.tmdbId) : "";
     $("contentKind").value = item.kind;
     $("contentTitle").value = item.title || "";
     $("contentEnglishTitle").value = item.englishTitle || "";
@@ -708,9 +1004,13 @@
       }
       movieSubtitleCandidates.push(...existingMovieSubtitles.slice(1));
       const subtitles = kind === "movie" ? normalizeSubtitles(movieSubtitleCandidates) : [];
-      const seasons = kind === "series" ? normalizeSeasons(seasonsFromEditor()) : [];
-      if (kind === "movie" && !sources.length) throw new Error("أضف مصدراً واحداً على الأقل للفيلم.");
+      const willPublish = hasPermission("publishContent") ? $("contentPublished").checked : existing?.published === true;
+      const seasons = kind === "series" ? normalizeSeasons(seasonsFromEditor(), willPublish) : [];
+      if (willPublish && kind === "movie" && !sources.length) throw new Error("أضف مصدراً واحداً على الأقل للفيلم قبل النشر.");
       if (kind === "series" && !seasons.length) throw new Error("أضف موسماً واحداً على الأقل للمسلسل.");
+      if (willPublish && kind === "series" && seasons.some((season) => season.episodes.some((episode) => !episode.sources.length))) {
+        throw new Error("لا يمكن نشر المسلسل قبل إضافة رابط تشغيل لكل حلقة.");
+      }
       const sectionIds = parseCsv($("contentSections").value);
       if (!isAdmin()) {
         const allowed = assignedSectionIds();
@@ -738,7 +1038,10 @@
         views: isAdmin() ? Math.max(0, Math.round(asNumber($("contentViews").value))) : Math.max(0, Math.round(asNumber(existing?.views, 0))),
         order: asNumber($("contentOrder").value),
         featured: $("contentFeatured").checked,
-        published: hasPermission("publishContent") ? $("contentPublished").checked : existing?.published === true,
+        published: willPublish,
+        tmdbId: Math.max(0, Math.round(asNumber($("contentTmdbId").value, asNumber(existing?.tmdbId, 0)))),
+        tmdbType: Math.max(0, Math.round(asNumber($("contentTmdbId").value, 0))) ? kind : asString(existing?.tmdbType),
+        tmdbImportedAt: Math.max(0, Math.round(asNumber($("contentTmdbId").value, 0))) ? Date.now() : asNumber(existing?.tmdbImportedAt, 0),
         addedAt: existing?.addedAt || today(),
         updatedBy: state.authUser.uid
       };
@@ -1021,6 +1324,7 @@
     else if (action === "save-request") saveContentRequest(id);
     else if (action === "preview-url") openMediaPreview(button.dataset.url, "معاينة مصدر البلاغ");
     else if (action === "preview-movie") openMediaPreview($("movieSourceUrl").value, "معاينة الفيلم");
+    else if (action === "tmdb-select") importTmdbItem(button.dataset.tmdbId, button.dataset.tmdbKind);
     else if (action === "add-episode") {
       const seasonIndex = asNumber(button.dataset.seasonIndex, -1);
       const season = state.seasonDraft[seasonIndex];
@@ -1169,7 +1473,51 @@
       if (!isAdmin()) $("contentSections").value = assignedSectionIds()[0] || "";
       setView("editor");
     });
-    $("contentKind")?.addEventListener("change", toggleKindFields);
+    $("contentKind")?.addEventListener("change", () => {
+      toggleKindFields();
+      if (state.tmdb.importMode === "tmdb") {
+        $("tmdbSearchResults").innerHTML = "";
+        state.tmdb.results = [];
+        setTmdbMessage("نوع البحث تغيّر. نفّذ البحث من جديد.");
+      }
+    });
+    $("[data-import-mode]").forEach((button) => button.addEventListener("click", () => setImportMode(button.dataset.importMode)));
+    $("tmdbSearchButton")?.addEventListener("click", searchTmdb);
+    $("tmdbSearchInput")?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        searchTmdb();
+      }
+    });
+    $("tmdbSettingsForm")?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const token = asString($("tmdbTokenInput").value);
+      if (!token) {
+        setMessage("tmdbSettingsMessage", "ألصق TMDb Token أولاً.", "error");
+        return;
+      }
+      if (!writeTmdbToken(token)) {
+        setMessage("tmdbSettingsMessage", "تعذّر حفظ التوكن على هذا الجهاز.", "error");
+        return;
+      }
+      state.tmdb.configuration = null;
+      setMessage("tmdbSettingsMessage", "تم حفظ TMDb Token داخل تطبيق الإدارة.", "success");
+      toast("تم حفظ TMDb Token");
+    });
+    $("tmdbTestButton")?.addEventListener("click", testTmdbToken);
+    $("tmdbToggleTokenButton")?.addEventListener("click", () => {
+      const input = $("tmdbTokenInput");
+      input.type = input.type === "password" ? "text" : "password";
+    });
+    $("tmdbDeleteTokenButton")?.addEventListener("click", () => {
+      writeTmdbToken("");
+      state.tmdb.configuration = null;
+      $("tmdbTokenInput").value = "";
+      $("tmdbSearchResults").innerHTML = "";
+      setImportMode("manual");
+      setMessage("tmdbSettingsMessage", "تم حذف TMDb Token من هذا الجهاز.", "success");
+      toast("تم حذف TMDb Token");
+    });
     $("addSeasonButton")?.addEventListener("click", () => {
       state.seasonDraft.push(newSeason(state.seasonDraft.length + 1));
       renderSeasonBuilder();
@@ -1237,6 +1585,7 @@
     setMessage("loginMessage", "تعذّر تحميل Firebase. تحقق من الاتصال وإعداد المشروع.", "error");
     console.error(event.detail || {});
   });
+  bindCopyProtection();
   bindEvents();
   fillSettings();
   renderDashboard();
