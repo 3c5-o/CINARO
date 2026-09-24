@@ -663,6 +663,12 @@
     if (!isAdmin() || state.tmdb.busy) return;
     const tmdbId = Math.max(1, Math.round(asNumber(id, 0)));
     const normalizedKind = kind === "series" ? "series" : "movie";
+    const duplicate = state.content.find((item) => asNumber(item.tmdbId) === tmdbId && item.kind === normalizedKind && item.id !== state.editingContentId);
+    if (duplicate) {
+      setTmdbMessage(`هذا المحتوى موجود مسبقاً باسم «${duplicate.title}» (${duplicate.id}).`, "error");
+      toast("تم منع استيراد نسخة مكررة من TMDb", "error");
+      return;
+    }
     state.tmdb.busy = true;
     setTmdbMessage("جاري تحميل تفاصيل TMDb…", "pending");
     try {
@@ -1025,6 +1031,11 @@
       if (!/^[a-z0-9-]+$/.test(id)) throw new Error("المعرّف يجب أن يحتوي أحرفاً إنجليزية صغيرة وأرقاماً وشرطة فقط.");
       if (!isAdmin() && existing && id !== existing.id) throw new Error("لا يستطيع المشرف تغيير معرّف المحتوى.");
       const kind = $("contentKind").value === "series" ? "series" : "movie";
+      const requestedTmdbId = Math.max(0, Math.round(asNumber($("contentTmdbId").value, asNumber(existing?.tmdbId, 0))));
+      if (requestedTmdbId) {
+        const duplicate = state.content.find((item) => asNumber(item.tmdbId) === requestedTmdbId && item.kind === kind && item.id !== (existing?.id || id));
+        if (duplicate) throw new Error(`يوجد محتوى آخر مرتبط بنفس TMDb ID: ${duplicate.title} (${duplicate.id}).`);
+      }
       const poster = validMediaUrl($("contentPoster").value);
       const backdrop = validMediaUrl($("contentBackdrop").value) || poster;
       if (!poster) throw new Error("رابط البوستر يجب أن يكون HTTPS.");
@@ -1096,8 +1107,8 @@
         order: asNumber($("contentOrder").value),
         featured: $("contentFeatured").checked,
         published: willPublish,
-        tmdbId: Math.max(0, Math.round(asNumber($("contentTmdbId").value, asNumber(existing?.tmdbId, 0)))),
-        tmdbType: Math.max(0, Math.round(asNumber($("contentTmdbId").value, 0))) ? kind : asString(existing?.tmdbType),
+        tmdbId: requestedTmdbId,
+        tmdbType: requestedTmdbId ? kind : asString(existing?.tmdbType),
         tmdbImportedAt: Math.max(0, Math.round(asNumber($("contentTmdbId").value, 0))) ? Date.now() : asNumber(existing?.tmdbImportedAt, 0),
         addedAt: existing?.addedAt || today(),
         updatedBy: state.authUser.uid
@@ -1106,7 +1117,16 @@
       await state.firebase.saveDocument("content", id, payload);
       if (state.editingContentId && state.editingContentId !== id) await state.firebase.deleteDocument("content", state.editingContentId);
       await state.firebase.logAudit(state.editingContentId ? "تعديل محتوى" : "إضافة محتوى", id, `${payload.title} · ${payload.kind}`, state.authUser);
-      toast("تم حفظ المحتوى الحقيقي بنجاح");
+      if (state.pendingRequestId && isAdmin()) {
+        await state.firebase.saveDocument("contentRequests", state.pendingRequestId, {
+          status: "added",
+          adminNote: `تمت إضافة «${payload.title}» إلى CINARO.`,
+          contentId: id,
+          handledBy: state.authUser.uid
+        });
+        await state.firebase.logAudit("تنفيذ طلب محتوى", state.pendingRequestId, id, state.authUser);
+      }
+      toast(state.pendingRequestId ? "تم حفظ المحتوى وتحديث الطلب تلقائياً" : "تم حفظ المحتوى الحقيقي بنجاح");
       resetContentForm();
       setView("content");
     } catch (error) {
@@ -1280,7 +1300,9 @@
       const payload = {
         featured: parseCsv($("settingFeatured").value),
         announcement: asString($("settingAnnouncement").value).slice(0, 500),
-        minimumVersion: asString($("settingMinVersion").value, "2.3.2").slice(0, 20),
+        latestVersion: asString($("settingLatestVersion").value, "2.4.0").slice(0, 20),
+        minimumVersion: asString($("settingMinVersion").value, "2.4.0").slice(0, 20),
+        updateNotes: asString($("settingUpdateNotes").value).slice(0, 1000),
         updateUrl: validMediaUrl($("settingUpdateUrl").value) || "https://github.com/3c5-o/CINARO/releases",
         maintenance: $("settingMaintenance").checked,
         forceUpdate: $("settingForceUpdate").checked,
@@ -1379,6 +1401,8 @@
     else if (action === "delete-section") deleteSection(id);
     else if (action === "toggle-report") toggleReport(id, button.dataset.status);
     else if (action === "save-request") saveContentRequest(id);
+    else if (action === "request-add-manual") openRequestAsContent(id, "manual");
+    else if (action === "request-add-tmdb") openRequestAsContent(id, "tmdb");
     else if (action === "preview-url") openMediaPreview(button.dataset.url, "معاينة مصدر البلاغ");
     else if (action === "preview-movie") openMediaPreview($("movieSourceUrl").value, "معاينة الفيلم");
     else if (action === "new-tmdb") openNewContent(button.dataset.kind, "tmdb");
