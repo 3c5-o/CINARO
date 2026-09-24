@@ -190,7 +190,7 @@ async function bootFirebase() {
     analyticsSdk.isSupported().then(function (supported) {
       if (!supported) return;
       analytics = analyticsSdk.getAnalytics(app);
-      analyticsSdk.logEvent(analytics, "app_open", { app_version: "2.3.2" });
+      analyticsSdk.logEvent(analytics, "app_open", { app_version: "2.4.0" });
     }).catch(function () {});
   }
 
