@@ -67,7 +67,7 @@ npx firebase-tools deploy --only firestore:rules
 {
   "featured": ["movie-example", "series-example"],
   "announcement": "رسالة اختيارية للمستخدمين",
-  "minimumVersion": "2.2.0",
+  "minimumVersion": "2.2.1",
   "updateUrl": "https://github.com/3c5-o/CINARO/releases/latest",
   "maintenance": false,
   "forceUpdate": false

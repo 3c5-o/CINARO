@@ -138,6 +138,37 @@ async function boot() {
       );
     },
 
+    listenContentForSections: function (sectionIds, callback, onError) {
+      const safeSections = Array.from(new Set(
+        (Array.isArray(sectionIds) ? sectionIds : [])
+          .map(function (sectionId) { return clean(sectionId, "", 80); })
+          .filter(Boolean)
+      )).slice(0, 30);
+
+      if (!safeSections.length) {
+        callback([], { fromCache: false });
+        return function () {};
+      }
+
+      const contentQuery = firestoreSdk.query(
+        getCollection("content"),
+        firestoreSdk.where("sectionIds", "array-contains-any", safeSections)
+      );
+
+      return firestoreSdk.onSnapshot(
+        contentQuery,
+        function (snapshot) {
+          const rows = snapshot.docs.map(function (snapshotDoc) {
+            return Object.assign({ id: snapshotDoc.id }, plainValue(snapshotDoc.data() || {}));
+          });
+          callback(rows, { fromCache: snapshot.metadata.fromCache });
+        },
+        function (error) {
+          if (typeof onError === "function") onError(error);
+        }
+      );
+    },
+
     listenDoc: function (name, id, callback, onError) {
       return firestoreSdk.onSnapshot(
         firestoreSdk.doc(db, name, id),

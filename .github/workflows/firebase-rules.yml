@@ -1,0 +1,79 @@
+name: Deploy Firebase Rules
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "firestore.rules"
+      - "firebase.json"
+      - ".github/workflows/firebase-rules.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "firestore.rules"
+      - "firebase.json"
+      - ".github/workflows/firebase-rules.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-firestore-rules:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Validate protected rule markers
+        run: |
+          grep -q "supervisorCanReadContent" firestore.rules
+          grep -q "data.sectionIds.hasAny(currentAssignment().data.sectionIds)" firestore.rules
+          grep -q "allow read, write: if false" firestore.rules
+
+  deploy-firestore-rules:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Configure Firebase credentials
+        env:
+          FIREBASE_SERVICE_ACCOUNT_CINARO: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CINARO }}
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          if [[ -n "$FIREBASE_SERVICE_ACCOUNT_CINARO" ]]; then
+            ACCOUNT_FILE="$RUNNER_TEMP/firebase-service-account.json"
+            printf '%s' "$FIREBASE_SERVICE_ACCOUNT_CINARO" > "$ACCOUNT_FILE"
+            node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' "$ACCOUNT_FILE"
+            echo "GOOGLE_APPLICATION_CREDENTIALS=$ACCOUNT_FILE" >> "$GITHUB_ENV"
+            echo "FIREBASE_AUTH_MODE=service-account" >> "$GITHUB_ENV"
+          elif [[ -n "$FIREBASE_TOKEN" ]]; then
+            echo "FIREBASE_AUTH_MODE=token" >> "$GITHUB_ENV"
+          else
+            echo "::error::Missing FIREBASE_SERVICE_ACCOUNT_CINARO or FIREBASE_TOKEN GitHub secret."
+            exit 1
+          fi
+
+      - name: Deploy Firestore rules
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          if [[ "$FIREBASE_AUTH_MODE" == "token" ]]; then
+            npx --yes firebase-tools@latest deploy --only firestore:rules --project cinaro --token "$FIREBASE_TOKEN" --non-interactive
+          else
+            npx --yes firebase-tools@latest deploy --only firestore:rules --project cinaro --non-interactive
+          fi
+
+      - name: Confirm deployed rules source
+        run: |
+          test -f firestore.rules
+          grep -q "supervisorCanReadContent" firestore.rules
+          grep -q "allow read, write: if false" firestore.rules
