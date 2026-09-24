@@ -244,6 +244,8 @@ button, a, [role="button"], .nav-item, .mini-row, .tmdb-result-card { touch-acti
 .tmdb-result-card em { color: var(--blue); font-size: .62rem; font-style: normal; }
 .tmdb-empty { padding: 1.2rem; border: 1px dashed var(--line-strong); border-radius: 12px; color: var(--dim); text-align: center; }
 .tmdb-token-actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1rem; }
+.backup-actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1rem; }
+.backup-actions .admin-button { flex: 1 1 12rem; }
 .tmdb-token-actions .admin-button { flex: 1 1 auto; }
 .tmdb-attribution { margin: .75rem 0 0; color: var(--dim); font-size: .62rem; line-height: 1.6; direction: ltr; text-align: left; }
 .tmdb-message { padding-inline: 0; }
