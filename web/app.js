@@ -320,6 +320,7 @@
       "auth/requires-recent-login": "لحماية حسابك، سجّل الخروج ثم ادخل مجددًا وأعد المحاولة.",
       "cinaro/name-too-short": "الاسم يجب أن يحتوي حرفين على الأقل.",
       "cinaro/request-duplicate": "عندك طلب مشابه ما زال جديداً أو قيد المراجعة.",
+      "cinaro/request-exists": "هذا المحتوى موجود بالفعل داخل CINARO.",
       "cinaro/request-title-too-short": "اكتب اسم الفيلم أو المسلسل بصورة أوضح."
     };
     return messages[code] || "تعذّر إكمال العملية. تحقق من البيانات والاتصال.";
@@ -2169,6 +2170,8 @@
         const requestedKind = byId("requestKind").value === "series" ? "series" : "movie";
         const requestedTitle = byId("requestName").value.trim();
         const normalizedTitle = normalizeArabic(requestedTitle);
+        const existingContent = DATA.items.find((item) => item.kind === requestedKind && [item.title, item.englishTitle].some((title) => normalizeArabic(title || "") === normalizedTitle));
+        if (existingContent) throw Object.assign(new Error("cinaro/request-exists"), { code: "cinaro/request-exists" });
         const duplicate = state.requests.find((request) =>
           request.kind === requestedKind &&
           ["new", "reviewing"].includes(request.status) &&
