@@ -448,7 +448,8 @@
       const editButton = hasPermission("editContent") ? `<button class="table-action" type="button" data-action="edit-content" data-id="${escapeHTML(item.id)}" title="تعديل"><svg><use href="#i-edit"></use></svg></button>` : "";
       const publishButton = hasPermission("publishContent") ? `<button class="table-action" type="button" data-action="toggle-published" data-id="${escapeHTML(item.id)}" title="${item.published ? "إلغاء النشر" : "نشر"}"><svg><use href="#i-${item.published ? "x" : "check"}"></use></svg></button>` : "";
       const deleteButton = hasPermission("deleteContent") ? `<button class="table-action danger" type="button" data-action="delete-content" data-id="${escapeHTML(item.id)}" title="حذف"><svg><use href="#i-trash"></use></svg></button>` : "";
-      return `<div class="data-row"><div class="title-cell"><span class="table-cover" style="background-image:url('${escapeHTML(item.poster || "../web/assets/images/poster-placeholder.webp")}')"></span><span><b>${escapeHTML(item.title)}</b><small>${escapeHTML(item.id)} · ${escapeHTML(String(item.year || "—"))}</small></span></div><span class="kind-chip">${item.kind === "series" ? "مسلسل" : "فيلم"}</span><span class="tag-list">${toArray(item.sectionIds).length ? item.sectionIds.slice(0, 3).map((id) => `<em>${escapeHTML(sectionName(id))}</em>`).join("") : "<em>عام</em>"}</span><span>${contentStatus(item)}</span><span class="row-actions">${editButton}${publishButton}${deleteButton || (!editButton && !publishButton ? '<small class="protected-label">عرض فقط</small>' : "")}</span></div>`;
+      const tmdbRefreshButton = isAdmin() && asNumber(item.tmdbId) > 0 ? `<button class="table-action" type="button" data-action="refresh-tmdb" data-id="${escapeHTML(item.id)}" title="تحديث بيانات TMDb"><svg><use href="#i-search"></use></svg></button>` : "";
+      return `<div class="data-row"><div class="title-cell"><span class="table-cover" style="background-image:url('${escapeHTML(item.poster || "../web/assets/images/poster-placeholder.webp")}')"></span><span><b>${escapeHTML(item.title)}</b><small>${escapeHTML(item.id)} · ${escapeHTML(String(item.year || "—"))}</small></span></div><span class="kind-chip">${item.kind === "series" ? "مسلسل" : "فيلم"}</span><span class="tag-list">${toArray(item.sectionIds).length ? item.sectionIds.slice(0, 3).map((id) => `<em>${escapeHTML(sectionName(id))}</em>`).join("") : "<em>عام</em>"}</span><span>${contentStatus(item)}</span><span class="row-actions">${editButton}${tmdbRefreshButton}${publishButton}${deleteButton || (!editButton && !publishButton && !tmdbRefreshButton ? '<small class="protected-label">عرض فقط</small>' : "")}</span></div>`;
     }).join("")}</div>`;
   }
 
@@ -1263,6 +1264,15 @@
     } catch (error) { toast(errorMessage(error), "error"); }
   }
 
+  async function refreshContentFromTmdb(id) {
+    const item = state.content.find((entry) => entry.id === id);
+    if (!item || !asNumber(item.tmdbId) || !isAdmin()) return;
+    openContentEditor(id);
+    setImportMode("tmdb");
+    setTmdbMessage("جاري تحديث بيانات TMDb مع الإبقاء على روابط التشغيل…", "pending");
+    await importTmdbItem(item.tmdbId, item.kind);
+  }
+
   async function deleteContent(id) {
     const item = state.content.find((entry) => entry.id === id);
     if (!item || !state.firebase) return;
@@ -1524,6 +1534,7 @@
     const id = button.dataset.id;
     if (action === "edit-content") openContentEditor(id);
     else if (action === "delete-content") deleteContent(id);
+    else if (action === "refresh-tmdb") refreshContentFromTmdb(id);
     else if (action === "toggle-published") togglePublished(id);
     else if (action === "toggle-user") toggleUser(id, button.dataset.status);
     else if (action === "edit-supervisor") editSupervisor(id);
