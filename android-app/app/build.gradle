@@ -16,8 +16,8 @@ android {
         applicationId "com.cinaro.app"
         minSdk 24
         targetSdk 35
-        versionCode 10
-        versionName "2.4.0"
+        versionCode 11
+        versionName "2.4.1"
     }
 
     buildFeatures {
@@ -28,7 +28,7 @@ android {
     productFlavors {
         user {
             dimension "edition"
-            buildConfigField "String", "ONLINE_APP_URL", '"https://3c5-o.github.io/CINARO/web/?v=2.4.0#home"'
+            buildConfigField "String", "ONLINE_APP_URL", '"https://3c5-o.github.io/CINARO/web/?v=2.4.1#home"'
             buildConfigField "String", "OFFLINE_APP_URL", '"file:///android_asset/www/index.html#home"'
             buildConfigField "String", "APP_PATH", '"/CINARO/web/"'
             buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "true"
@@ -36,9 +36,9 @@ android {
         admin {
             dimension "edition"
             applicationId "com.cinaro.admin"
-            versionName "2.4.0-admin"
+            versionName "2.4.1-admin"
             resValue "string", "app_name", "CINARO Admin"
-            buildConfigField "String", "ONLINE_APP_URL", '"https://3c5-o.github.io/CINARO/admin/?v=2.4.0#dashboard"'
+            buildConfigField "String", "ONLINE_APP_URL", '"https://3c5-o.github.io/CINARO/admin/?v=2.4.1#dashboard"'
             buildConfigField "String", "OFFLINE_APP_URL", '"file:///android_asset/admin/index.html#dashboard"'
             buildConfigField "String", "APP_PATH", '"/CINARO/admin/"'
             buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "false"
