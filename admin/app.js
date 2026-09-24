@@ -23,6 +23,7 @@
     logs: [],
     reports: [],
     requests: [],
+    migratedManagementSections: new Set(),
     seasonDraft: [],
     config: {},
     unsubscribers: [],
@@ -1097,6 +1098,7 @@
         duration: Math.max(0, Math.round(asNumber($("contentDuration").value))),
         genres: parseCsv($("contentGenres").value),
         sectionIds,
+        managementSectionId: sectionIds.includes(existing?.managementSectionId) ? existing.managementSectionId : (sectionIds[0] || ""),
         description: asString($("contentDescription").value).slice(0, 3000),
         poster,
         backdrop,
@@ -1431,6 +1433,21 @@
     state.dataListenersStarted = false;
   }
 
+  function migrateManagementSections(rows) {
+    if (!isAdmin() || !state.firebase) return;
+    rows.forEach((item) => {
+      if (asString(item.managementSectionId) || !toArray(item.sectionIds).length || state.migratedManagementSections.has(item.id)) return;
+      state.migratedManagementSections.add(item.id);
+      state.firebase.saveDocument("content", item.id, {
+        managementSectionId: item.sectionIds[0],
+        updatedBy: state.authUser?.uid || ""
+      }).catch((error) => {
+        state.migratedManagementSections.delete(item.id);
+        console.warn("CINARO management section migration failed", item.id, error);
+      });
+    });
+  }
+
   function startDataListeners(client) {
     stopDataListeners();
     const refresh = () => {
@@ -1446,6 +1463,7 @@
     const listen = (name, setter, label) => {
       const stop = client.listenCollection(name, (rows) => {
         state[setter] = setter === "content" && !isAdmin() ? rows.filter(canManageContent) : rows;
+        if (setter === "content" && isAdmin()) migrateManagementSections(rows);
         setConnection("connected", "متصل بـ Firestore المباشر");
         refresh();
       }, (error) => {
