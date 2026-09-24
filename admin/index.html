@@ -77,6 +77,30 @@
       <section id="view-editor" class="admin-view" data-title="محرر المحتوى">
         <div class="section-toolbar"><div><span id="editorKicker">محتوى جديد</span><h2 id="editorTitle">إضافة محتوى</h2><p>احفظ روابط HTTPS مباشرة فقط، ثم عاين المحتوى قبل نشره.</p></div><button class="admin-button ghost" type="button" data-view="content"><svg><use href="#i-arrow-right"></use></svg> العودة للمحتوى</button></div>
         <form id="contentForm" class="panel editor-form">
+          <div class="form-section import-source-section">
+            <div class="form-section-title"><span>طريقة إضافة المحتوى</span><b>00</b></div>
+            <div class="import-mode-tabs" role="tablist" aria-label="طريقة إضافة المحتوى">
+              <button class="import-mode-button active" type="button" data-import-mode="manual">إضافة يدوية</button>
+              <button class="import-mode-button" type="button" data-import-mode="tmdb" data-admin-only>استيراد من TMDb</button>
+            </div>
+            <div id="tmdbImportPanel" class="tmdb-import-panel is-hidden" data-admin-only>
+              <div class="tmdb-search-row">
+                <label><span>بحث TMDb</span><input id="tmdbSearchInput" type="search" placeholder="اكتب اسم الفيلم أو المسلسل"></label>
+                <button id="tmdbSearchButton" class="admin-button primary" type="button"><svg><use href="#i-search"></use></svg> بحث</button>
+              </div>
+              <div class="tmdb-import-options" aria-label="بيانات الاستيراد">
+                <label class="check-field"><input id="tmdbImportBasic" type="checkbox" checked><span>العناوين والسنة والتقييم والمدة</span></label>
+                <label class="check-field"><input id="tmdbImportDescription" type="checkbox" checked><span>الوصف</span></label>
+                <label class="check-field"><input id="tmdbImportImages" type="checkbox" checked><span>البوستر والخلفية</span></label>
+                <label class="check-field"><input id="tmdbImportGenres" type="checkbox" checked><span>التصنيفات والتصنيف العمري</span></label>
+                <label class="check-field"><input id="tmdbImportEpisodes" type="checkbox" checked><span>المواسم والحلقات للمسلسلات</span></label>
+              </div>
+              <p id="tmdbImportMessage" class="form-message tmdb-message" role="status"></p>
+              <div id="tmdbSearchResults" class="tmdb-results"></div>
+              <p class="tmdb-attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
+            </div>
+          </div>
+          <input id="contentTmdbId" type="hidden">
           <div class="form-section"><div class="form-section-title"><span>المعلومات الأساسية</span><b>01</b></div><div class="form-grid two"><label><span>المعرّف الفريد</span><input id="contentId" required pattern="[a-z0-9-]+" placeholder="movie-example"><small>أحرف إنجليزية صغيرة وأرقام وشرطة فقط.</small></label><label><span>نوع المحتوى</span><select id="contentKind"><option value="movie">فيلم</option><option value="series">مسلسل</option></select></label><label><span>العنوان العربي</span><input id="contentTitle" required maxlength="180"></label><label><span>العنوان الإنجليزي</span><input id="contentEnglishTitle" maxlength="180"></label><label><span>السنة</span><input id="contentYear" type="number" min="1888" max="2200" required></label><label><span>التقييم</span><input id="contentRating" type="number" min="0" max="10" step="0.1" value="0"></label><label><span>التصنيف العمري</span><input id="contentAgeRating" value="عام" maxlength="20"></label><label><span>المدة بالدقائق</span><input id="contentDuration" type="number" min="0" value="0"></label><label><span>التصنيفات</span><input id="contentGenres" placeholder="أكشن، إثارة، جريمة" required></label><label><span>الأقسام المخصصة</span><input id="contentSections" placeholder="action, featured"><small>معرّفات من قسم الأقسام، مفصولة بفاصلة.</small></label></div><label><span>الوصف</span><textarea id="contentDescription" rows="4" maxlength="3000" required></textarea></label></div>
           <div class="form-section"><div class="form-section-title"><span>الصور</span><b>02</b></div><div class="form-grid two"><label><span>رابط البوستر</span><input id="contentPoster" type="url" placeholder="https://…" required></label><label><span>رابط الخلفية</span><input id="contentBackdrop" type="url" placeholder="https://…"><small>اختياري؛ عند تركه فارغاً يُستخدم البوستر.</small></label></div><div class="media-preview-grid"><figure><img id="posterPreview" src="../web/assets/images/poster-placeholder.webp" alt="معاينة البوستر"><figcaption>معاينة البوستر</figcaption></figure><figure class="wide"><img id="backdropPreview" src="../web/assets/images/poster-placeholder.webp" alt="معاينة الخلفية"><figcaption>معاينة الخلفية</figcaption></figure></div></div>
           <div id="movieMediaFields" class="form-section"><div class="form-section-title"><span>تشغيل الفيلم</span><b>03</b></div><label><span>رابط الفيلم المباشر</span><input id="movieSourceUrl" type="url" inputmode="url" placeholder="https://…/video.mp4"><small>رابط HTTPS مباشر بصيغة MP4 أو مصدر فيديو قابل للتشغيل.</small></label><div class="form-grid two"><label><span>رابط احتياطي</span><input id="movieBackupUrl" type="url" inputmode="url" placeholder="اختياري"></label><label><span>رابط الترجمة VTT</span><input id="movieSubtitleUrl" type="url" inputmode="url" placeholder="اختياري"></label></div><button class="admin-button ghost media-preview-button" type="button" data-action="preview-movie"><svg><use href="#i-eye"></use></svg> معاينة رابط الفيلم</button></div>
@@ -96,7 +120,36 @@
 
       <section id="view-sections" class="admin-view" data-title="إدارة الأقسام"><div class="section-toolbar"><div><span>تنظيم المكتبة</span><h2>الأقسام والتصنيفات</h2><p>أنشئ أقساماً حقيقية ثم اربط المحتوى والمشرفين بها.</p></div></div><div class="two-column-layout"><form id="sectionForm" class="panel compact-form"><div class="panel-heading"><div><span>إضافة أو تعديل</span><h2 id="sectionFormTitle">قسم جديد</h2></div></div><input id="sectionOriginalId" type="hidden"><label><span>المعرّف</span><input id="sectionId" required pattern="[a-z0-9-]+" placeholder="action"></label><label><span>اسم القسم</span><input id="sectionName" required placeholder="أكشن"></label><label><span>الوصف</span><textarea id="sectionDescription" rows="4"></textarea></label><div class="form-actions"><button id="resetSectionButton" class="admin-button ghost" type="button">تفريغ</button><button class="admin-button primary" type="submit"><svg><use href="#i-save"></use></svg> حفظ القسم</button></div><p id="sectionMessage" class="form-message"></p></form><div class="panel table-panel"><div class="panel-heading"><div><span>الأقسام المتاحة</span><h2>كل الأقسام</h2></div></div><div id="sectionsTable" class="data-table-wrap"></div></div></div></section>
 
-      <section id="view-settings" class="admin-view" data-title="إعدادات التطبيق"><div class="section-toolbar"><div><span>التحكم العام</span><h2>إعدادات CINARO</h2><p>هذه الإعدادات تؤثر على النسخة المنشورة للمستخدمين.</p></div></div><form id="settingsForm" class="panel compact-form settings-form"><label><span>معرّفات المحتوى المميز</span><textarea id="settingFeatured" rows="3" placeholder="movie-id, series-id"></textarea></label><label><span>رسالة عامة للمستخدمين</span><textarea id="settingAnnouncement" rows="3" placeholder="اختياري"></textarea></label><div class="form-grid two"><label><span>الحد الأدنى لإصدار التطبيق</span><input id="settingMinVersion" value="2.1.0"></label><label><span>رابط تنزيل التحديث</span><input id="settingUpdateUrl" type="url" value="https://github.com/3c5-o/CINARO/releases"></label><label class="check-field"><input id="settingMaintenance" type="checkbox"><span>وضع الصيانة</span></label><label class="check-field"><input id="settingForceUpdate" type="checkbox"><span>إجبار التحديث</span></label></div><div class="form-actions"><button class="admin-button primary" type="submit"><svg><use href="#i-save"></use></svg> حفظ الإعدادات</button></div><p id="settingsMessage" class="form-message"></p></form></section>
+      <section id="view-settings" class="admin-view" data-title="إعدادات التطبيق">
+        <div class="section-toolbar"><div><span>التحكم العام</span><h2>إعدادات CINARO</h2><p>هذه الإعدادات تؤثر على النسخة المنشورة للمستخدمين.</p></div></div>
+        <div class="settings-stack">
+          <form id="settingsForm" class="panel compact-form settings-form">
+            <div class="panel-heading"><div><span>إعدادات عامة</span><h2>التطبيق والتحديثات</h2></div></div>
+            <label><span>معرّفات المحتوى المميز</span><textarea id="settingFeatured" rows="3" placeholder="movie-id, series-id"></textarea></label>
+            <label><span>رسالة عامة للمستخدمين</span><textarea id="settingAnnouncement" rows="3" placeholder="اختياري"></textarea></label>
+            <div class="form-grid two">
+              <label><span>الحد الأدنى لإصدار التطبيق</span><input id="settingMinVersion" value="2.3.0"></label>
+              <label><span>رابط تنزيل التحديث</span><input id="settingUpdateUrl" type="url" value="https://github.com/3c5-o/CINARO/releases"></label>
+              <label class="check-field"><input id="settingMaintenance" type="checkbox"><span>وضع الصيانة</span></label>
+              <label class="check-field"><input id="settingForceUpdate" type="checkbox"><span>إجبار التحديث</span></label>
+            </div>
+            <div class="form-actions"><button class="admin-button primary" type="submit"><svg><use href="#i-save"></use></svg> حفظ الإعدادات</button></div>
+            <p id="settingsMessage" class="form-message"></p>
+          </form>
+          <form id="tmdbSettingsForm" class="panel compact-form settings-form">
+            <div class="panel-heading"><div><span>مصدر البيانات</span><h2>إعدادات TMDb</h2></div></div>
+            <label><span>API Read Access Token</span><input id="tmdbTokenInput" type="password" autocomplete="off" spellcheck="false" placeholder="الصق Bearer Token هنا"><small>يُحفظ محلياً داخل تطبيق الإدارة ويمكن تغييره أو حذفه بأي وقت.</small></label>
+            <div class="tmdb-token-actions">
+              <button id="tmdbToggleTokenButton" class="admin-button ghost" type="button"><svg><use href="#i-eye"></use></svg> إظهار/إخفاء</button>
+              <button id="tmdbTestButton" class="admin-button ghost" type="button"><svg><use href="#i-check"></use></svg> اختبار الاتصال</button>
+              <button id="tmdbDeleteTokenButton" class="admin-button danger" type="button"><svg><use href="#i-trash"></use></svg> حذف التوكن</button>
+              <button class="admin-button primary" type="submit"><svg><use href="#i-save"></use></svg> حفظ التوكن</button>
+            </div>
+            <p id="tmdbSettingsMessage" class="form-message" role="status"></p>
+            <p class="tmdb-attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
+          </form>
+        </div>
+      </section>
 
       <section id="view-activity" class="admin-view" data-title="سجل العمليات"><div class="section-toolbar"><div><span>التدقيق والأمان</span><h2>سجل العمليات</h2><p>كل عملية إدارية مهمة تُحفظ مع منفذها ووقتها.</p></div></div><div class="panel table-panel"><div id="activityTable" class="data-table-wrap"></div></div></section>
     </main>

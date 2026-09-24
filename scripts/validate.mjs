@@ -11,7 +11,7 @@ const ok = (condition, message) => { if (!condition) errors.push(message); };
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 const expectedVersion = packageJson.version;
-ok(expectedVersion === "2.2.1", "Package version must be CINARO 2.2.1");
+ok(expectedVersion === "2.3.0", "Package version must be CINARO 2.3.0");
 
 const requiredFiles = [
   "index.html",
@@ -136,6 +136,12 @@ ok(adminHtml.includes('id="view-requests"'), "Admin must include the content req
 ok(adminHtml.includes('id="requestStatusFilter"'), "Admin must include request status filtering");
 ok(adminHtml.includes('id="requestsTable"'), "Admin must include the request management table");
 ok(adminHtml.includes('hls.js@1.7.3/dist/hls.min.js'), "Admin must load the pinned HLS.js runtime");
+ok(adminHtml.includes('id="tmdbImportPanel"'), "Admin editor must expose TMDb import");
+ok(adminHtml.includes('id="tmdbSettingsForm"'), "Admin settings must expose TMDb token controls");
+ok(adminHtml.includes('data-import-mode="manual"'), "Admin editor must preserve manual content entry");
+ok(adminHtml.includes('data-import-mode="tmdb"'), "Admin editor must offer TMDb import mode");
+ok(adminHtml.includes('id="tmdbTokenInput"'), "Admin settings must include the TMDb token input");
+ok(adminHtml.includes("This product uses the TMDB API but is not endorsed or certified by TMDB."), "Admin must include TMDb attribution");
 
 const adminAppSource = fs.readFileSync(path.join(adminRoot, "app.js"), "utf8");
 ok(adminAppSource.includes("function destroyPreviewHls("), "Admin must tear down HLS previews");
@@ -155,12 +161,25 @@ ok(adminAppSource.includes("existingMovieSources.slice(2)"), "Admin must preserv
 ok(adminAppSource.includes("existingMovieSubtitles.slice(1)"), "Admin must preserve additional movie subtitles");
 ok(adminAppSource.includes("thumbnail: validMediaUrl(episode.thumbnail"), "Admin must preserve episode thumbnails");
 ok(adminAppSource.includes("client.listenContentForSections("), "Supervisors must use the scoped content listener");
+ok(adminAppSource.includes('TMDB_STORAGE_KEY = "cinaro:admin:tmdb-token:v1"'), "Admin must keep the TMDb token in admin-local storage");
+ok(adminAppSource.includes('TMDB_API_ROOT = "https://api.themoviedb.org/3"'), "Admin TMDb client must target API v3");
+ok(adminAppSource.includes('tmdbRequest("/configuration")'), "TMDb integration must load API configuration");
+ok(adminAppSource.includes('"/search/movie"'), "TMDb integration must support movie search");
+ok(adminAppSource.includes('"/search/tv"'), "TMDb integration must support TV search");
+ok(adminAppSource.includes("Authorization:"), "TMDb integration must send Bearer authorization");
+ok(adminAppSource.includes("function fetchTmdbSeriesSeasons("), "TMDb integration must import TV seasons and episodes");
+ok(adminAppSource.includes("contentTmdbId"), "Admin must retain TMDb content IDs");
+ok(adminAppSource.includes("const willPublish ="), "Admin must distinguish drafts from publish-time media requirements");
+ok(adminAppSource.includes("window.CINARO_HANDLE_BACK = handleNativeBack"), "Admin must handle Android back navigation in-app");
+ok(adminAppSource.includes("function bindCopyProtection("), "Admin must prevent casual content copying");
 
 const adminStyles = fs.readFileSync(path.join(adminRoot, "styles.css"), "utf8");
 ok(adminStyles.includes('inset-inline-start: 0'), "Admin sidebar must use logical RTL positioning");
 ok(!adminStyles.includes('inset: 0 auto 0 0'), "Admin mobile sidebar must not mix physical and logical positioning");
 ok(adminStyles.includes('visibility: hidden'), "Closed admin sidebar must be visually hidden on mobile");
 ok(adminStyles.includes('@media (max-width: 520px)'), "Admin dashboard must include a narrow-phone layout");
+ok(adminStyles.includes(".tmdb-results"), "Admin styles must include TMDb result cards");
+ok(adminStyles.includes("user-select: none"), "Admin must disable casual text selection outside form fields");
 
 const adminManifest = JSON.parse(fs.readFileSync(path.join(adminRoot, "manifest.webmanifest"), "utf8"));
 for (const icon of adminManifest.icons || []) {
@@ -172,13 +191,19 @@ const androidActivity = fs.readFileSync(path.join(root, "android-app", "app", "s
 ok(androidActivity.includes('settings.setLoadWithOverviewMode(false)'), "Android WebView must not shrink the app into a wide overview");
 ok(androidActivity.includes('WindowManager.LayoutParams.FLAG_SECURE'), "Android user edition must support secure-screen protection");
 ok(androidActivity.includes(`CINARO/${expectedVersion} AndroidApp`), "Android user agent must match the package version");
+ok(androidActivity.includes('addJavascriptInterface(new NativeBridge(), "CinaroNative")'), "Android must expose the CINARO native bridge");
+ok(androidActivity.includes("enterPictureInPictureMode"), "Android must support native picture-in-picture");
+ok(androidActivity.includes("CINARO_HANDLE_BACK"), "Android back must delegate to the web app first");
+ok(androidActivity.includes("SCREEN_ORIENTATION_PORTRAIT"), "Android must restore portrait outside fullscreen playback");
 const androidManifest = fs.readFileSync(path.join(root, "android-app", "app", "src", "main", "AndroidManifest.xml"), "utf8");
 ok(androidManifest.includes('android:allowBackup="false"'), "Android app data backups must be disabled");
+ok(androidManifest.includes('android:supportsPictureInPicture="true"'), "Android manifest must enable picture-in-picture");
+ok(androidManifest.includes('android:screenOrientation="portrait"'), "Android app must default to portrait orientation");
 const androidBuild = fs.readFileSync(path.join(root, "android-app", "app", "build.gradle"), "utf8");
 ok(androidBuild.includes('buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "true"'), "User Android flavor must block screen capture");
 ok(androidBuild.includes('buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "false"'), "Admin Android flavor must keep normal screen capture behavior");
 ok(androidBuild.includes(`versionName "${expectedVersion}"`), "Android versionName must match package.json");
-ok(androidBuild.includes('versionCode 6'), "Android versionCode must be 6 for CINARO 2.2.1");
+ok(androidBuild.includes('versionCode 7'), "Android versionCode must be 7 for CINARO 2.3.0");
 ok(fs.existsSync(path.join(root, "android-app", "app", "src", "admin", "res", "mipmap-xxxhdpi", "ic_launcher.png")), "Admin Android flavor must have a dedicated launcher icon");
 
 const firebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
@@ -230,6 +255,18 @@ ok(
   "Route replacement must immediately render the new route"
 );
 ok(appSource.includes("clearInterval(player.endedTimer)"), "Autoplay countdown must be cleared as an interval");
+ok(appSource.includes("function requestPortraitMode("), "Player must restore portrait after playback");
+ok(appSource.includes("window.CinaroNative?.requestPortrait?.()"), "Web player must request native portrait restore");
+ok(appSource.includes("window.CinaroNative.enterPictureInPicture()"), "Web player must use native Android PiP when available");
+ok(appSource.includes("window.CINARO_HANDLE_BACK = handleBackNavigation"), "User app must expose in-app Android back handling");
+ok(appSource.includes("function bindCopyProtection("), "User app must prevent casual content copying");
+ok(!appSource.includes('["pointermove", "pointerdown"]'), "Player must not reveal controls on every pointerdown");
+ok(appSource.includes('event.pointerType === "mouse"'), "Player must only auto-reveal controls on mouse movement");
+ok(appSource.includes('storage.get(STORAGE.authChoice, "") === "account"'), "Saved accounts must not be replaced with guest mode while auth restores");
+ok(html.includes("This product uses the TMDB API but is not endorsed or certified by TMDB."), "User app must include TMDb attribution");
+const webStyles = fs.readFileSync(path.join(webRoot, "styles.css"), "utf8");
+ok(webStyles.includes("user-select: none"), "User app must disable casual content selection");
+ok(webStyles.includes("-webkit-touch-callout: none"), "User app must disable long-press content callouts");
 
 const userFirebaseSource = fs.readFileSync(path.join(webRoot, "firebase.js"), "utf8");
 ok(userFirebaseSource.includes("submitContentRequest: async function"), "Firebase client must support request submission");
@@ -237,6 +274,7 @@ ok(userFirebaseSource.includes("listenMyRequests: function"), "Firebase client m
 ok(userFirebaseSource.includes(`app_version: "${expectedVersion}"`), "Firebase analytics version must match package.json");
 ok(userFirebaseSource.includes(`minimumVersion: textValue(data.minimumVersion, "${expectedVersion}"`), "Firebase minimum-version fallback must match package.json");
 ok(userFirebaseSource.includes('where("userId", "==", user.uid)'), "Request history must be scoped to the signed-in user");
+ok(userFirebaseSource.includes("browserLocalPersistence"), "Firebase Auth must persist signed-in accounts across app restarts");
 
 const adminFirebaseSource = fs.readFileSync(path.join(adminRoot, "firebase.js"), "utf8");
 ok(adminFirebaseSource.includes('projectId: "cinaro"'), "Admin Firebase project ID must be cinaro");

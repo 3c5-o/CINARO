@@ -2,7 +2,7 @@
   "use strict";
 
   let DATA = window.CINARO_DATA;
-  const APP_VERSION = "2.2.1";
+  const APP_VERSION = "2.3.0";
   const IMAGE_FALLBACK = "assets/images/poster-placeholder.webp";
 
   if (!DATA || !Array.isArray(DATA.items)) {
@@ -617,6 +617,10 @@
 
   async function continueAsGuest() {
     if (state.authBusy) return;
+    if (!state.authResolved && storage.get(STORAGE.authChoice, "") === "account") {
+      setAuthMessage("جاري استعادة حسابك المحفوظ. انتظر اتصال Firebase أو أعد فتح التطبيق.", "success");
+      return;
+    }
     setAuthBusy(true);
     setAuthMessage("جاري تجهيز وضع الضيف…");
     try {
@@ -717,7 +721,14 @@
     });
 
     byId("guestButton").addEventListener("click", continueAsGuest);
-    byId("closeAuthButton").addEventListener("click", continueAsGuest);
+    byId("closeAuthButton").addEventListener("click", () => {
+      if (storage.get(STORAGE.authChoice, "") === "account") {
+        hideAuth();
+        toast("الحساب محفوظ على هذا الجهاز وسيُستعاد عند توفر الاتصال");
+        return;
+      }
+      continueAsGuest();
+    });
     byId("accountButton").addEventListener("click", () => {
       if (state.authUser && !state.authUser.isAnonymous) showAuth("account");
       else {
@@ -1762,6 +1773,7 @@
     if (document.fullscreenElement && player.stage.contains(document.fullscreenElement)) {
       document.exitFullscreen().catch(() => {});
     }
+    requestPortraitMode();
 
     player.video.removeAttribute("src");
     player.video.load();
@@ -1783,6 +1795,7 @@
 
   function closePlayer() {
     persistPlayerProgress(true);
+    requestPortraitMode();
     const fallback = player.media ? `#details/${encodeURIComponent(player.media.item.id)}` : "#home";
     navigate((state.lastNonPlayerHash || fallback).slice(1));
   }
@@ -1857,6 +1870,11 @@
     player.seekFeedback._timer = window.setTimeout(() => player.seekFeedback.classList.remove("show"), 650);
   }
 
+  function requestPortraitMode() {
+    try { screen.orientation?.unlock?.(); } catch (_) {}
+    try { window.CinaroNative?.requestPortrait?.(); } catch (_) {}
+  }
+
   function showPlayerControls() {
     player.stage.classList.remove("controls-hidden");
     clearTimeout(player.controlsTimer);
@@ -1889,11 +1907,17 @@
 
   async function togglePictureInPicture() {
     try {
+      const nativeSupported = Boolean(window.CinaroNative?.isPictureInPictureSupported?.());
+      if (nativeSupported) {
+        window.CinaroNative.enterPictureInPicture();
+        showPlayerControls();
+        return;
+      }
       if (!document.pictureInPictureEnabled || player.video.disablePictureInPicture) throw new Error("unsupported");
       if (document.pictureInPictureElement) await document.exitPictureInPicture();
       else await player.video.requestPictureInPicture();
     } catch (_) {
-      toast("وضع الصورة داخل صورة غير متاح", "error");
+      toast("وضع الصورة داخل صورة غير متاح على هذا الجهاز", "error");
     }
   }
 
@@ -2182,12 +2206,12 @@
       const ratio = event.clientX / window.innerWidth;
       seekBy(ratio < .4 ? -10 : ratio > .6 ? 10 : 0);
     });
-    ["pointermove", "pointerdown"].forEach((eventName) => player.stage.addEventListener(eventName, showPlayerControls, { passive: true }));
+    player.stage.addEventListener("pointermove", (event) => {
+      if (event.pointerType === "mouse") showPlayerControls();
+    }, { passive: true });
 
     document.addEventListener("fullscreenchange", () => {
-      if (!document.fullscreenElement) {
-        try { screen.orientation?.unlock?.(); } catch (_) {}
-      }
+      if (!document.fullscreenElement) requestPortraitMode();
       showPlayerControls();
     });
   }
@@ -2229,9 +2253,47 @@
       window.setTimeout(() => $(".series-area")?.scrollIntoView({ behavior: settings.reduceMotion ? "auto" : "smooth", block: "start" }), 20);
     } else if (action === "share-item") shareItem(button.dataset.itemId);
     else if (action === "go-back") {
+      handleBackNavigation();
+    }
+  }
+
+  function handleBackNavigation() {
+    if (state.activeSheet) {
+      closeSheets();
+      return true;
+    }
+    if (!elements.authView.hidden) {
+      if (state.authUser || state.localGuest || storage.get(STORAGE.authChoice, "") === "account") {
+        hideAuth();
+        return true;
+      }
+      return false;
+    }
+    if (state.route?.name === "watch") {
+      closePlayer();
+      return true;
+    }
+    if (state.route?.name && state.route.name !== "home") {
       if (window.history.length > 1) window.history.back();
       else navigate("home");
+      return true;
     }
+    return false;
+  }
+
+  window.CINARO_HANDLE_BACK = handleBackNavigation;
+
+  function bindCopyProtection() {
+    const isEditable = (target) => Boolean(target?.closest?.("input, textarea, select, [contenteditable='true'], .allow-select"));
+    ["copy", "cut", "contextmenu"].forEach((eventName) => {
+      document.addEventListener(eventName, (event) => {
+        if (isEditable(event.target)) return;
+        event.preventDefault();
+      });
+    });
+    document.addEventListener("dragstart", (event) => {
+      if (event.target instanceof HTMLImageElement) event.preventDefault();
+    });
   }
 
   function bindGlobalEvents() {
@@ -2419,11 +2481,16 @@
   function initialize() {
     applySettings();
     bindAuthEvents();
+    bindCopyProtection();
     bindGlobalEvents();
     bindPlayerEvents();
     setupMediaSessionActions();
     updateNetworkStatus();
     registerServiceWorker();
+    window.addEventListener("cinaro:pip-exit", () => {
+      requestPortraitMode();
+      showPlayerControls();
+    });
     if (!location.hash) navigate("home", true);
     else renderRoute();
     updateAccountUI();
@@ -2434,7 +2501,7 @@
       state.authResolved = true;
       setFirebaseStatus("error", "Firebase غير متاح — التطبيق يعمل بالبيانات المحلية");
       updateAccountUI();
-      if (!state.localGuest && !state.authUser) showAuth("login");
+      if (!state.localGuest && !state.authUser && storage.get(STORAGE.authChoice, "") !== "account") showAuth("login");
     });
 
     if (window.CINARO_FIREBASE) connectFirebase(window.CINARO_FIREBASE);
@@ -2443,7 +2510,7 @@
       state.authResolved = true;
       setFirebaseStatus("error", "تعذّر الاتصال بـFirebase — يمكنك المتابعة كضيف");
       updateAccountUI();
-      if (!state.localGuest) showAuth("login");
+      if (!state.localGuest && storage.get(STORAGE.authChoice, "") !== "account") showAuth("login");
     }, 7000);
     finishSplash();
   }

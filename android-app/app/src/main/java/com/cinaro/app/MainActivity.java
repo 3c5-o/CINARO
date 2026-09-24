@@ -2,14 +2,17 @@ package com.cinaro.app;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.PictureInPictureParams;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Rational;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -18,6 +21,7 @@ import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.webkit.ConsoleMessage;
 import android.webkit.DownloadListener;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -35,7 +39,6 @@ public class MainActivity extends Activity {
     private FrameLayout rootView;
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenCallback;
-    private int originalOrientation;
     private boolean usingOfflineFallback;
 
     @Override
@@ -99,7 +102,7 @@ public class MainActivity extends Activity {
         settings.setAllowUniversalAccessFromFileURLs(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setUserAgentString(settings.getUserAgentString() + " CINARO/2.2.1 AndroidApp");
+        settings.setUserAgentString(settings.getUserAgentString() + " CINARO/2.3.0 AndroidApp");
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.setSafeBrowsingEnabled(true);
@@ -113,6 +116,7 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new CinaroWebViewClient());
         webView.setWebChromeClient(new CinaroChromeClient());
         webView.setDownloadListener(new CinaroDownloadListener());
+        webView.addJavascriptInterface(new NativeBridge(), "CinaroNative");
     }
 
     private class CinaroWebViewClient extends WebViewClient {
@@ -169,7 +173,6 @@ public class MainActivity extends Activity {
                 return;
             }
 
-            originalOrientation = getRequestedOrientation();
             fullscreenView = view;
             fullscreenCallback = callback;
             webView.setVisibility(View.GONE);
@@ -190,6 +193,41 @@ public class MainActivity extends Activity {
         public boolean onConsoleMessage(ConsoleMessage message) {
             return super.onConsoleMessage(message);
         }
+    }
+
+    private class NativeBridge {
+        @JavascriptInterface
+        public boolean isPictureInPictureSupported() {
+            return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O;
+        }
+
+        @JavascriptInterface
+        public void enterPictureInPicture() {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+            runOnUiThread(() -> {
+                if (fullscreenView != null) {
+                    exitFullscreenVideo();
+                }
+                try {
+                    PictureInPictureParams params = new PictureInPictureParams.Builder()
+                            .setAspectRatio(new Rational(16, 9))
+                            .build();
+                    MainActivity.this.enterPictureInPictureMode(params);
+                } catch (IllegalStateException error) {
+                    Toast.makeText(MainActivity.this, "تعذّر تشغيل وضع الصورة داخل صورة", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void requestPortrait() {
+            runOnUiThread(MainActivity.this::restorePortraitOrientation);
+        }
+    }
+
+    private void restorePortraitOrientation() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && isInPictureInPictureMode()) return;
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
     }
 
     private class CinaroDownloadListener implements DownloadListener {
@@ -230,7 +268,7 @@ public class MainActivity extends Activity {
         rootView.removeView(fullscreenView);
         fullscreenView = null;
         webView.setVisibility(View.VISIBLE);
-        setRequestedOrientation(originalOrientation);
+        restorePortraitOrientation();
         configureWindow();
         if (fullscreenCallback != null) {
             fullscreenCallback.onCustomViewHidden();
@@ -242,7 +280,23 @@ public class MainActivity extends Activity {
     public void onBackPressed() {
         if (fullscreenView != null) {
             exitFullscreenVideo();
-        } else if (webView.canGoBack()) {
+            return;
+        }
+        if (webView == null) {
+            super.onBackPressed();
+            return;
+        }
+        webView.evaluateJavascript(
+                "(window.CINARO_HANDLE_BACK ? window.CINARO_HANDLE_BACK() : false)",
+                result -> {
+                    if ("true".equals(result)) return;
+                    fallbackBackNavigation();
+                }
+        );
+    }
+
+    private void fallbackBackNavigation() {
+        if (webView != null && webView.canGoBack()) {
             webView.goBack();
         } else {
             super.onBackPressed();
@@ -258,7 +312,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         webView.onPause();
-        webView.evaluateJavascript("document.getElementById('videoPlayer')?.pause()", null);
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !isInPictureInPictureMode()) {
+            webView.evaluateJavascript("document.getElementById('videoPlayer')?.pause()", null);
+        }
         super.onPause();
     }
 
@@ -266,6 +322,18 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         webView.onResume();
+        if (fullscreenView == null && (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !isInPictureInPictureMode())) {
+            restorePortraitOrientation();
+        }
+    }
+
+    @Override
+    public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, Configuration newConfig) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+        if (!isInPictureInPictureMode && fullscreenView == null) {
+            restorePortraitOrientation();
+            webView.evaluateJavascript("window.dispatchEvent(new Event('cinaro:pip-exit'))", null);
+        }
     }
 
     @Override

@@ -431,6 +431,23 @@ body.service-locked {
   transform: scale(.92);
 }
 
+body, button, a, img, .view, .player-view {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+input, textarea, select, [contenteditable="true"], .allow-select {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+img {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
 main {
   min-height: 100vh;
   min-height: 100dvh;
@@ -2131,6 +2148,16 @@ main {
   gap: .7rem;
   padding: 1rem .3rem .1rem;
 }
+.tmdb-credit {
+  max-width: 28rem;
+  margin: .65rem auto 0;
+  color: var(--muted);
+  font-size: .58rem;
+  line-height: 1.55;
+  direction: ltr;
+  text-align: center;
+}
+
 
 .about-app img {
   border-radius: 13px;
