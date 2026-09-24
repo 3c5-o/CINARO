@@ -1451,6 +1451,24 @@
     });
   }
 
+  function handleNativeBack() {
+    if (!$("mediaPreviewDialog")?.hidden) {
+      closeMediaPreview();
+      return true;
+    }
+    if (document.body.classList.contains("nav-open")) {
+      setMobileNavigation(false);
+      return true;
+    }
+    if (!$("adminApp")?.hidden && state.view !== "dashboard") {
+      setView(state.view === "editor" ? "content" : "dashboard");
+      return true;
+    }
+    return false;
+  }
+
+  window.CINARO_HANDLE_BACK = handleNativeBack;
+
   function bindEvents() {
     $("adminLoginForm")?.addEventListener("submit", async (event) => {
       event.preventDefault();
