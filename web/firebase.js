@@ -190,7 +190,7 @@ async function bootFirebase() {
     analyticsSdk.isSupported().then(function (supported) {
       if (!supported) return;
       analytics = analyticsSdk.getAnalytics(app);
-      analyticsSdk.logEvent(analytics, "app_open", { app_version: "2.4.0" });
+      analyticsSdk.logEvent(analytics, "app_open", { app_version: "2.4.1" });
     }).catch(function () {});
   }
 
@@ -439,8 +439,8 @@ async function bootFirebase() {
           featured = Array.isArray(data.featured) ? data.featured.map(String).slice(0, 12) : [];
           config = {
             announcement: textValue(data.announcement, "", 500),
-            latestVersion: textValue(data.latestVersion, "2.4.0", 20),
-            minimumVersion: textValue(data.minimumVersion, "2.4.0", 20),
+            latestVersion: textValue(data.latestVersion, "2.4.1", 20),
+            minimumVersion: textValue(data.minimumVersion, "2.4.1", 20),
             updateNotes: textValue(data.updateNotes, "", 1000),
             maintenance: data.maintenance === true,
             forceUpdate: data.forceUpdate === true,
