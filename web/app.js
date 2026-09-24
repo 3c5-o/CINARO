@@ -2,7 +2,7 @@
   "use strict";
 
   let DATA = window.CINARO_DATA;
-  const APP_VERSION = "2.3.2";
+  const APP_VERSION = "2.4.0";
   const IMAGE_FALLBACK = "assets/images/poster-placeholder.webp";
 
   if (!DATA || !Array.isArray(DATA.items)) {
@@ -2547,7 +2547,7 @@
     if (!("serviceWorker" in navigator) || !/^https?:$/.test(location.protocol)) return;
     window.addEventListener("load", async () => {
       try {
-        const registration = await navigator.serviceWorker.register("./sw.js?v=2.3.2", { scope: "./", updateViaCache: "none" });
+        const registration = await navigator.serviceWorker.register("./sw.js?v=2.4.0", { scope: "./", updateViaCache: "none" });
         registration.addEventListener("updatefound", () => {
           const worker = registration.installing;
           worker?.addEventListener("statechange", () => {
