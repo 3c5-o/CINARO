@@ -195,6 +195,8 @@ ok(firestoreRules.includes("supervisorCanPublish"), "Firestore rules must enforc
 ok(firestoreRules.includes("supervisorCanCreateContent"), "Firestore rules must constrain supervisor content creation");
 ok(firestoreRules.includes("supervisorCanUpdateContent"), "Firestore rules must constrain supervisor content updates");
 ok(firestoreRules.includes("data.views == 0"), "Supervisor-created content must start with zero views");
+ok(firestoreRules.includes("data.get('published', false) == false"), "Supervisor content creation must honor publish permission");
+ok(firestoreRules.includes("allow write: if admin() || (owner(userId) && activeUser())"), "Blocked users must not write private synced state");
 ok(firestoreRules.includes("request.resource.data.get('views', 0) == resource.data.get('views', 0)"), "Supervisors must not change view counters");
 ok(firestoreRules.includes("match /contentRequests/{requestId}"), "Firestore rules must protect content requests");
 ok(firestoreRules.includes("request.resource.data.status == 'new'"), "Users must only create requests in the new state");
