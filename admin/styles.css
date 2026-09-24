@@ -280,6 +280,8 @@ img { -webkit-user-drag: none; user-drag: none; }
 .request-title-cell small, .request-user-cell small { margin-top: .28rem; color: var(--dim); font-size: .67rem; line-height: 1.5; overflow-wrap: anywhere; }
 .request-status-control, .request-note-control { width: 100%; min-width: 0; }
 .request-note-control { min-height: 2.35rem; }
+.requests-data-table .row-actions { display: flex; flex-wrap: wrap; gap: .3rem; }
+.requests-data-table .table-action { flex: 0 0 auto; }
 
 .report-content small, .report-content b { display: block; }
 .report-content small { margin-top: .25rem; color: var(--dim); }
