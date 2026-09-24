@@ -190,7 +190,7 @@ async function bootFirebase() {
     analyticsSdk.isSupported().then(function (supported) {
       if (!supported) return;
       analytics = analyticsSdk.getAnalytics(app);
-      analyticsSdk.logEvent(analytics, "app_open", { app_version: "2.3.1" });
+      analyticsSdk.logEvent(analytics, "app_open", { app_version: "2.3.2" });
     }).catch(function () {});
   }
 
@@ -416,7 +416,7 @@ async function bootFirebase() {
           featured = Array.isArray(data.featured) ? data.featured.map(String).slice(0, 12) : [];
           config = {
             announcement: textValue(data.announcement, "", 500),
-            minimumVersion: textValue(data.minimumVersion, "2.3.1", 20),
+            minimumVersion: textValue(data.minimumVersion, "2.3.2", 20),
             maintenance: data.maintenance === true,
             forceUpdate: data.forceUpdate === true,
             updateUrl: mediaUrl(data.updateUrl, "https://github.com/3c5-o/CINARO/releases")
