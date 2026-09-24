@@ -69,7 +69,14 @@
       </section>
 
       <section id="view-content" class="admin-view" data-title="إدارة المحتوى">
-        <div class="section-toolbar"><div><span>المكتبة</span><h2>الأفلام والمسلسلات</h2><p>كل ما يظهر هنا مصدره Firestore، ولا توجد بيانات تجريبية داخل نسخة المستخدم.</p></div><button id="newContentButton" class="admin-button primary" type="button"><svg><use href="#i-plus"></use></svg> إضافة محتوى</button></div>
+        <div class="section-toolbar">
+          <div><span>المكتبة</span><h2>الأفلام والمسلسلات</h2><p>أضف المحتوى يدوياً أو استورد معلوماته من TMDb ثم أضف روابط التشغيل الخاصة بك.</p></div>
+          <div class="content-create-actions">
+            <button id="newContentButton" class="admin-button primary" type="button"><svg><use href="#i-plus"></use></svg> إضافة يدوية</button>
+            <button class="admin-button ghost tmdb-quick-button" type="button" data-action="new-tmdb" data-kind="movie" data-admin-only><svg><use href="#i-film"></use></svg> فيلم من TMDb</button>
+            <button class="admin-button ghost tmdb-quick-button" type="button" data-action="new-tmdb" data-kind="series" data-admin-only><svg><use href="#i-film"></use></svg> مسلسل من TMDb</button>
+          </div>
+        </div>
         <div class="filter-bar"><label class="admin-search"><svg><use href="#i-search"></use></svg><input id="contentSearch" type="search" placeholder="ابحث بالاسم أو المعرّف…"></label><select id="contentKindFilter" aria-label="تصفية النوع"><option value="all">كل الأنواع</option><option value="movie">أفلام</option><option value="series">مسلسلات</option></select><select id="contentStatusFilter" aria-label="تصفية الحالة"><option value="all">كل الحالات</option><option value="published">منشور</option><option value="draft">مسودة</option></select></div>
         <div class="panel table-panel"><div id="contentTable" class="data-table-wrap"></div></div>
       </section>
