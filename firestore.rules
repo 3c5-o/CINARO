@@ -65,6 +65,30 @@ service cloud.firestore {
         && data.sectionIds.hasOnly(currentAssignment().data.sectionIds);
     }
 
+    function supervisorCanCreateContent(contentId, data) {
+      return supervisorCanCreate()
+        && assignedContent(data)
+        && data.id is string
+        && data.id == contentId
+        && data.updatedBy == request.auth.uid
+        && data.views is int
+        && data.views == 0;
+    }
+
+    function supervisorCanUpdateContent(contentId) {
+      return supervisorCanEdit()
+        && assignedContent(resource.data)
+        && assignedContent(request.resource.data)
+        && request.resource.data.id is string
+        && request.resource.data.id == contentId
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.get('views', 0) == resource.data.get('views', 0)
+        && (
+          request.resource.data.published == resource.data.published ||
+          supervisorCanPublish()
+        );
+    }
+
     function uniqueViewIncrement(contentId) {
       return activeUser()
         && resource.data.published == true
@@ -78,20 +102,11 @@ service cloud.firestore {
     match /content/{contentId} {
       allow get, list: if resource.data.published == true || admin() || supervisor();
 
-      allow create: if admin() || (
-        supervisorCanCreate()
-        && assignedContent(request.resource.data)
-      );
+      allow create: if admin() || supervisorCanCreateContent(contentId, request.resource.data);
 
-      allow update: if admin() || (
-        supervisorCanEdit()
-        && assignedContent(resource.data)
-        && assignedContent(request.resource.data)
-        && (
-          request.resource.data.published == resource.data.published ||
-          supervisorCanPublish()
-        )
-      ) || uniqueViewIncrement(contentId);
+      allow update: if admin()
+        || supervisorCanUpdateContent(contentId)
+        || uniqueViewIncrement(contentId);
 
       allow delete: if admin() || (
         supervisorCanDelete() && assignedContent(resource.data)
