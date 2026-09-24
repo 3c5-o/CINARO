@@ -1081,6 +1081,11 @@
       return;
     }
     countNode.textContent = `${results.length} نتيجة`;
+    if (!results.length) {
+      const requestKind = state.searchType === "series" ? "series" : "movie";
+      resultsNode.innerHTML = `<div class="request-empty-card search-request-card">${icon("search")}<h2>ما لقينا هذا المحتوى</h2><p>تقدر ترسل الاسم مباشرة إلى الإدارة حتى تضيفه للمكتبة.</p><button class="button primary" type="button" data-action="request-search" data-kind="${requestKind}" data-title="${escapeAttribute(state.searchQuery)}">${icon("film")} طلب هذا المحتوى</button></div>`;
+      return;
+    }
     resultsNode.innerHTML = mediaGrid(results, "جرّب كتابة اسم مختلف أو اختر نوعًا آخر.");
   }
 
@@ -1165,9 +1170,10 @@
         ${rows.length ? rows.map((request) => {
           const status = requestStatusInfo(request.status);
           const note = String(request.adminNote || "").trim();
+          const linkedContent = request.contentId && itemMap.get(request.contentId);
           return `<article class="request-card">
             <div class="request-card-main"><span class="request-kind">${request.kind === "series" ? "مسلسل" : "فيلم"}</span><h3>${escapeHTML(request.title || "طلب محتوى")}</h3><p>${escapeHTML(request.notes || "بدون ملاحظات")}</p>${note ? `<small class="request-admin-note">ملاحظة الإدارة: ${escapeHTML(note)}</small>` : ""}</div>
-            <div class="request-card-meta"><span class="request-status ${status.className}">${status.label}</span><small>${escapeHTML(formatRequestDate(request.createdAt))}</small></div>
+            <div class="request-card-meta"><span class="request-status ${status.className}">${status.label}</span><small>${escapeHTML(formatRequestDate(request.createdAt))}</small><div class="request-card-actions">${linkedContent ? `<button class="button primary compact-button" type="button" data-route="details/${escapeAttribute(linkedContent.id)}">فتح المحتوى</button>` : ""}${request.status === "new" ? `<button class="button secondary compact-button" type="button" data-action="cancel-request" data-request-id="${escapeAttribute(request.id)}">إلغاء الطلب</button>` : ""}</div></div>
           </article>`;
         }).join("") : `<div class="request-empty-card compact">${icon("film")}<h2>ما عندك طلبات بعد</h2><p>أرسل أول طلب وسيظهر هنا مع حالته.</p></div>`}
       </div>`;
@@ -1470,7 +1476,7 @@
     });
   }
 
-  function openRequestSheet() {
+  function openRequestSheet(options = {}) {
     if (!state.firebase || !state.authUser || state.authUser.isAnonymous) {
       closeSheets();
       showAuth("login");
@@ -1478,6 +1484,8 @@
       return;
     }
     byId("requestForm")?.reset();
+    if (options.kind && byId("requestKind")) byId("requestKind").value = options.kind === "series" ? "series" : "movie";
+    if (options.title && byId("requestName")) byId("requestName").value = String(options.title).slice(0, 180);
     if (byId("requestMessage")) {
       byId("requestMessage").textContent = "";
       byId("requestMessage").className = "auth-message";
@@ -2258,6 +2266,18 @@
       renderLibrary();
     } else if (action === "open-request-sheet") {
       openRequestSheet();
+    } else if (action === "request-search") {
+      openRequestSheet({ kind: button.dataset.kind, title: button.dataset.title });
+    } else if (action === "cancel-request") {
+      const requestId = button.dataset.requestId;
+      const request = state.requests.find((item) => item.id === requestId);
+      if (!request || request.status !== "new") return;
+      askConfirmation(`إلغاء طلب «${request.title}»؟`).then((accepted) => {
+        if (!accepted) return;
+        state.firebase?.cancelContentRequest?.(requestId)
+          .then(() => toast("تم إلغاء الطلب"))
+          .catch((error) => toast(authErrorMessage(error), "error"));
+      });
     } else if (action === "request-login") {
       showAuth("login");
       setAuthMessage("سجّل دخولك حتى ترسل طلب محتوى وتتابع حالته.");
