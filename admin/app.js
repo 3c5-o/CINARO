@@ -1674,6 +1674,16 @@
     });
   }
 
+  window.addEventListener("error", (event) => {
+    if (!event?.error) return;
+    console.error("CINARO admin runtime error", event.error);
+    showNotice("حدث خطأ في واجهة الإدارة. إذا توقف زر أو قسم عن الاستجابة، حدّث الصفحة ثم أعد المحاولة.", "error");
+  });
+  window.addEventListener("unhandledrejection", (event) => {
+    console.error("CINARO admin unhandled promise", event.reason);
+    showNotice("تعذّرت عملية داخل الإدارة. تحقق من الاتصال وأعد المحاولة.", "error");
+  });
+
   window.addEventListener("cinaro:admin-firebase-ready", (event) => connectFirebase(event.detail && event.detail.client));
   window.addEventListener("cinaro:admin-firebase-error", (event) => {
     setConnection("error", "Firebase غير متاح");
