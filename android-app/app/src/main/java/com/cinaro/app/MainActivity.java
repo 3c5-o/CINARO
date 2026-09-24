@@ -290,13 +290,17 @@ public class MainActivity extends Activity {
                 "(window.CINARO_HANDLE_BACK ? window.CINARO_HANDLE_BACK() : false)",
                 result -> {
                     if ("true".equals(result)) return;
-                    if (webView.canGoBack()) {
-                        webView.goBack();
-                    } else {
-                        MainActivity.super.onBackPressed();
-                    }
+                    fallbackBackNavigation();
                 }
         );
+    }
+
+    private void fallbackBackNavigation() {
+        if (webView != null && webView.canGoBack()) {
+            webView.goBack();
+        } else {
+            super.onBackPressed();
+        }
     }
 
     @Override
