@@ -1,9 +1,9 @@
-const CACHE = "cinaro-admin-v2.4.1";
+const CACHE = "cinaro-admin-v2.5.0";
 const SHELL = [
   "./",
   "./index.html",
   "./styles.css",
-  "./firebase.js",
+  "./supabase.js",
   "./app.js",
   "./manifest.webmanifest",
   "./assets/admin-hero.svg",
