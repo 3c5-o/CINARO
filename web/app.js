@@ -2,7 +2,9 @@
   "use strict";
 
   let DATA = window.CINARO_DATA;
-  const APP_VERSION = "2.5.0";
+  const WEB_APP_VERSION = "2.5.0";
+  const NATIVE_APP_VERSION = navigator.userAgent.match(/CINARO\/(\d+\.\d+\.\d+)/i)?.[1] || "";
+  const APP_VERSION = NATIVE_APP_VERSION || WEB_APP_VERSION;
   const IMAGE_FALLBACK = "assets/images/poster-placeholder.webp";
 
   if (!DATA || !Array.isArray(DATA.items)) {
