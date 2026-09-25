@@ -76,11 +76,11 @@
     const messages = {
       "auth/invalid-credential": "البريد أو كلمة المرور غير صحيحة.",
       "auth/invalid-login-credentials": "البريد أو كلمة المرور غير صحيحة.",
-      "auth/user-disabled": "هذا الحساب معطّل من Firebase.",
+      "auth/user-disabled": "هذا الحساب معطّل من Supabase.",
       "auth/too-many-requests": "محاولات كثيرة. انتظر قليلاً ثم أعد المحاولة.",
       "auth/network-request-failed": "تعذّر الاتصال بالشبكة.",
       "permission-denied": "ليس لديك صلاحية لهذه العملية.",
-      "failed-precondition": "تأكد من إعداد Firestore قبل المتابعة."
+      "failed-precondition": "تأكد من إعداد Supabase قبل المتابعة."
     };
     return messages[code] || asString(error && error.message, "حدث خطأ غير متوقع.");
   }
@@ -922,15 +922,31 @@
     });
   }
 
+  function toLocalDateTimeInput(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const pad = (number) => String(number).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  function localDateTimeToIso(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+  }
+
   function fillSettings() {
     $("settingFeatured").value = toArray(state.config.featured).join(", ");
     $("settingAnnouncement").value = asString(state.config.announcement);
-    $("settingLatestVersion").value = asString(state.config.latestVersion, "2.4.1");
-    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.4.1");
+    $("settingLatestVersion").value = asString(state.config.latestVersion, "2.5.0");
+    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.5.0");
     $("settingUpdateUrl").value = asString(state.config.updateUrl, "https://github.com/3c5-o/CINARO/releases");
     $("settingUpdateNotes").value = asString(state.config.updateNotes);
+    if ($("settingUpdateReleasedAt")) $("settingUpdateReleasedAt").value = toLocalDateTimeInput(state.config.updateReleasedAt);
+    if ($("settingOldVersionShutdownAt")) $("settingOldVersionShutdownAt").value = toLocalDateTimeInput(state.config.oldVersionShutdownAt);
     $("settingMaintenance").checked = state.config.maintenance === true;
-    $("settingForceUpdate").checked = state.config.forceUpdate === true;
+    $("settingForceUpdate").checked = state.config.forceUpdate !== false;
     fillTmdbSettings();
   }
 
@@ -1378,7 +1394,7 @@
       const email = asString($("supervisorEmail").value).toLowerCase();
       const name = asString($("supervisorName").value);
       const sectionIds = parseCsv($("supervisorSections").value);
-      if (!/^[A-Za-z0-9_-]{8,150}$/.test(uid)) throw new Error("UID حساب Firebase غير صحيح.");
+      if (!/^[A-Za-z0-9_-]{8,150}$/.test(uid)) throw new Error("UID حساب Supabase غير صحيح.");
       if (!email || !name || !sectionIds.length) throw new Error("UID والبريد والاسم وقسم واحد على الأقل حقول مطلوبة.");
       const payload = {
         uid, email, displayName: name.slice(0, 100), sectionIds, active: true,
@@ -1471,15 +1487,25 @@
     const form = $("settingsForm");
     setBusy(form, true);
     try {
+      const latestVersion = asString($("settingLatestVersion").value, "2.5.0").slice(0, 20);
+      const versionChanged = latestVersion !== asString(state.config.latestVersion, "2.5.0");
+      const releaseAt = versionChanged
+        ? new Date().toISOString()
+        : localDateTimeToIso($("settingUpdateReleasedAt")?.value) || state.config.updateReleasedAt || new Date().toISOString();
+      const shutdownAt = versionChanged
+        ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        : localDateTimeToIso($("settingOldVersionShutdownAt")?.value) || state.config.oldVersionShutdownAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
       const payload = {
         featured: parseCsv($("settingFeatured").value),
         announcement: asString($("settingAnnouncement").value).slice(0, 500),
-        latestVersion: asString($("settingLatestVersion").value, "2.4.1").slice(0, 20),
-        minimumVersion: asString($("settingMinVersion").value, "2.4.1").slice(0, 20),
+        latestVersion,
+        minimumVersion: asString($("settingMinVersion").value, "2.5.0").slice(0, 20),
         updateNotes: asString($("settingUpdateNotes").value).slice(0, 1000),
         updateUrl: validMediaUrl($("settingUpdateUrl").value) || "https://github.com/3c5-o/CINARO/releases",
         maintenance: $("settingMaintenance").checked,
-        forceUpdate: $("settingForceUpdate").checked,
+        forceUpdate: true,
+        updateReleasedAt: releaseAt,
+        oldVersionShutdownAt: shutdownAt,
         updatedBy: state.authUser.uid
       };
       await state.firebase.saveDocument("appConfig", "public", payload);
@@ -1506,7 +1532,7 @@
     if (!isAdmin()) return;
     const payload = {
       schema: "cinaro-backup-v1",
-      appVersion: "2.4.1",
+      appVersion: "2.5.0",
       exportedAt: new Date().toISOString(),
       content: state.content.map((item) => ({ ...item })),
       sections: state.sections.map((item) => ({ ...item })),
@@ -1769,12 +1795,12 @@
       const stop = client.listenCollection(name, (rows) => {
         state[setter] = setter === "content" && !isAdmin() ? rows.filter(canManageContent) : rows;
         if (setter === "content" && isAdmin()) migrateManagementSections(rows);
-        setConnection("connected", "متصل بـ Firestore المباشر");
+        setConnection("connected", "متصل بـ Supabase المباشر");
         refresh();
       }, (error) => {
         console.warn("CINARO admin listener failed", label, error);
-        setConnection("error", "توجد مشكلة في صلاحيات Firestore");
-        showNotice(`تعذّر تحميل ${label}. راجع قواعد Firestore وصلاحيات الحساب.`, "error");
+        setConnection("error", "توجد مشكلة في صلاحيات Supabase");
+        showNotice(`تعذّر تحميل ${label}. راجع قواعد Supabase وصلاحيات الحساب.`, "error");
       });
       state.unsubscribers.push(stop);
     };
@@ -1792,7 +1818,7 @@
         (error) => {
           console.warn("CINARO supervisor content listener failed", error);
           setConnection("error", "تعذّر تحميل محتوى الأقسام المسموحة");
-          showNotice("تعذّر تحميل محتوى الأقسام المسموحة. تحقق من تعيين المشرف وقواعد Firestore.", "error");
+          showNotice("تعذّر تحميل محتوى الأقسام المسموحة. تحقق من تعيين المشرف وقواعد Supabase.", "error");
         }
       );
       state.unsubscribers.push(stopScopedContent);
@@ -1819,7 +1845,7 @@
     state.dataListenersStarted = true;
   }
 
-  function connectFirebase(client) {
+  function connectSupabase(client) {
     if (!client || state.firebase === client) return;
     state.firebase = client;
     setConnection("pending", "جاري الاتصال…");
@@ -1879,7 +1905,7 @@
       event.preventDefault();
       const form = event.currentTarget;
       setBusy(form, true);
-      setMessage("loginMessage", "جاري التحقق من Firebase…", "pending");
+      setMessage("loginMessage", "جاري التحقق من Supabase…", "pending");
       try {
         await state.firebase.login($("adminEmail").value, $("adminPassword").value);
         $("adminPassword").value = "";
@@ -2012,18 +2038,18 @@
     showNotice("تعذّرت عملية داخل الإدارة. تحقق من الاتصال وأعد المحاولة.", "error");
   });
 
-  window.addEventListener("cinaro:admin-firebase-ready", (event) => connectFirebase(event.detail && event.detail.client));
-  window.addEventListener("cinaro:admin-firebase-error", (event) => {
-    setConnection("error", "Firebase غير متاح");
-    setMessage("loginMessage", "تعذّر تحميل Firebase. تحقق من الاتصال وإعداد المشروع.", "error");
+  window.addEventListener("cinaro:admin-supabase-ready", (event) => connectSupabase(event.detail && event.detail.client));
+  window.addEventListener("cinaro:admin-supabase-error", (event) => {
+    setConnection("error", "Supabase غير متاح");
+    setMessage("loginMessage", "تعذّر تحميل Supabase. تحقق من الاتصال وإعداد المشروع.", "error");
     console.error(event.detail || {});
   });
   bindCopyProtection();
   bindEvents();
   fillSettings();
   renderDashboard();
-  if (window.CINARO_ADMIN_FIREBASE) connectFirebase(window.CINARO_ADMIN_FIREBASE);
+  if (window.CINARO_ADMIN_SUPABASE) connectSupabase(window.CINARO_ADMIN_SUPABASE);
   if (!window.CinaroNative && "serviceWorker" in navigator && location.protocol === "https:") {
-    navigator.serviceWorker.register("sw.js?v=2.4.1", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
+    navigator.serviceWorker.register("sw.js?v=2.5.0", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
   }
 })();
