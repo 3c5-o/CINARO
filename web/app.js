@@ -2,7 +2,7 @@
   "use strict";
 
   let DATA = window.CINARO_DATA;
-  const APP_VERSION = "2.4.1";
+  const APP_VERSION = "2.5.0";
   const IMAGE_FALLBACK = "assets/images/poster-placeholder.webp";
 
   if (!DATA || !Array.isArray(DATA.items)) {
@@ -291,7 +291,7 @@
     scheduleCloudSync(1000);
   }
 
-  function setFirebaseStatus(status, message) {
+  function setSupabaseStatus(status, message) {
     state.firebaseStatus = status;
     const className = status === "connected" ? "sync-dot" : status === "error" ? "sync-dot error" : "sync-dot pending";
     if (elements.firebaseStatusText) elements.firebaseStatusText.textContent = message;
@@ -313,10 +313,10 @@
       "auth/email-already-in-use": "يوجد حساب مسجل بهذا البريد.",
       "auth/weak-password": "كلمة المرور يجب أن تكون 6 أحرف على الأقل.",
       "auth/too-many-requests": "محاولات كثيرة. انتظر قليلاً ثم حاول مجددًا.",
-      "auth/network-request-failed": "تعذّر الاتصال بـFirebase. تحقق من الإنترنت.",
-      "auth/unauthorized-domain": "هذا النطاق غير مضاف إلى النطاقات المسموحة في Firebase.",
+      "auth/network-request-failed": "تعذّر الاتصال بـSupabase. تحقق من الإنترنت.",
+      "auth/unauthorized-domain": "هذا النطاق غير مضاف إلى النطاقات المسموحة في Supabase.",
       "auth/web-storage-unsupported": "هذا الجهاز يمنع التخزين المطلوب لتسجيل الدخول.",
-      "auth/operation-not-allowed": "طريقة الدخول غير مفعّلة من Firebase Console.",
+      "auth/operation-not-allowed": "طريقة الدخول غير مفعّلة من Supabase Console.",
       "auth/requires-login": "سجّل الدخول بحسابك لإكمال هذه العملية.",
       "auth/requires-recent-login": "لحماية حسابك، سجّل الخروج ثم ادخل مجددًا وأعد المحاولة.",
       "cinaro/name-too-short": "الاسم يجب أن يحتوي حرفين على الأقل.",
@@ -422,7 +422,7 @@
     if (!state.firebase || !state.authUser || !state.cloudHydrated) return;
     if (markDirty) state.cloudRevision += 1;
     window.clearTimeout(state.cloudSyncTimer);
-    setFirebaseStatus("pending", "جاري حفظ تغييراتك…");
+    setSupabaseStatus("pending", "جاري حفظ تغييراتك…");
     state.cloudSyncTimer = window.setTimeout(flushCloudState, delay);
   }
 
@@ -440,16 +440,16 @@
         state.cloudSavedRevision = Math.max(state.cloudSavedRevision, revision);
         storage.set(STORAGE.cloudOwner, userId);
         if (state.cloudSavedRevision < state.cloudRevision) {
-          setFirebaseStatus("pending", "توجد تغييرات بانتظار المزامنة…");
+          setSupabaseStatus("pending", "توجد تغييرات بانتظار المزامنة…");
         } else {
-          setFirebaseStatus("connected", "تمت مزامنة بياناتك");
+          setSupabaseStatus("connected", "تمت مزامنة بياناتك");
         }
         updateAccountUI();
       })
       .catch((error) => {
         if (state.authUser?.uid !== userId) return;
         console.warn("CINARO cloud sync failed", error);
-        setFirebaseStatus("error", "تعذّرت المزامنة — بياناتك محفوظة محلياً");
+        setSupabaseStatus("error", "تعذّرت المزامنة — بياناتك محفوظة محلياً");
         updateAccountUI();
       });
     return state.cloudWritePromise;
@@ -477,7 +477,7 @@
       refreshCurrentView();
     }
     state.cloudHydrated = true;
-    setFirebaseStatus(hasUnsavedLocalChanges ? "pending" : "connected", hasUnsavedLocalChanges ? "توجد تغييرات بانتظار المزامنة…" : "تمت مزامنة بياناتك");
+    setSupabaseStatus(hasUnsavedLocalChanges ? "pending" : "connected", hasUnsavedLocalChanges ? "توجد تغييرات بانتظار المزامنة…" : "تمت مزامنة بياناتك");
     updateAccountUI();
     if (!hasUnsavedLocalChanges && (shouldMigrateLocalData || !payload)) scheduleCloudSync(100);
   }
@@ -501,7 +501,7 @@
       (error) => {
         console.warn("CINARO user state listener failed", error);
         state.cloudHydrated = true;
-        setFirebaseStatus("error", "الحساب متصل لكن تعذّرت قراءة المزامنة");
+        setSupabaseStatus("error", "الحساب متصل لكن تعذّرت قراءة المزامنة");
       }
     );
     state.userProfileUnsubscribe = state.firebase.listenUserProfile(
@@ -538,9 +538,10 @@
   function updateServiceGate() {
     const minimumVersion = String(state.remoteConfig.minimumVersion || "").trim();
     const latestVersion = String(state.remoteConfig.latestVersion || minimumVersion || "").trim();
-    const needsUpdate = Boolean(minimumVersion && compareVersions(APP_VERSION, minimumVersion) < 0);
+    const belowMinimum = Boolean(minimumVersion && compareVersions(APP_VERSION, minimumVersion) < 0);
+    const updateAvailable = Boolean(latestVersion && compareVersions(APP_VERSION, latestVersion) < 0);
     const maintenance = state.remoteConfig.maintenance === true;
-    const forcedUpdate = needsUpdate && state.remoteConfig.forceUpdate === true;
+    const forcedUpdate = state.remoteConfig.forceUpdate !== false && (belowMinimum || updateAvailable);
     state.serviceLocked = maintenance || forcedUpdate;
 
     if (!elements.serviceGate) return;
@@ -587,10 +588,10 @@
     if (elements.remoteNotice) {
       const minimumVersion = String(state.remoteConfig.minimumVersion || "").trim();
       const latestVersion = String(state.remoteConfig.latestVersion || minimumVersion || "").trim();
-      const needsUpdate = minimumVersion && compareVersions(APP_VERSION, minimumVersion) < 0;
-      const hasOptionalUpdate = latestVersion && compareVersions(APP_VERSION, latestVersion) < 0;
-      const updateMessage = (needsUpdate || hasOptionalUpdate)
-        ? `يتوفر إصدار أحدث من CINARO (${latestVersion || minimumVersion}). ${String(state.remoteConfig.updateNotes || "حدّث التطبيق للحصول على آخر المميزات.").trim()}`
+      const belowMinimum = minimumVersion && compareVersions(APP_VERSION, minimumVersion) < 0;
+      const updateAvailable = latestVersion && compareVersions(APP_VERSION, latestVersion) < 0;
+      const updateMessage = (belowMinimum || updateAvailable)
+        ? `يتوفر تحديث إجباري لـ CINARO (${latestVersion || minimumVersion}). ${String(state.remoteConfig.updateNotes || "يجب تحديث التطبيق للاستمرار.").trim()}`
         : "";
       const message = state.remoteConfig.maintenance
         ? "CINARO تحت الصيانة حالياً. سيعود العرض قريباً."
@@ -601,7 +602,7 @@
     }
     updateServiceGate();
     updateUpdateControl();
-    if (state.remoteConfig.maintenance) setFirebaseStatus("connected", "وضع الصيانة مفعل من الإدارة");
+    if (state.remoteConfig.maintenance) setSupabaseStatus("connected", "وضع الصيانة مفعل من الإدارة");
     const incomingItems = Array.isArray(payload?.items) ? payload.items : [];
     DATA = {
       ...DATA,
@@ -615,24 +616,24 @@
     series = DATA.items.filter((item) => item.kind === "series");
     state.heroIndex = 0;
     if (!DATA.items.length) {
-      setFirebaseStatus("connected", state.remoteConfig.maintenance ? "وضع الصيانة مفعل من الإدارة" : "Firebase متصل — لم يُنشر محتوى بعد");
+      setSupabaseStatus("connected", state.remoteConfig.maintenance ? "وضع الصيانة مفعل من الإدارة" : "Supabase متصل — لم يُنشر محتوى بعد");
       if (state.route?.name !== "watch") refreshCurrentView();
       return;
     }
-    setFirebaseStatus(payload.fromCache ? "pending" : "connected", payload.fromCache ? "عرض محتوى Firebase المحفوظ" : "متصل بالمحتوى المباشر");
+    setSupabaseStatus(payload.fromCache ? "pending" : "connected", payload.fromCache ? "عرض محتوى Supabase المحفوظ" : "متصل بالمحتوى المباشر");
     if (state.route?.name !== "watch") refreshCurrentView();
   }
 
-  function connectFirebase(client = window.CINARO_FIREBASE) {
+  function connectSupabase(client = window.CINARO_SUPABASE) {
     if (!client || state.firebase === client) return;
     state.firebase = client;
-    setFirebaseStatus("pending", "جاري قراءة بيانات Firebase…");
+    setSupabaseStatus("pending", "جاري قراءة بيانات Supabase…");
 
     state.firebaseContentUnsubscribe = client.listenContent(
       replaceCatalog,
       (error) => {
         console.warn("CINARO content listener failed", error);
-        setFirebaseStatus("error", "تعذّرت قراءة Firestore — يعرض التطبيق المحتوى المحفوظ");
+        setSupabaseStatus("error", "تعذّرت قراءة Firestore — يعرض التطبيق المحتوى المحفوظ");
       }
     );
 
@@ -662,7 +663,7 @@
   async function continueAsGuest() {
     if (state.authBusy) return;
     if (!state.authResolved && storage.get(STORAGE.authChoice, "") === "account") {
-      setAuthMessage("جاري استعادة حسابك المحفوظ. انتظر اتصال Firebase أو أعد فتح التطبيق.", "success");
+      setAuthMessage("جاري استعادة حسابك المحفوظ. انتظر اتصال Supabase أو أعد فتح التطبيق.", "success");
       return;
     }
     setAuthBusy(true);
@@ -671,14 +672,14 @@
       if (state.firebase) {
         await state.firebase.guest();
       } else {
-        throw new Error("firebase/unavailable");
+        throw new Error("supabase/unavailable");
       }
       state.localGuest = true;
       storage.set(STORAGE.authChoice, "guest");
       hideAuth();
       toast("أهلاً بك في CINARO");
     } catch (error) {
-      console.warn("CINARO anonymous Firebase auth unavailable", error);
+      console.warn("CINARO anonymous Supabase auth unavailable", error);
       state.localGuest = true;
       state.authUser = null;
       storage.set(STORAGE.authChoice, "guest");
@@ -696,7 +697,7 @@
     byId("loginForm").addEventListener("submit", async (event) => {
       event.preventDefault();
       if (!state.firebase || state.authBusy) {
-        setAuthMessage("Firebase غير متاح الآن؛ يمكنك المتابعة كضيف.", "error");
+        setAuthMessage("Supabase غير متاح الآن؛ يمكنك المتابعة كضيف.", "error");
         return;
       }
       setAuthBusy(true);
@@ -721,7 +722,7 @@
         return;
       }
       if (!state.firebase || state.authBusy) {
-        setAuthMessage("Firebase غير متاح الآن؛ يمكنك المتابعة كضيف.", "error");
+        setAuthMessage("Supabase غير متاح الآن؛ يمكنك المتابعة كضيف.", "error");
         return;
       }
       setAuthBusy(true);
@@ -750,7 +751,7 @@
         return;
       }
       if (!state.firebase || state.authBusy) {
-        setAuthMessage("Firebase غير متاح الآن.", "error");
+        setAuthMessage("Supabase غير متاح الآن.", "error");
         return;
       }
       setAuthBusy(true);
@@ -2697,20 +2698,20 @@
     else renderRoute();
     updateAccountUI();
 
-    window.addEventListener("cinaro:firebase-ready", (event) => connectFirebase(event.detail?.client));
-    window.addEventListener("cinaro:firebase-error", (event) => {
-      console.warn("CINARO Firebase unavailable", event.detail);
+    window.addEventListener("cinaro:supabase-ready", (event) => connectSupabase(event.detail?.client));
+    window.addEventListener("cinaro:supabase-error", (event) => {
+      console.warn("CINARO Supabase unavailable", event.detail);
       state.authResolved = true;
-      setFirebaseStatus("error", "Firebase غير متاح — التطبيق يعمل بالبيانات المحلية");
+      setSupabaseStatus("error", "Supabase غير متاح — التطبيق يعمل بالبيانات المحلية");
       updateAccountUI();
       if (!state.localGuest && !state.authUser && storage.get(STORAGE.authChoice, "") !== "account") showAuth("login");
     });
 
-    if (window.CINARO_FIREBASE) connectFirebase(window.CINARO_FIREBASE);
+    if (window.CINARO_SUPABASE) connectSupabase(window.CINARO_SUPABASE);
     window.setTimeout(() => {
       if (state.firebase || state.authResolved) return;
       state.authResolved = true;
-      setFirebaseStatus("error", "تعذّر الاتصال بـFirebase — يمكنك المتابعة كضيف");
+      setSupabaseStatus("error", "تعذّر الاتصال بـSupabase — يمكنك المتابعة كضيف");
       updateAccountUI();
       if (!state.localGuest && storage.get(STORAGE.authChoice, "") !== "account") showAuth("login");
     }, 7000);
