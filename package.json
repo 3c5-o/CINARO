@@ -1,12 +1,12 @@
 {
   "name": "cinaro",
-  "version": "2.4.1",
+  "version": "2.5.0",
   "private": true,
   "description": "CINARO Arabic movies and series progressive web app",
   "type": "module",
   "scripts": {
     "dev": "node scripts/serve.mjs",
-    "test": "node --check web/data.js && node --check web/firebase.js && node --check web/app.js && node --check web/sw.js && node --check admin/firebase.js && node --check admin/app.js && node --check admin/sw.js && node scripts/validate.mjs"
+    "test": "node --check web/data.js && node --check web/supabase.js && node --check web/app.js && node --check web/sw.js && node --check admin/supabase.js && node --check admin/app.js && node --check admin/sw.js && node scripts/validate.mjs"
   },
   "engines": {
     "node": ">=20"
