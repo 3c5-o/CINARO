@@ -1,143 +1,93 @@
-# CINARO — سينارو
+# CINARO 2.5
 
-تطبيق عربي للأفلام والمسلسلات بواجهة سينمائية مخصصة للهاتف، مع نسخة مستخدم ونسخة إدارة متجاوبة. يعملان كتطبيقَي ويب تقدّميين قابلين للتثبيت (PWA)، ويأتيان كنسختي Android مستقلتين تبنيان تلقائيًا عبر GitHub Actions.
+CINARO is an Arabic-first movies and series application with separate **User** and **Admin** experiences. Version 2.5 moves the production data layer from Firebase to **Supabase** and introduces a new design system for both editions.
 
-> كل قصة تبدأ هنا
+## Architecture
 
-## أهم المزايا
+- **User PWA / APK:** `web/`
+- **Admin PWA / APK:** `admin/`
+- **Android wrapper:** `android-app/`
+- **Backend:** Supabase Auth + PostgreSQL + RLS + Realtime + Cron
+- **Playback:** HTML5/HLS player with existing CINARO playback controls
+- **Metadata:** TMDb token remains local to the Admin app and is not stored in the public database
 
-- واجهة RTL متجاوبة للهاتف والتابلت والكمبيوتر.
-- شاشة بداية وهوية وأيقونة CINARO أصلية.
-- رئيسية ديناميكية: تابع المشاهدة، الأكثر مشاهدة، الجديد، الأعلى تقييمًا والمسلسلات.
-- صفحات مستقلة للأفلام والمسلسلات مع التصنيف والترتيب.
-- بحث مباشر بالعربية والإنجليزية والتصنيف.
-- تسجيل وإنشاء حساب واستعادة كلمة المرور عبر Firebase Authentication.
-- تعديل اسم الحساب، التحقق من البريد وإرسال رابط إعادة تعيين كلمة المرور.
-- دخول اختياري كضيف من دون تعطيل المشاهدة.
-- مزامنة المفضلة وسجل المشاهدة والإعدادات بين أجهزة الحساب عبر Cloud Firestore.
-- كتالوج مباشر من Firestore من دون أفلام أو مسلسلات وهمية مضمّنة.
-- حفظ تقدم مستقل لكل فيلم ولكل حلقة، مع استئناف من آخر ثانية.
-- تسجيل مشاهدة فريدة للحساب بعد بدء المشاهدة الفعلية، من دون تضخيم العداد عند إعادة الفتح.
-- روابط عميقة حقيقية للتفاصيل والتشغيل باستخدام Hash Routing.
-- مشغل مخصص: تقديم/تأخير، سرعة، مصادر جودة، ترجمة VTT، ملء الشاشة، صورة داخل صورة والحلقة التالية.
-- إرسال بلاغ تشغيل من داخل المشغل ومتابعته من لوحة الإدارة.
-- معالجة أخطاء الفيديو والصور وحالات الاتصال، والانتقال تلقائيًا إلى مصدر فيديو بديل عند فشل المصدر الحالي.
-- وضع صيانة وتحديث إجباري مع رابط تنزيل يحدده المدير.
-- Service Worker لتخزين واجهة التطبيق والعمل دون اتصال.
-- مشروع Android WebView آمن يفتح النسخة الحية لتحديث المحتوى فورًا، ويرجع تلقائيًا إلى نسخة محلية مضمّنة عند تعذر الشبكة.
-- لوحة إدارة Mobile-first لإدارة المحتوى والمستخدمين والأقسام والمشرفين والبلاغات وإعدادات النشر وسجل التدقيق.
-- محرر مرئي للأفلام والمواسم والحلقات وروابط الفيديو، مع معاينة للبوستر والخلفية والفيديو.
-- أقسام واجهة ديناميكية يمكن ربط المحتوى بها من لوحة الإدارة.
-- تعيين نطاق المشرف حسب الأقسام مع صلاحيات مستقلة للإضافة والتعديل والحذف والنشر.
-- لا توجد بيانات كتالوج وهمية في الإنتاج؛ المحتوى الحقيقي يقرأ مباشرة من Firestore.
+## Supabase project
 
-## تفعيل Firebase
+Production project: **CINARO**
 
-إعداد المشروع موجود في `web/firebase.js`، وقواعد الحماية في `firestore.rules`. قبل اختبار الحسابات والمزامنة:
+The clients use the project **publishable key only**. No Supabase secret/service-role key is committed to this repository.
 
-1. فعّل **Email/Password** و **Anonymous** من Firebase Authentication.
-2. أضف `3c5-o.github.io` إلى Authorized domains.
-3. أنشئ Cloud Firestore وانشر القواعد باستخدام `firebase deploy --only firestore:rules`.
-4. أنشئ حساب الإدارة من Firebase Authentication بالبريد المخصص للمشروع، وأدخل كلمة المرور يدوياً داخل Firebase فقط.
-5. أضف المحتوى المنشور داخل Collection باسم `content` أو استخدم لوحة الإدارة.
+Core database areas:
 
-التعليمات وبنية مستندات الأفلام والمسلسلات موضحة بالكامل في [`FIREBASE_SETUP.md`](FIREBASE_SETUP.md).
+- `profiles`
+- `account_status`
+- `admin_memberships`
+- `app_config`
+- `sections`
+- `content`
+- `user_states`
+- `content_requests`
+- `reports`
+- `content_views`
+- `audit_logs`
 
-## تشغيل نسخة الويب محليًا
+Every exposed table has Row Level Security enabled. Administrative writes are authorized by database policies, not by hidden buttons in the UI.
 
-يلزم Node.js 20 أو أحدث:
+## Roles
+
+- **Owner / Admin:** full control.
+- **Supervisor:** restricted to assigned management sections and explicit create/edit/delete/publish permissions.
+- **User:** can read published content and manage only their own state, requests and reports.
+- **Guest:** local mode is supported; Supabase anonymous auth is used when available.
+
+## Mandatory updates
+
+CINARO 2.5 uses a mandatory update gate.
+
+- `latestVersion` controls the newest release.
+- When the APK is older than `latestVersion`, CINARO blocks normal use and shows only **Update now**.
+- The APK version is read from the Android URL version parameter / native identifier so an old APK cannot appear current merely because it loaded newer web files.
+- `minimumVersion` is the final supported floor.
+- The Admin app records the release date and an old-version shutdown deadline.
+- Supabase Cron raises `minimumVersion` to `latestVersion` automatically after the configured deadline; the default release lifecycle in the Admin UI is seven days.
+
+Maintenance mode remains separate and has priority over the update screen.
+
+## Security
+
+- Do not put Supabase secret keys in `web/`, `admin/`, APK assets, GitHub Pages, or client-side environment variables.
+- RLS is the authorization boundary.
+- User-controlled metadata is not used to authorize Admin access.
+- Owner access is granted through `admin_memberships`; merely knowing an email address is not enough.
+- Administrative operations are recorded in `audit_logs`.
+- The Android signing workflow keeps using the existing GitHub repository secrets:
+  - `CINARO_KEYSTORE_BASE64`
+  - `CINARO_KEYSTORE_PASSWORD`
+  - `CINARO_KEY_ALIAS`
+  - `CINARO_KEY_PASSWORD`
+
+## Local validation
+
+Requires Node.js 20+:
 
 ```bash
 npm test
-npm run dev
 ```
 
-ثم افتح:
+The validation checks JavaScript syntax, Supabase client configuration, forced-update behavior, PWA cache versioning, Android versioning, and release workflow wiring.
 
-```text
-http://127.0.0.1:4173
-```
+## Android builds
 
-## إضافة فيلم
+Version 2.5.0 uses:
 
-للمحتوى الحي أضف المستند إلى Collection باسم `content` في Firestore أو استخدم لوحة الإدارة. لا تتضمن `web/data.js` بيانات تجريبية:
+- User: `com.cinaro.app`
+- Admin: `com.cinaro.admin`
+- `versionCode 12`
+- User version: `2.5.0`
+- Admin version: `2.5.0-admin`
 
-```js
-{
-  id: "movie-unique-id",
-  kind: "movie",
-  title: "اسم الفيلم",
-  englishTitle: "Movie Name",
-  year: 2026,
-  rating: 8.5,
-  ageRating: "+13",
-  genres: ["أكشن"],
-  duration: 110,
-  views: 0,
-  addedAt: "2026-09-13",
-  description: "وصف الفيلم",
-  poster: "https://example.com/poster.jpg",
-  backdrop: "https://example.com/backdrop.jpg",
-  sources: [
-    { label: "1080p", url: "https://example.com/movie-1080.mp4", type: "video/mp4" },
-    { label: "720p", url: "https://example.com/movie-720.mp4", type: "video/mp4" }
-  ],
-  subtitles: [
-    { label: "العربية", srclang: "ar", src: "assets/subtitles/movie-ar.vtt" }
-  ]
-}
-```
+On pull requests, GitHub Actions builds test APKs. On `main`, the workflow uses the stable release signing secrets when available and publishes the CINARO 2.5.0 release.
 
-يجب أن يكون رابط الفيديو مباشرًا عبر HTTPS، وأن يسمح الخادم بطلبات النطاق `Range Requests` حتى يعمل التقديم والاستئناف بصورة سليمة.
+## First Owner account
 
-## بناء APK
-
-عند رفع أي تعديل إلى فرع `main` يعمل مسار **Build Android APK** تلقائيًا:
-
-1. افتح تبويب **Actions** في المستودع.
-2. افتح آخر تشغيل باسم **Build Android APK**.
-3. من **Artifacts** نزّل `CINARO-Android-APKs`.
-4. فك الضغط وثبّت `CINARO-User-*.apk` للمستخدم أو `CINARO-Admin-*.apk` للإدارة.
-
-إذا لم تُضف أسرار التوقيع، ينتج المسار نسخة Beta/Debug قابلة للتثبيت والاختبار. لبناء Release ثابت يمكن تثبيت تحديثاته فوق النسخة السابقة، أضف الأسرار التالية إلى GitHub Actions من دون رفع ملف المفتاح إلى المستودع:
-
-- `CINARO_KEYSTORE_BASE64`
-- `CINARO_KEYSTORE_PASSWORD`
-- `CINARO_KEY_ALIAS`
-- `CINARO_KEY_PASSWORD`
-
-يجب الاحتفاظ بملف المفتاح وكلمات مروره دائمًا؛ فقدانه يعني عدم القدرة على إصدار تحديث يُثبَّت فوق النسخة الموقعة الحالية. الانتقال من نسخة Debug القديمة إلى أول نسخة Release مستقرة قد يتطلب حذف النسخة القديمة مرة واحدة، وبعدها تُثبت تحديثات Release فوق بعضها بصورة طبيعية.
-
-## GitHub Pages
-
-المسار **Deploy CINARO PWA** ينشر التطبيق تلقائيًا. رابط التشغيل المباشر:
-
-```text
-https://3c5-o.github.io/CINARO/web/
-```
-
-لوحة الإدارة:
-
-```text
-https://3c5-o.github.io/CINARO/admin/
-```
-
-الرابط `https://3c5-o.github.io/CINARO/` يحوّل إلى التطبيق تلقائيًا.
-
-## هيكل المشروع
-
-```text
-CINARO/
-├── web/                    # تطبيق PWA
-├── admin/                  # لوحة إدارة PWA متجاوبة وقابلة للتثبيت
-├── android-app/            # مشروع Android الأصلي
-├── firestore.rules         # صلاحيات Firestore
-├── firebase.json           # إعداد نشر قواعد Firebase
-├── assets/                 # دليل الهوية وبرومبتات الأصول
-├── scripts/                # فحص وتشغيل محلي
-└── .github/workflows/      # النشر وبناء APK والاختبارات
-```
-
-## تنبيه المحتوى
-
-استخدم فقط فيديوهات وصورًا تملك حقوق نشرها أو لديك ترخيص لاستخدامها. يجب أن تكون الروابط مباشرة عبر HTTPS وأن يدعم خادم الفيديو Range Requests.
+Supabase Auth starts independently from the old Firebase Auth database. The same CINARO Admin email/password can continue to be used, but the Auth account must first exist in Supabase. The Owner membership is then granted to that real Supabase user ID; passwords are never stored in this repository.
