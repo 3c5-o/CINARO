@@ -15,12 +15,12 @@
   <meta property="og:type" content="website">
   <meta property="og:image" content="assets/images/og-image.jpg">
   <meta name="twitter:card" content="summary_large_image">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; media-src 'self' https: blob:; connect-src 'self' https: wss:; frame-src 'self' https://cinaro.firebaseapp.com; style-src 'self' 'unsafe-inline'; script-src 'self' https://www.gstatic.com https://cdn.jsdelivr.net; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; media-src 'self' https: blob:; connect-src 'self' https: wss:; frame-src 'self' https://zmkkoggsqvwvwkanlyux.supabase.co; style-src 'self' 'unsafe-inline'; script-src 'self' https://cdn.jsdelivr.net; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>CINARO — كل قصة تبدأ هنا</title>
-  <link rel="manifest" href="manifest.webmanifest?v=2.4.1">
+  <link rel="manifest" href="manifest.webmanifest?v=2.5.0">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=2.4.1">
+  <link rel="stylesheet" href="styles.css?v=2.5.0">
 </head>
 <body class="booting">
   <noscript>
@@ -47,7 +47,7 @@
       <span id="serviceGateKicker">تنبيه CINARO</span>
       <h1 id="serviceGateTitle">الخدمة غير متاحة مؤقتاً</h1>
       <p id="serviceGateText"></p>
-      <a id="serviceGateAction" class="button primary" href="https://github.com/3c5-o/CINARO/releases" target="_blank" rel="noopener" hidden>تنزيل آخر إصدار</a>
+      <a id="serviceGateAction" class="button primary" href="https://github.com/3c5-o/CINARO/releases" target="_blank" rel="noopener" hidden>تحديث الآن</a>
     </div>
   </section>
 
@@ -113,7 +113,7 @@
           <svg aria-hidden="true"><use href="#i-user"></use></svg>
           المتابعة كضيف
         </button>
-        <p class="guest-note">يمكنك المشاهدة كضيف، وستُحفظ بياناتك على هذا الجهاز فقط إذا تعذّر اتصال Firebase.</p>
+        <p class="guest-note">يمكنك المشاهدة كضيف، وتبقى بيانات هذا الجهاز محلية إذا تعذّر الاتصال بالخدمة السحابية.</p>
       </div>
 
       <div id="accountPanel" class="account-panel" hidden>
@@ -123,7 +123,7 @@
         <p id="accountPanelEmail"></p>
         <div class="account-sync-card">
           <span id="accountSyncDot" class="sync-dot"></span>
-          <div><b>مزامنة Firebase</b><small id="accountSyncText">جاري الاتصال…</small></div>
+          <div><b>مزامنة Supabase</b><small id="accountSyncText">جاري الاتصال…</small></div>
         </div>
         <form id="profileForm" class="profile-form">
           <label class="auth-field"><span>الاسم الظاهر</span><div><svg aria-hidden="true"><use href="#i-user"></use></svg><input id="profileName" type="text" minlength="2" maxlength="30" autocomplete="name" required></div></label>
@@ -304,7 +304,7 @@
         <svg aria-hidden="true"><use href="#i-arrow-left"></use></svg>
       </button>
       <div class="setting-row connection-row" aria-live="polite">
-        <span><svg aria-hidden="true"><use href="#i-cloud"></use></svg><span><b>اتصال البيانات</b><small id="firebaseStatusText">جاري الاتصال بـFirebase…</small></span></span>
+        <span><svg aria-hidden="true"><use href="#i-cloud"></use></svg><span><b>اتصال البيانات</b><small id="firebaseStatusText">جاري الاتصال بـSupabase…</small></span></span>
         <span id="firebaseStatusDot" class="sync-dot pending"></span>
       </div>
       <label class="setting-row">
@@ -338,7 +338,7 @@
     </div>
     <div class="about-app">
       <img src="assets/icons/icon-192.png" alt="" width="48" height="48">
-      <div><b>CINARO</b><small>الإصدار 2.4.1 · نسخة المستخدم</small></div>
+      <div><b>CINARO</b><small>الإصدار 2.5.0 · نسخة المستخدم</small></div>
     </div>
     <p class="tmdb-credit">This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
   </aside>
@@ -447,8 +447,8 @@
   </svg>
 
   <script src="data.js" defer></script>
-  <script src="firebase.js?v=2.4.1" type="module"></script>
+  <script src="supabase.js?v=2.5.0" type="module"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="app.js?v=2.4.1" defer></script>
+  <script src="app.js?v=2.5.0" defer></script>
 </body>
 </html>
