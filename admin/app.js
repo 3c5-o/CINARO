@@ -922,6 +922,20 @@
     });
   }
 
+  function toLocalDateTimeInput(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const pad = (number) => String(number).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  function localDateTimeToIso(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+  }
+
   function fillSettings() {
     $("settingFeatured").value = toArray(state.config.featured).join(", ");
     $("settingAnnouncement").value = asString(state.config.announcement);
@@ -929,8 +943,10 @@
     $("settingMinVersion").value = asString(state.config.minimumVersion, "2.5.0");
     $("settingUpdateUrl").value = asString(state.config.updateUrl, "https://github.com/3c5-o/CINARO/releases");
     $("settingUpdateNotes").value = asString(state.config.updateNotes);
+    if ($("settingUpdateReleasedAt")) $("settingUpdateReleasedAt").value = toLocalDateTimeInput(state.config.updateReleasedAt);
+    if ($("settingOldVersionShutdownAt")) $("settingOldVersionShutdownAt").value = toLocalDateTimeInput(state.config.oldVersionShutdownAt);
     $("settingMaintenance").checked = state.config.maintenance === true;
-    $("settingForceUpdate").checked = state.config.forceUpdate === true;
+    $("settingForceUpdate").checked = state.config.forceUpdate !== false;
     fillTmdbSettings();
   }
 
@@ -1471,15 +1487,25 @@
     const form = $("settingsForm");
     setBusy(form, true);
     try {
+      const latestVersion = asString($("settingLatestVersion").value, "2.5.0").slice(0, 20);
+      const versionChanged = latestVersion !== asString(state.config.latestVersion, "2.5.0");
+      const releaseAt = versionChanged
+        ? new Date().toISOString()
+        : localDateTimeToIso($("settingUpdateReleasedAt")?.value) || state.config.updateReleasedAt || new Date().toISOString();
+      const shutdownAt = versionChanged
+        ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        : localDateTimeToIso($("settingOldVersionShutdownAt")?.value) || state.config.oldVersionShutdownAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
       const payload = {
         featured: parseCsv($("settingFeatured").value),
         announcement: asString($("settingAnnouncement").value).slice(0, 500),
-        latestVersion: asString($("settingLatestVersion").value, "2.5.0").slice(0, 20),
+        latestVersion,
         minimumVersion: asString($("settingMinVersion").value, "2.5.0").slice(0, 20),
         updateNotes: asString($("settingUpdateNotes").value).slice(0, 1000),
         updateUrl: validMediaUrl($("settingUpdateUrl").value) || "https://github.com/3c5-o/CINARO/releases",
         maintenance: $("settingMaintenance").checked,
-        forceUpdate: $("settingForceUpdate").checked,
+        forceUpdate: true,
+        updateReleasedAt: releaseAt,
+        oldVersionShutdownAt: shutdownAt,
         updatedBy: state.authUser.uid
       };
       await state.firebase.saveDocument("appConfig", "public", payload);
