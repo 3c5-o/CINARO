@@ -48,13 +48,25 @@ const mediaUrl = (value, fallback = "") => {
   return fallback;
 };
 
+const STORAGE_ID_RE = /^CIN-[MS]-[A-Z0-9]{10}$/i;
+
 const normalizeSources = (sources) => (Array.isArray(sources) ? sources : [])
   .slice(0, 12)
   .map((source, index) => {
+    const label = textValue(source?.label, "المصدر " + (index + 1), 40);
+    const storageId = textValue(source?.storageId || source?.storage_id, "", 32).toUpperCase();
+    if (STORAGE_ID_RE.test(storageId)) {
+      return {
+        label,
+        storageId,
+        provider: "telegram",
+        type: "video/mp4"
+      };
+    }
     const url = mediaUrl(source?.url);
     if (!url) return null;
     return {
-      label: textValue(source?.label, "المصدر " + (index + 1), 40),
+      label,
       url,
       type: textValue(source?.type, /\.m3u8(?:$|[?#])/i.test(url) ? "application/vnd.apple.mpegurl" : "video/mp4", 80)
     };
