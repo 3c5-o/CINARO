@@ -68,6 +68,7 @@ assert(adminHtml.includes('id="settingUpdateReleasedAt"'), "admin UI exposes upd
 assert(adminHtml.includes('id="settingOldVersionShutdownAt"'), "admin UI exposes seven-day shutdown time");
 assert(adminHtml.includes("dashboard-quick-actions"), "admin dashboard includes quick actions");
 assert(adminHtml.includes("system-live-pill"), "admin topbar includes live system status");
+assert(!/Supabase|Firebase|Firestore|SUPABASE/i.test(adminHtml), "admin HTML exposes no provider names");
 
 for (const [name, source] of [["user", webSupabase], ["admin", adminSupabase]]) {
   assert(source.includes("@supabase/supabase-js@2.117.2"), name + " client pins Supabase JS");
@@ -83,7 +84,8 @@ assert(webSupabase.includes('signInWithPassword'), "user login uses Supabase Aut
 assert(webSupabase.includes('signUp'), "user registration uses Supabase Auth");
 assert(webSupabase.includes('.eq("published", true)'), "user catalog only requests published content");
 assert(webSupabase.includes("retryAttempt"), "user catalog retries transient load failures");
-assert(webSupabase.includes("Published content is the only mandatory dataset"), "catalog rendering tolerates optional dataset failures");
+assert(webSupabase.includes("Published content and release controls are mandatory"), "catalog keeps release controls mandatory");
+assert(webSupabase.includes("sections are decorative"), "catalog tolerates section-only failures");
 
 assert(adminSupabase.includes('from("admin_memberships")'), "admin permissions use database memberships");
 assert(adminSupabase.includes('from("audit_logs")'), "admin audit logging uses Supabase");
@@ -110,6 +112,7 @@ assert(workflow.includes("CINARO-User-v2.6.3.apk"), "workflow names user APK 2.6
 assert(workflow.includes("CINARO-Admin-v2.6.3.apk"), "workflow names admin APK 2.6.3");
 assert(workflow.includes('TAG="v2.6.3"'), "workflow publishes v2.6.3");
 assert(workflow.includes("CINARO_KEYSTORE_BASE64"), "stable signing secrets remain configured");
+assert(!/Supabase|Firebase|Firestore/i.test(workflow.match(/NOTES="[^"]+"/)?.[0] || ""), "release notes expose no provider names");
 
 if (process.exitCode) {
   console.error("\nCINARO validation failed.");
