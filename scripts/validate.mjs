@@ -29,6 +29,7 @@ const mainActivity = read("android-app/app/src/main/java/com/cinaro/app/MainActi
 const pushFunction = read("supabase/functions/send-notification/index.ts");
 const telegramGateway = read("gateway/app.py");
 const telegramMigration = read("supabase/migrations/20260926141000_add_telegram_storage_gateway.sql");
+const telegramTeamMigration = read("supabase/migrations/20260926153000_add_telegram_bot_team_roles.sql");
 const workflow = read(".github/workflows/android-apk.yml");
 const packageJson = JSON.parse(read("package.json"));
 
@@ -126,7 +127,14 @@ assert(adminApp.includes("gatewayStreamUrl"), "admin can preview CINARO Storage 
 assert(adminHtml.includes("CIN-M-XXXXXXXXXX"), "movie editor documents CINARO Storage IDs");
 assert(adminApp.includes("CIN-S-XXXXXXXXXX"), "series editor documents CINARO Storage IDs");
 
-assert(telegramGateway.includes("8407394858"), "Telegram bot is restricted to the configured CINARO owner");
+assert(telegramGateway.includes('os.environ.get("TELEGRAM_ADMIN_ID"'), "Telegram gateway bootstraps the configured CINARO owner");
+assert(telegramGateway.includes("telegram_bot_members"), "Telegram bot reads team membership from the server");
+assert(telegramGateway.includes("team_add_admin"), "Telegram bot can add secondary admins");
+assert(telegramGateway.includes("team_add_supervisor_all"), "Telegram bot can add upload supervisors");
+assert(telegramGateway.includes("can_upload"), "Telegram bot enforces scoped movie and series upload permissions");
+assert(telegramGateway.includes("team_remove_id:"), "Telegram bot supports removing team members");
+assert(telegramTeamMigration.includes("create table if not exists public.telegram_bot_members"), "Telegram team role migration is tracked");
+assert(telegramTeamMigration.includes("role in ('owner','admin','supervisor')"), "Telegram team roles are constrained in the database");
 assert(telegramGateway.includes("MAX_MEDIA_BYTES = 1_950_000_000"), "Telegram storage enforces the 1.95 GB limit");
 assert(telegramGateway.includes('/stream/{sid}'), "Telegram gateway exposes storage ID streaming");
 assert(telegramGateway.includes("parse_range"), "Telegram gateway implements HTTP Range streaming");
