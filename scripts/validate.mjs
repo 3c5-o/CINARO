@@ -48,7 +48,7 @@ assert(webApp.includes("NATIVE_APP_VERSION"), "user runtime can read native vers
 assert(webApp.includes("updateAvailable"), "forced update checks latest version");
 assert(webApp.includes("state.remoteConfig.forceUpdate !== false"), "forced update defaults to enabled");
 assert(!webApp.includes("(needsUpdate && state.remoteConfig.forceUpdate)"), "user config render has no stale needsUpdate reference");
-assert(!/\$\([\s\S]{0,240}?\)\s*\.forEach\(/.test(webApp), "user app does not call forEach on querySelector results");
+assert(!/(?<!\$)\$\([\s\S]{0,240}?\)\s*\.forEach\(/.test(webApp), "user app does not call forEach on single querySelector results");
 assert(webApp.includes("runBootStep"), "user boot isolates feature initialization failures");
 assert(webApp.includes("CINARO realtime view refresh failed"), "realtime refresh has an error boundary");
 assert(webApp.includes("forcedUpdateNotice"), "user config notice uses defined forced-update state");
