@@ -346,7 +346,8 @@ public class MainActivity extends Activity {
         String value = route == null ? "" : route.trim().replaceFirst("^#", "");
         if (value.matches("^(home|movies|series|library|search)$")) return value;
         if (value.matches("^details/[a-z0-9-]{1,150}$")) return value;
-        if (value.matches("^watch/[a-z0-9-]{1,150}(?:/\\d{1,4}/\\d{1,5})?$")) return value;
+        if (value.matches("^watch/movie/[a-z0-9-]{1,150}$")) return value;
+        if (value.matches("^watch/series/[a-z0-9-]{1,150}/\\d{1,4}/\\d{1,5}$")) return value;
         return value.isEmpty() ? null : "home";
     }
 
