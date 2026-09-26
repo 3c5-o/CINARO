@@ -124,7 +124,7 @@ assert(webApp.includes("telegramGatewayUrl"), "user player reads the configured 
 assert(adminApp.includes("sourceFromInput"), "admin accepts URL or CINARO Storage source input");
 assert(adminApp.includes("gatewayStreamUrl"), "admin can preview CINARO Storage through the gateway");
 assert(adminHtml.includes("CIN-M-XXXXXXXXXX"), "movie editor documents CINARO Storage IDs");
-assert(adminHtml.includes("CIN-S-XXXXXXXXXX"), "series editor documents CINARO Storage IDs");
+assert(adminApp.includes("CIN-S-XXXXXXXXXX"), "series editor documents CINARO Storage IDs");
 
 assert(telegramGateway.includes("8407394858"), "Telegram bot is restricted to the configured CINARO owner");
 assert(telegramGateway.includes("MAX_MEDIA_BYTES = 1_950_000_000"), "Telegram storage enforces the 1.95 GB limit");
