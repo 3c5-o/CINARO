@@ -429,10 +429,16 @@
     return id && base ? `${base}/stream/${encodeURIComponent(id)}` : "";
   }
 
-  function sourceFromInput(value, label = "تلقائي", previousType = "video/mp4") {
+  function sourceFromInput(value, label = "تلقائي", previousType = "video/mp4", expectedKind = "") {
     const input = asString(value);
     const storageId = normalizeStorageId(input);
     if (storageId) {
+      const storageKind = storageId.startsWith("CIN-M-") ? "movie" : "series";
+      if (expectedKind && storageKind !== expectedKind) {
+        throw new Error(expectedKind === "movie"
+          ? "استخدم معرّف فيلم يبدأ بـ CIN-M- في حقول الفيلم."
+          : "استخدم معرّف مسلسل يبدأ بـ CIN-S- في حقول الحلقات.");
+      }
       return { label: asString(label, "Telegram").slice(0, 40), storageId, provider: "telegram", type: "video/mp4" };
     }
     const url = validMediaUrl(input);
@@ -1259,10 +1265,10 @@
         const backupUrl = asString(episode.backupUrl);
         const sourceCandidates = [];
         if (primaryUrl) {
-          sourceCandidates.push(sourceFromInput(primaryUrl, asString(episode.primarySource?.label, "تلقائي"), episode.primarySource?.type));
+          sourceCandidates.push(sourceFromInput(primaryUrl, asString(episode.primarySource?.label, "تلقائي"), episode.primarySource?.type, "series"));
         }
         if (backupUrl) {
-          sourceCandidates.push(sourceFromInput(backupUrl, asString(episode.backupSource?.label, "احتياطي"), episode.backupSource?.type));
+          sourceCandidates.push(sourceFromInput(backupUrl, asString(episode.backupSource?.label, "احتياطي"), episode.backupSource?.type, "series"));
         }
         sourceCandidates.push(...toArray(episode.extraSources));
 
@@ -1486,10 +1492,10 @@
       const backupMovieUrl = asString($("movieBackupUrl").value);
       const movieSourceCandidates = [];
       if (primaryMovieUrl) {
-        movieSourceCandidates.push(sourceFromInput(primaryMovieUrl, asString(existingMovieSources[0]?.label, "تلقائي"), existingMovieSources[0]?.type));
+        movieSourceCandidates.push(sourceFromInput(primaryMovieUrl, asString(existingMovieSources[0]?.label, "تلقائي"), existingMovieSources[0]?.type, "movie"));
       }
       if (backupMovieUrl) {
-        movieSourceCandidates.push(sourceFromInput(backupMovieUrl, asString(existingMovieSources[1]?.label, "احتياطي"), existingMovieSources[1]?.type));
+        movieSourceCandidates.push(sourceFromInput(backupMovieUrl, asString(existingMovieSources[1]?.label, "احتياطي"), existingMovieSources[1]?.type, "movie"));
       }
       movieSourceCandidates.push(...existingMovieSources.slice(2));
       const sources = kind === "movie" ? normalizeSources(movieSourceCandidates) : [];
@@ -1511,7 +1517,7 @@
       if (willPublish && kind === "movie" && !sources.length) throw new Error("أضف مصدراً واحداً على الأقل للفيلم قبل النشر.");
       if (kind === "series" && !seasons.length) throw new Error("أضف موسماً واحداً على الأقل للمسلسل.");
       if (willPublish && kind === "series" && seasons.some((season) => season.episodes.some((episode) => !episode.sources.length))) {
-        throw new Error("لا يمكن نشر المسلسل قبل إضافة رابط تشغيل لكل حلقة.");
+        throw new Error("لا يمكن نشر المسلسل قبل إضافة مصدر تشغيل لكل حلقة.");
       }
       let sectionIds = parseCsv($("contentSections").value);
       if (isAdmin()) sectionIds = normalizeSectionSelection(kind, sectionIds);
