@@ -2,7 +2,7 @@
   "use strict";
 
   let DATA = window.CINARO_DATA;
-  const WEB_APP_VERSION = "2.6.1";
+  const WEB_APP_VERSION = "2.6.2";
   const URL_APP_VERSION = new URLSearchParams(location.search).get("v")?.match(/^\d+\.\d+\.\d+$/)?.[0] || "";
   const NATIVE_APP_VERSION = navigator.userAgent.match(/CINARO\/(\d+\.\d+\.\d+)/i)?.[1] || "";
   const APP_VERSION = URL_APP_VERSION || NATIVE_APP_VERSION || WEB_APP_VERSION;
@@ -1448,7 +1448,7 @@
       const item = itemMap.get(route.parts[1]);
       active = item?.kind === "series" ? "series" : "movies";
     }
-    $('[data-route="home"], [data-route="movies"], [data-route="series"], [data-route="search"], [data-route="library"]')
+    document.querySelectorAll('[data-route="home"], [data-route="movies"], [data-route="series"], [data-route="search"], [data-route="library"]')
       .forEach((button) => button.classList.toggle("active", button.dataset.route === active));
   }
 
@@ -1521,13 +1521,20 @@
   function refreshCurrentView() {
     const scrollPosition = window.scrollY;
     const route = state.route || parseRoute();
-    if (route.name === "home") renderHome();
-    else if (route.name === "movies") renderCatalog("movie");
-    else if (route.name === "series") renderCatalog("series");
-    else if (route.name === "library") renderLibrary();
-    else if (route.name === "search") renderSearchResultsOnly();
-    else if (route.name === "details") renderDetails(route.parts[1]);
+    try {
+      if (route.name === "home") renderHome();
+      else if (route.name === "movies") renderCatalog("movie");
+      else if (route.name === "series") renderCatalog("series");
+      else if (route.name === "library") renderLibrary();
+      else if (route.name === "search") renderSearchResultsOnly();
+      else if (route.name === "details") renderDetails(route.parts[1]);
+    } catch (error) {
+      console.error("CINARO realtime view refresh failed", route.name, error);
+      toast("تعذّر تحديث هذا القسم الآن، لكن التطبيق سيبقى يعمل.", "error");
+      return false;
+    }
     window.scrollTo(0, scrollPosition);
+    return true;
   }
 
   function toggleFavorite(itemId) {
@@ -1832,7 +1839,7 @@
   }
 
   function populateSubtitleTracks(tracks) {
-    $('track[data-cinaro-track="true"]', player.video).forEach((track) => track.remove());
+    player.video.querySelectorAll('track[data-cinaro-track="true"]').forEach((track) => track.remove());
     tracks.forEach((trackData, index) => {
       const track = document.createElement("track");
       track.kind = "subtitles";
@@ -2585,14 +2592,15 @@
       if (!event?.error || state.runtimeErrorShown) return;
       state.runtimeErrorShown = true;
       console.error("CINARO runtime error", event.error);
-      toast("تم احتواء خطأ في الواجهة. جرّب القسم مرة ثانية.", "error");
-      window.setTimeout(() => { state.runtimeErrorShown = false; }, 2500);
+      toast("تعذّر تنفيذ جزء من الواجهة، وتم إبقاء التطبيق يعمل.", "error");
+      window.setTimeout(() => { state.runtimeErrorShown = false; }, 2200);
     });
     window.addEventListener("unhandledrejection", (event) => {
       if (state.runtimeErrorShown) return;
       state.runtimeErrorShown = true;
       console.error("CINARO unhandled promise", event.reason);
-      toast("تعذّرت عملية داخل التطبيق. تحقق من الإنترنت وحاول مرة ثانية.", "error");
+      toast("تعذّرت عملية مؤقتة. يمكنك متابعة استخدام التطبيق.", "error");
+      window.setTimeout(() => { state.runtimeErrorShown = false; }, 2200);
     });
 
     window.addEventListener("hashchange", renderRoute);
@@ -2725,40 +2733,61 @@
     });
   }
 
+  function runBootStep(name, task) {
+    try {
+      task();
+      return true;
+    } catch (error) {
+      console.error(`CINARO boot step failed: ${name}`, error);
+      return false;
+    }
+  }
+
   function initialize() {
-    applySettings();
-    bindAuthEvents();
-    bindCopyProtection();
-    bindGlobalEvents();
-    bindPlayerEvents();
-    setupMediaSessionActions();
-    updateNetworkStatus();
-    registerServiceWorker();
-    window.addEventListener("cinaro:pip-exit", () => {
-      requestPortraitMode();
-      showPlayerControls();
-    });
-    if (!location.hash) navigate("home", true);
-    else renderRoute();
-    updateAccountUI();
-
-    window.addEventListener("cinaro:supabase-ready", (event) => connectSupabase(event.detail?.client));
-    window.addEventListener("cinaro:supabase-error", (event) => {
-      console.warn("CINARO Supabase unavailable", event.detail);
-      state.authResolved = true;
-      setSupabaseStatus("error", "Supabase غير متاح — التطبيق يعمل بالبيانات المحلية");
-      updateAccountUI();
-      if (!state.localGuest && !state.authUser && storage.get(STORAGE.authChoice, "") !== "account") showAuth("login");
+    runBootStep("settings", applySettings);
+    runBootStep("global-events", bindGlobalEvents);
+    runBootStep("auth-events", bindAuthEvents);
+    runBootStep("copy-protection", bindCopyProtection);
+    runBootStep("player-events", bindPlayerEvents);
+    runBootStep("media-session", setupMediaSessionActions);
+    runBootStep("network-status", updateNetworkStatus);
+    runBootStep("service-worker", registerServiceWorker);
+    runBootStep("pip-events", () => {
+      window.addEventListener("cinaro:pip-exit", () => {
+        requestPortraitMode();
+        showPlayerControls();
+      });
     });
 
-    if (window.CINARO_SUPABASE) connectSupabase(window.CINARO_SUPABASE);
+    runBootStep("initial-route", () => {
+      if (!location.hash) navigate("home", true);
+      else renderRoute();
+    });
+    runBootStep("account-ui", updateAccountUI);
+
+    runBootStep("supabase-events", () => {
+      window.addEventListener("cinaro:supabase-ready", (event) => connectSupabase(event.detail?.client));
+      window.addEventListener("cinaro:supabase-error", (event) => {
+        console.warn("CINARO Supabase unavailable", event.detail);
+        state.authResolved = true;
+        setSupabaseStatus("error", "Supabase غير متاح — التطبيق يعمل بآخر بيانات متاحة");
+        updateAccountUI();
+        if (!state.localGuest && !state.authUser && storage.get(STORAGE.authChoice, "") !== "account") showAuth("login");
+      });
+    });
+
+    runBootStep("supabase-connect", () => {
+      if (window.CINARO_SUPABASE) connectSupabase(window.CINARO_SUPABASE);
+    });
+
     window.setTimeout(() => {
       if (state.firebase || state.authResolved) return;
       state.authResolved = true;
       setSupabaseStatus("error", "تعذّر الاتصال بـSupabase — يمكنك المتابعة كضيف");
-      updateAccountUI();
+      runBootStep("delayed-account-ui", updateAccountUI);
       if (!state.localGuest && storage.get(STORAGE.authChoice, "") !== "account") showAuth("login");
     }, 7000);
+
     finishSplash();
   }
 
