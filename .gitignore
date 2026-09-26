@@ -5,3 +5,12 @@ dist/
 *.log
 .idea/
 .vscode/
+
+# Secrets and local service credentials
+.env
+.env.*
+!.env.example
+*service-account*.json
+*service_account*.json
+*firebase-admin*.json
+google-services.json

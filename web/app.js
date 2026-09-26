@@ -2,7 +2,7 @@
   "use strict";
 
   let DATA = window.CINARO_DATA;
-  const WEB_APP_VERSION = "2.6.3";
+  const WEB_APP_VERSION = "2.7.0";
   const URL_APP_VERSION = new URLSearchParams(location.search).get("v")?.match(/^\d+\.\d+\.\d+$/)?.[0] || "";
   const NATIVE_APP_VERSION = navigator.userAgent.match(/CINARO\/(\d+\.\d+\.\d+)/i)?.[1] || "";
   const APP_VERSION = URL_APP_VERSION || NATIVE_APP_VERSION || WEB_APP_VERSION;
@@ -56,7 +56,8 @@
     autoplayNext: true,
     reduceMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
     playbackRate: 1,
-    captionsEnabled: false
+    captionsEnabled: false,
+    notificationsEnabled: true
   };
 
   let favorites = new Set(storage.get(STORAGE.favorites, []));
@@ -294,6 +295,33 @@
     scheduleCloudSync(1000);
   }
 
+  function nativeNotificationsAvailable() {
+    try {
+      return Boolean(window.CinaroNative?.notificationsAvailable?.());
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function syncNativePushIdentity(user = state.authUser) {
+    if (!nativeNotificationsAvailable()) return;
+    try {
+      if (user && !user.isAnonymous && user.uid) window.CinaroNative.setNotificationUser(String(user.uid));
+      else window.CinaroNative.clearNotificationUser();
+    } catch (error) {
+      console.warn("CINARO push identity sync failed", error);
+    }
+  }
+
+  function syncNativePushPreference() {
+    if (!nativeNotificationsAvailable()) return;
+    try {
+      if (settings.notificationsEnabled === false) window.CinaroNative.setPushEnabled(false);
+    } catch (error) {
+      console.warn("CINARO push preference sync failed", error);
+    }
+  }
+
   function setSupabaseStatus(status, message) {
     state.firebaseStatus = status;
     const className = status === "connected" ? "sync-dot" : status === "error" ? "sync-dot error" : "sync-dot pending";
@@ -477,6 +505,8 @@
       storage.set(STORAGE.history, watchHistory);
       storage.set(STORAGE.settings, settings);
       applySettings();
+      syncSettingsControls();
+      syncNativePushPreference();
       refreshCurrentView();
     }
     state.cloudHydrated = true;
@@ -644,6 +674,7 @@
     state.firebaseAuthUnsubscribe = client.onAuth((user) => {
       state.authResolved = true;
       state.authUser = user;
+      syncNativePushIdentity(user);
       if (user) {
         state.localGuest = Boolean(user.isAnonymous);
         storage.set(STORAGE.authChoice, user.isAnonymous ? "guest" : "account");
@@ -1620,6 +1651,14 @@
     byId("oledToggle").checked = Boolean(settings.oled);
     byId("autoplayToggle").checked = Boolean(settings.autoplayNext);
     byId("motionToggle").checked = Boolean(settings.reduceMotion);
+    const notificationRow = byId("notificationSettingRow");
+    const notificationsToggle = byId("notificationsToggle");
+    const available = nativeNotificationsAvailable();
+    if (notificationRow) notificationRow.hidden = !available;
+    if (notificationsToggle) {
+      notificationsToggle.disabled = !available;
+      notificationsToggle.checked = settings.notificationsEnabled !== false;
+    }
   }
 
   function applySettings() {
@@ -2641,6 +2680,15 @@
       applySettings();
       startHeroRotation();
     });
+    byId("notificationsToggle")?.addEventListener("change", (event) => {
+      settings.notificationsEnabled = event.target.checked;
+      saveSettings();
+      if (nativeNotificationsAvailable()) {
+        try { window.CinaroNative.setPushEnabled(Boolean(event.target.checked)); }
+        catch (error) { console.warn("CINARO push preference update failed", error); }
+      }
+      toast(event.target.checked ? "تم تفعيل إشعارات CINARO" : "تم إيقاف إشعارات CINARO");
+    });
     byId("clearHistoryButton").addEventListener("click", async () => {
       const accepted = await askConfirmation(state.authUser && !state.authUser.isAnonymous
         ? "سيتم حذف تقدم الأفلام والحلقات من هذا الحساب وجميع أجهزته."
@@ -2744,7 +2792,11 @@
   }
 
   function initialize() {
-    runBootStep("settings", applySettings);
+    runBootStep("settings", () => {
+      applySettings();
+      syncSettingsControls();
+      syncNativePushPreference();
+    });
     runBootStep("global-events", bindGlobalEvents);
     runBootStep("auth-events", bindAuthEvents);
     runBootStep("copy-protection", bindCopyProtection);

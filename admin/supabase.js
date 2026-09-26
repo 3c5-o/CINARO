@@ -64,8 +64,8 @@ const configFromRow = (row) => ({
   id: row?.id || "public",
   featured: Array.isArray(row?.featured) ? row.featured : [],
   announcement: row?.announcement || "",
-  latestVersion: row?.latest_version || "2.6.3",
-  minimumVersion: row?.minimum_version || "2.6.3",
+  latestVersion: row?.latest_version || "2.7.0",
+  minimumVersion: row?.minimum_version || "2.7.0",
   updateNotes: row?.update_notes || "",
   updateUrl: row?.update_url || "https://github.com/3c5-o/CINARO/releases",
   maintenance: row?.maintenance === true,
@@ -115,6 +115,26 @@ const auditFromRow = (row) => ({
   details: row?.details || "",
   actorUid: row?.actor_uid || "",
   actorEmail: row?.actor_email || "",
+  createdAt: dateMillis(row?.created_at)
+});
+
+const notificationFromRow = (row) => ({
+  id: String(row?.id || ""),
+  title: row?.title || "",
+  message: row?.message || "",
+  imageUrl: row?.image_url || "",
+  audienceType: row?.audience_type === "user" ? "user" : "all",
+  targetUserId: row?.target_user_id || "",
+  route: row?.route || "home",
+  contentId: row?.content_id || "",
+  contentKind: row?.content_kind || "",
+  season: numberValue(row?.season, 0),
+  episode: numberValue(row?.episode, 0),
+  status: row?.status === "failed" ? "failed" : "sent",
+  oneSignalMessageId: row?.onesignal_message_id || "",
+  recipients: Math.max(0, Math.round(numberValue(row?.recipients, 0))),
+  errorMessage: row?.error_message || "",
+  actorUid: row?.actor_uid || "",
   createdAt: dateMillis(row?.created_at)
 });
 
@@ -277,8 +297,8 @@ async function saveDocument(name, id, payload) {
     const row = {
       id: safeId,
       announcement: patch.announcement !== undefined ? clean(patch.announcement, "", 500) : old.announcement || "",
-      latest_version: patch.latestVersion !== undefined ? clean(patch.latestVersion, "2.6.3", 20) : old.latest_version || "2.6.3",
-      minimum_version: patch.minimumVersion !== undefined ? clean(patch.minimumVersion, "2.6.3", 20) : old.minimum_version || "2.6.3",
+      latest_version: patch.latestVersion !== undefined ? clean(patch.latestVersion, "2.7.0", 20) : old.latest_version || "2.7.0",
+      minimum_version: patch.minimumVersion !== undefined ? clean(patch.minimumVersion, "2.7.0", 20) : old.minimum_version || "2.7.0",
       update_notes: patch.updateNotes !== undefined ? clean(patch.updateNotes, "", 1000) : old.update_notes || "",
       maintenance: patch.maintenance !== undefined ? patch.maintenance === true : old.maintenance === true,
       force_update: patch.forceUpdate !== undefined ? patch.forceUpdate === true : old.force_update !== false,
@@ -426,6 +446,10 @@ const client = {
         const result = await supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(1500);
         throwIf(result.error);
         rows = (result.data || []).map(auditFromRow);
+      } else if (name === "notificationLogs") {
+        const result = await supabase.from("notification_logs").select("*").order("created_at", { ascending: false }).limit(300);
+        throwIf(result.error);
+        rows = (result.data || []).map(notificationFromRow);
       } else if (name === "users") {
         rows = await loadUsers();
       } else if (name === "supervisorAssignments") {
@@ -438,7 +462,10 @@ const client = {
 
     const tables = name === "users" ? ["profiles", "account_status"]
       : name === "supervisorAssignments" ? ["admin_memberships", "profiles"]
-      : [name === "contentRequests" ? "content_requests" : name === "auditLogs" ? "audit_logs" : name];
+      : [name === "contentRequests" ? "content_requests"
+        : name === "auditLogs" ? "audit_logs"
+        : name === "notificationLogs" ? "notification_logs"
+        : name];
 
     stops = tables.map((table, index) => live(table, name + "-" + index, load));
     load().catch((error) => onError?.(error));
@@ -483,6 +510,18 @@ const client = {
 
   saveDocument,
   deleteDocument,
+
+  async sendNotification(payload) {
+    const body = payload && typeof payload === "object" ? payload : {};
+    const { data, error } = await supabase.functions.invoke("send-notification", { body });
+    throwIf(error);
+    if (data?.error) {
+      const failure = new Error(data?.message || data.error);
+      failure.code = data.error;
+      throw failure;
+    }
+    return data || {};
+  },
 
   async logAudit(action, target, details, actor) {
     const result = await supabase.from("audit_logs").insert({

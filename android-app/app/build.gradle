@@ -16,8 +16,8 @@ android {
         applicationId "com.cinaro.app"
         minSdk 24
         targetSdk 35
-        versionCode 16
-        versionName "2.6.3"
+        versionCode 17
+        versionName "2.7.0"
     }
 
     buildFeatures {
@@ -28,20 +28,24 @@ android {
     productFlavors {
         user {
             dimension "edition"
-            buildConfigField "String", "ONLINE_APP_URL", '"https://3c5-o.github.io/CINARO/web/?v=2.6.3#home"'
+            buildConfigField "String", "ONLINE_APP_URL", '"https://3c5-o.github.io/CINARO/web/?v=2.7.0#home"'
             buildConfigField "String", "OFFLINE_APP_URL", '"file:///android_asset/www/index.html#home"'
             buildConfigField "String", "APP_PATH", '"/CINARO/web/"'
             buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "true"
+            buildConfigField "boolean", "ENABLE_PUSH", "true"
+            buildConfigField "String", "ONESIGNAL_APP_ID", '"86e154b0-957b-41e9-a07b-9f5ed651cb01"'
         }
         admin {
             dimension "edition"
             applicationId "com.cinaro.admin"
-            versionName "2.6.3-admin"
+            versionName "2.7.0-admin"
             resValue "string", "app_name", "CINARO Admin"
-            buildConfigField "String", "ONLINE_APP_URL", '"https://3c5-o.github.io/CINARO/admin/?v=2.6.3#dashboard"'
+            buildConfigField "String", "ONLINE_APP_URL", '"https://3c5-o.github.io/CINARO/admin/?v=2.7.0#dashboard"'
             buildConfigField "String", "OFFLINE_APP_URL", '"file:///android_asset/admin/index.html#dashboard"'
             buildConfigField "String", "APP_PATH", '"/CINARO/admin/"'
             buildConfigField "boolean", "BLOCK_SCREEN_CAPTURE", "false"
+            buildConfigField "boolean", "ENABLE_PUSH", "false"
+            buildConfigField "String", "ONESIGNAL_APP_ID", '""'
         }
     }
 
@@ -94,4 +98,9 @@ tasks.register("syncAdminAssets", Copy) {
 
 tasks.named("preBuild").configure {
     dependsOn("syncWebAssets", "syncAdminAssets")
+}
+
+
+dependencies {
+    implementation "com.onesignal:OneSignal:5.10.2"
 }

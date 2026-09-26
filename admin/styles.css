@@ -1667,3 +1667,42 @@ textarea:focus {
     font-size: .46rem;
   }
 }
+
+
+/* ===== CINARO 2.7 — Push notification center ===== */
+.notification-layout { align-items: start; }
+.notification-form { padding-bottom: 1.2rem; }
+.notification-form > label,
+.notification-form > .form-grid { margin: 0 1.25rem 1rem; }
+.notification-form > .form-actions { padding-top: .2rem; }
+.notification-info-panel { overflow: hidden; }
+.notification-feature-list { display: grid; gap: .15rem; padding: 0 1.15rem 1.15rem; }
+.notification-feature-list > span {
+  display: grid;
+  gap: .2rem;
+  padding: .9rem .2rem;
+  border-bottom: 1px solid var(--line);
+}
+.notification-feature-list > span:last-child { border-bottom: 0; }
+.notification-feature-list b { color: var(--text); font-size: .78rem; }
+.notification-feature-list small { color: var(--dim); font-size: .7rem; line-height: 1.7; }
+.notification-history-panel { margin-top: 1rem; }
+.notifications-data-table { min-width: 900px; }
+.notifications-data-table .data-head,
+.notifications-data-table .data-row {
+  grid-template-columns: minmax(260px, 1.45fr) .72fr .72fr minmax(170px, .9fr) .85fr;
+}
+.notification-message-cell { min-width: 0; }
+.notification-message-cell b,
+.notification-message-cell small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notification-message-cell b { color: var(--text); font-size: .78rem; }
+.notification-message-cell small { margin-top: .28rem; color: var(--dim); }
+.notification-status.sent { color: #74e9be; background: rgba(53,212,155,.1); }
+.notification-status.failed { color: #ff9cac; background: rgba(255,54,87,.1); }
+.notification-recipient { direction: ltr; text-align: start; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .66rem; }
+.notification-route { direction: ltr; text-align: start; color: var(--dim); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .66rem; }
