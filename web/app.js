@@ -889,19 +889,24 @@
 
   function mediaCard(item) {
     const favorite = favorites.has(item.id);
+    const genre = Array.isArray(item.genres) && item.genres.length ? item.genres[0] : (item.kind === "movie" ? "فيلم" : "مسلسل");
     return `
       <article class="media-card" tabindex="0" role="link" data-route="details/${escapeAttribute(item.id)}" aria-label="تفاصيل ${escapeAttribute(item.title)}">
         <div class="poster-shell">
           ${imageMarkup(item.poster, `غلاف ${item.title}`)}
-          <span class="kind-badge">${item.kind === "movie" ? "فيلم" : "مسلسل"}</span>
+          <div class="card-topline">
+            <span class="kind-badge">${item.kind === "movie" ? "فيلم" : "مسلسل"}</span>
+            <span class="card-rating-pill">${icon("star")} ${escapeHTML(item.rating)}</span>
+          </div>
           <button class="favorite-button ${favorite ? "active" : ""}" type="button" data-action="toggle-favorite" data-item-id="${escapeAttribute(item.id)}" aria-label="${favorite ? "إزالة من قائمتي" : "إضافة إلى قائمتي"}">
             ${icon("heart")}
           </button>
           <span class="card-play">${icon("play")}</span>
+          <div class="poster-gradient"></div>
         </div>
         <div class="card-copy">
           <h3 class="card-title">${escapeHTML(item.title)}</h3>
-          <div class="card-meta"><span class="rating">${icon("star")} ${escapeHTML(item.rating)}</span><span>·</span><span>${escapeHTML(item.year)}</span></div>
+          <div class="card-meta"><span>${escapeHTML(genre)}</span><span>•</span><span>${escapeHTML(item.year)}</span></div>
         </div>
       </article>`;
   }
@@ -982,24 +987,36 @@
     const featuredItems = DATA.featured.map((id) => itemMap.get(id)).filter(Boolean);
     const item = featuredItems[state.heroIndex % Math.max(1, featuredItems.length)] || DATA.items[0];
     const favorite = favorites.has(item.id);
+    const genreLine = (item.genres || []).slice(0, 3).join(" • ");
     container.innerHTML = `
       <section class="hero" style="background-image:url('${cssImage(item.backdrop || item.poster)}')">
-        <div class="hero-content">
+        <div class="hero-noise" aria-hidden="true"></div>
+        <div class="hero-content content-shell">
           <div class="hero-copy">
-            <span class="eyebrow">اختيار CINARO</span>
+            <div class="hero-kickers">
+              <span class="eyebrow">CINARO PREMIERE</span>
+              <span class="hero-genre">${escapeHTML(genreLine || (item.kind === "movie" ? "فيلم" : "مسلسل"))}</span>
+            </div>
             <h1>${escapeHTML(item.title)}</h1>
             <p class="english-title">${escapeHTML(item.englishTitle || "")}</p>
             ${metaRow(item)}
             <p class="hero-description">${escapeHTML(item.description)}</p>
-            <div class="button-row">
-              <button class="button primary" type="button" data-route="${escapeAttribute(defaultWatchRoute(item))}">${icon("play")} مشاهدة الآن</button>
+            <div class="button-row hero-actions">
+              <button class="button primary hero-watch" type="button" data-route="${escapeAttribute(defaultWatchRoute(item))}">${icon("play")} مشاهدة الآن</button>
               <button class="button secondary" type="button" data-route="details/${escapeAttribute(item.id)}">${icon("info")} التفاصيل</button>
-              <button class="button secondary ${favorite ? "is-favorite" : ""}" type="button" data-action="toggle-favorite" data-item-id="${escapeAttribute(item.id)}">${icon("heart")} ${favorite ? "في قائمتي" : "قائمتي"}</button>
+              <button class="button icon-only secondary ${favorite ? "is-favorite" : ""}" type="button" data-action="toggle-favorite" data-item-id="${escapeAttribute(item.id)}" aria-label="${favorite ? "إزالة من قائمتي" : "إضافة إلى قائمتي"}">${icon("heart")}</button>
             </div>
           </div>
+          <button class="hero-poster-card" type="button" data-route="details/${escapeAttribute(item.id)}" aria-label="فتح تفاصيل ${escapeAttribute(item.title)}">
+            ${imageMarkup(item.poster, `غلاف ${item.title}`, "hero-poster", "eager")}
+            <span><b>${escapeHTML(item.title)}</b><small>${item.kind === "movie" ? "فيلم" : "مسلسل"} • ${escapeHTML(item.year)}</small></span>
+          </button>
         </div>
-        <div class="hero-dots" aria-label="اختيارات الواجهة">
-          ${featuredItems.map((_, index) => `<button class="hero-dot ${index === state.heroIndex ? "active" : ""}" type="button" data-action="hero-dot" data-index="${index}" aria-label="العرض ${index + 1}"></button>`).join("")}
+        <div class="hero-footer content-shell">
+          <div class="hero-dots" aria-label="اختيارات الواجهة">
+            ${featuredItems.map((_, index) => `<button class="hero-dot ${index === state.heroIndex ? "active" : ""}" type="button" data-action="hero-dot" data-index="${index}" aria-label="العرض ${index + 1}"></button>`).join("")}
+          </div>
+          <span class="hero-index">${String((state.heroIndex % Math.max(1, featuredItems.length)) + 1).padStart(2, "0")} / ${String(Math.max(1, featuredItems.length)).padStart(2, "0")}</span>
         </div>
       </section>`;
   }
@@ -1017,10 +1034,10 @@
       return;
     }
     const continueItems = recentEntries().slice(0, 8);
-    const popular = sortItems(DATA.items, "popular").slice(0, 8);
-    const latest = sortItems(DATA.items, "latest").slice(0, 10);
-    const topRated = sortItems(DATA.items, "rating").slice(0, 8);
-    const featuredSeries = sortItems(series, "popular").slice(0, 8);
+    const popular = sortItems(DATA.items, "popular").slice(0, 10);
+    const latest = sortItems(DATA.items, "latest").slice(0, 12);
+    const topRated = sortItems(DATA.items, "rating").slice(0, 10);
+    const featuredSeries = sortItems(series, "popular").slice(0, 10);
     const customSections = state.sections.map((section) => ({
       ...section,
       items: sortItems(DATA.items.filter((item) => item.sectionIds?.includes(section.id)), "latest").slice(0, 12)
@@ -1028,26 +1045,32 @@
 
     elements.home.innerHTML = `
       <div id="homeHero"></div>
+      <div class="content-shell discovery-dock" aria-label="اختصارات CINARO">
+        <button type="button" data-route="movies"><span class="dock-icon">${icon("film")}</span><span><b>الأفلام</b><small>${movies.length} عنوان</small></span>${icon("chevron-left")}</button>
+        <button type="button" data-route="series"><span class="dock-icon">${icon("tv")}</span><span><b>المسلسلات</b><small>${series.length} مسلسل</small></span>${icon("chevron-left")}</button>
+        <button type="button" data-route="search"><span class="dock-icon">${icon("search")}</span><span><b>اكتشف بسرعة</b><small>بحث مباشر</small></span>${icon("chevron-left")}</button>
+        <button type="button" data-route="library"><span class="dock-icon">${icon("heart")}</span><span><b>مساحتك</b><small>المفضلة والمتابعة</small></span>${icon("chevron-left")}</button>
+      </div>
       <div class="content-shell home-sections">
         ${continueItems.length ? `
-          <section class="content-section">
-            ${sectionHeading("أكمل من مكانك", "تابع المشاهدة", "library")}
+          <section class="content-section continue-section">
+            ${sectionHeading("استمر بدون ما تضيع مكانك", "أكمل المشاهدة", "library")}
             <div class="continue-rail">${continueItems.map(continueCard).join("")}</div>
           </section>` : ""}
-        <section class="content-section">
-          ${sectionHeading("يتصدر الآن", "الأكثر مشاهدة", "movies")}
-          <div class="media-rail">${popular.map(mediaCard).join("")}</div>
+        <section class="content-section spotlight-section">
+          ${sectionHeading("يشاهده الجميع الآن", "الأكثر مشاهدة", "movies")}
+          <div class="media-rail featured-rail">${popular.map(mediaCard).join("")}</div>
         </section>
         <section class="content-section">
-          ${sectionHeading("وصل حديثًا", "جديد CINARO", "movies")}
+          ${sectionHeading("وصل للتو إلى مكتبتك", "جديد CINARO", "movies")}
           <div class="media-rail">${latest.map(mediaCard).join("")}</div>
         </section>
         <section class="content-section">
-          ${sectionHeading("اختيارات قوية", "الأعلى تقييمًا", "movies")}
+          ${sectionHeading("تقييمات مرتفعة", "اختيارات مميزة", "movies")}
           <div class="media-rail">${topRated.map(mediaCard).join("")}</div>
         </section>
         <section class="content-section">
-          ${sectionHeading("حلقات ومواسم", "مسلسلات مميزة", "series")}
+          ${sectionHeading("مواسم وحلقات تستحق الوقت", "مسلسلات مختارة", "series")}
           <div class="media-rail">${featuredSeries.map(mediaCard).join("")}</div>
         </section>
         ${customSections.map((section) => `
@@ -1079,15 +1102,17 @@
     const visibleCount = Number.isFinite(Number(config.visible)) ? Number(config.visible) : 60;
     const visible = sorted.slice(0, Math.max(30, visibleCount));
     const title = kind === "movie" ? "الأفلام" : "المسلسلات";
-    const kicker = kind === "movie" ? "شاشة كبيرة في جيبك" : "مواسم تستحق المتابعة";
-    const description = kind === "movie" ? "اكتشف الأفلام ورتّبها حسب الجديد أو التقييم أو المشاهدة." : "تصفّح المسلسلات وانتقل بين المواسم والحلقات بسهولة.";
+    const kicker = kind === "movie" ? "CINEMA COLLECTION" : "SERIES COLLECTION";
+    const description = kind === "movie" ? "كل أفلام CINARO في مكان واحد، بترتيب أسرع وفلاتر أوضح." : "المسلسلات والمواسم والحلقات مرتبة لتوصل للي تريده بأقل خطوات.";
 
     return `
-      <div class="content-shell page-shell">
-        <div class="page-heading">
+      <div class="content-shell page-shell catalog-shell">
+        <div class="catalog-hero">
+          <div class="catalog-hero-icon">${icon(kind === "movie" ? "film" : "tv")}</div>
           <div><span>${kicker}</span><h1>${title}</h1><p>${description}</p></div>
+          <div class="catalog-count"><b>${source.length}</b><small>${kind === "movie" ? "فيلم" : "مسلسل"}</small></div>
         </div>
-        <div class="filter-panel">
+        <div class="filter-panel premium-filter">
           <div class="chip-row" aria-label="التصنيفات">
             ${genres.map((genre) => `<button class="chip ${genre === config.genre ? "active" : ""}" type="button" data-action="catalog-genre" data-kind="${kind}" data-genre="${escapeAttribute(genre)}">${escapeHTML(genre)}</button>`).join("")}
           </div>
@@ -1098,7 +1123,7 @@
             <option value="oldest" ${config.sort === "oldest" ? "selected" : ""}>الأقدم</option>
           </select>
         </div>
-        <div class="result-count">${sorted.length} ${kind === "movie" ? "فيلم" : "مسلسل"}</div>
+        <div class="catalog-result-line"><span>النتائج</span><b>${sorted.length} ${kind === "movie" ? "فيلم" : "مسلسل"}</b></div>
         <div class="media-grid">${mediaGrid(visible, `لا يوجد ${title} ضمن هذا التصنيف.`)}</div>
         ${visible.length < sorted.length ? `<div class="load-more-wrap"><button class="button secondary" type="button" data-action="catalog-more" data-kind="${kind}">عرض المزيد (${sorted.length - visible.length})</button></div>` : ""}
       </div>`;
@@ -1422,7 +1447,7 @@
       const item = itemMap.get(route.parts[1]);
       active = item?.kind === "series" ? "series" : "movies";
     }
-    $$('[data-route="home"], [data-route="movies"], [data-route="series"], [data-route="library"]')
+    $('[data-route="home"], [data-route="movies"], [data-route="series"], [data-route="search"], [data-route="library"]')
       .forEach((button) => button.classList.toggle("active", button.dataset.route === active));
   }
 
