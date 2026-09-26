@@ -60,6 +60,7 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT
         ));
         setContentView(rootView);
+        configureSystemInsets();
 
         configureWebView();
         captureNotificationIntent(getIntent());
@@ -101,6 +102,33 @@ public class MainActivity extends Activity {
                         WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
             }
         }
+    }
+
+    private void configureSystemInsets() {
+        rootView.setOnApplyWindowInsetsListener((view, insets) -> {
+            int topInset;
+            int bottomInset;
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                android.graphics.Insets systemBars = insets.getInsets(WindowInsets.Type.systemBars());
+                topInset = systemBars.top;
+                bottomInset = systemBars.bottom;
+            } else {
+                topInset = insets.getSystemWindowInsetTop();
+                bottomInset = insets.getSystemWindowInsetBottom();
+            }
+
+            if (webView != null) {
+                FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) webView.getLayoutParams();
+                if (params.topMargin != topInset || params.bottomMargin != bottomInset) {
+                    params.topMargin = topInset;
+                    params.bottomMargin = bottomInset;
+                    webView.setLayoutParams(params);
+                }
+            }
+            return insets;
+        });
+        rootView.requestApplyInsets();
     }
 
     @SuppressLint({"SetJavaScriptEnabled", "ObsoleteSdkInt"})
@@ -318,7 +346,8 @@ public class MainActivity extends Activity {
         String value = route == null ? "" : route.trim().replaceFirst("^#", "");
         if (value.matches("^(home|movies|series|library|search)$")) return value;
         if (value.matches("^details/[a-z0-9-]{1,150}$")) return value;
-        if (value.matches("^watch/[a-z0-9-]{1,150}(?:/\\d{1,4}/\\d{1,5})?$")) return value;
+        if (value.matches("^watch/movie/[a-z0-9-]{1,150}$")) return value;
+        if (value.matches("^watch/series/[a-z0-9-]{1,150}/\\d{1,4}/\\d{1,5}$")) return value;
         return value.isEmpty() ? null : "home";
     }
 

@@ -220,7 +220,10 @@
     if (!isAdmin() || !state.firebase?.sendNotification) return null;
     try {
       const result = await state.firebase.sendNotification(payload);
-      if (!options.silent) toast(`تم إرسال الإشعار${result?.recipients ? ` إلى ${formatNumber(result.recipients)} جهاز` : ""}`);
+      if (!options.silent) {
+        if (result?.warning === "no_recipients") toast("تم تنفيذ الإرسال، لكن لا توجد أجهزة مستهدفة قابلة لاستلام الإشعار حالياً.", "error");
+        else toast(`تم إرسال الإشعار${result?.recipients ? ` إلى ${formatNumber(result.recipients)} جهاز` : ""}`);
+      }
       return result;
     } catch (error) {
       console.warn("CINARO notification send failed", error);
@@ -252,7 +255,7 @@
       title: `حلقة جديدة من ${item.title}`,
       message: `الموسم ${latest.season} · الحلقة ${latest.episode}${latest.title ? ` — ${latest.title}` : ""} متوفرة الآن.`,
       imageUrl: item.poster || "",
-      route: `watch/${item.id}/${latest.season}/${latest.episode}`,
+      route: `watch/series/${item.id}/${latest.season}/${latest.episode}`,
       contentId: item.id,
       contentKind: "series",
       season: latest.season,
@@ -356,11 +359,16 @@
         contentKind: item?.kind || ""
       });
       await state.firebase.logAudit("إرسال إشعار", item?.id || audienceType, `${title} · ${audienceType}`, state.authUser);
-      setMessage("notificationMessage", `تم الإرسال بنجاح${result?.recipients ? ` إلى ${formatNumber(result.recipients)} جهاز` : ""}.`, "success");
+      if (result?.warning === "no_recipients") {
+        setMessage("notificationMessage", "تم تنفيذ الطلب، لكن لا توجد أجهزة مشتركة نشطة تستقبل الإشعار حالياً.", "error");
+        toast("لا توجد أجهزة مستهدفة قابلة للاستلام حالياً.", "error");
+      } else {
+        setMessage("notificationMessage", `تم الإرسال بنجاح${result?.recipients ? ` إلى ${formatNumber(result.recipients)} جهاز` : ""}.`, "success");
+        toast(`تم إرسال الإشعار${result?.recipients ? ` إلى ${formatNumber(result.recipients)} جهاز` : ""}`);
+      }
       $("notificationTitle").value = "";
       $("notificationBody").value = "";
       $("notificationImage").value = "";
-      toast("تم إرسال الإشعار");
     } catch (error) {
       setMessage("notificationMessage", errorMessage(error), "error");
     } finally {
@@ -1118,8 +1126,8 @@
   function fillSettings() {
     $("settingFeatured").value = toArray(state.config.featured).join(", ");
     $("settingAnnouncement").value = asString(state.config.announcement);
-    $("settingLatestVersion").value = asString(state.config.latestVersion, "2.7.0");
-    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.7.0");
+    $("settingLatestVersion").value = asString(state.config.latestVersion, "2.7.1");
+    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.7.1");
     $("settingUpdateUrl").value = asString(state.config.updateUrl, "https://github.com/3c5-o/CINARO/releases");
     $("settingUpdateNotes").value = asString(state.config.updateNotes);
     if ($("settingUpdateReleasedAt")) $("settingUpdateReleasedAt").value = toLocalDateTimeInput(state.config.updateReleasedAt);
@@ -1701,8 +1709,8 @@
     const form = $("settingsForm");
     setBusy(form, true);
     try {
-      const latestVersion = asString($("settingLatestVersion").value, "2.7.0").slice(0, 20);
-      const versionChanged = latestVersion !== asString(state.config.latestVersion, "2.7.0");
+      const latestVersion = asString($("settingLatestVersion").value, "2.7.1").slice(0, 20);
+      const versionChanged = latestVersion !== asString(state.config.latestVersion, "2.7.1");
       const releaseAt = versionChanged
         ? new Date().toISOString()
         : localDateTimeToIso($("settingUpdateReleasedAt")?.value) || state.config.updateReleasedAt || new Date().toISOString();
@@ -1713,7 +1721,7 @@
         featured: parseCsv($("settingFeatured").value),
         announcement: asString($("settingAnnouncement").value).slice(0, 500),
         latestVersion,
-        minimumVersion: asString($("settingMinVersion").value, "2.7.0").slice(0, 20),
+        minimumVersion: asString($("settingMinVersion").value, "2.7.1").slice(0, 20),
         updateNotes: asString($("settingUpdateNotes").value).slice(0, 1000),
         updateUrl: validMediaUrl($("settingUpdateUrl").value) || "https://github.com/3c5-o/CINARO/releases",
         maintenance: $("settingMaintenance").checked,
@@ -1746,7 +1754,7 @@
     if (!isAdmin()) return;
     const payload = {
       schema: "cinaro-backup-v1",
-      appVersion: "2.7.0",
+      appVersion: "2.7.1",
       exportedAt: new Date().toISOString(),
       content: state.content.map((item) => ({ ...item })),
       sections: state.sections.map((item) => ({ ...item })),

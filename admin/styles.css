@@ -1706,3 +1706,68 @@ textarea:focus {
 .notification-status.failed { color: #ff9cac; background: rgba(255,54,87,.1); }
 .notification-recipient { direction: ltr; text-align: start; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .66rem; }
 .notification-route { direction: ltr; text-align: start; color: var(--dim); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .66rem; }
+
+/* ===== CINARO 2.7.1 — notification center mobile polish ===== */
+@media (max-width: 760px) {
+  .notification-layout {
+    grid-template-columns: 1fr;
+    gap: .8rem;
+  }
+
+  .notification-form > label,
+  .notification-form > .form-grid {
+    margin-inline: .85rem;
+  }
+
+  .notification-form .form-grid.two {
+    grid-template-columns: 1fr;
+  }
+
+  .notification-history-panel {
+    overflow: hidden;
+  }
+
+  .notifications-data-table {
+    min-width: 0;
+  }
+
+  .notifications-data-table .data-head {
+    display: none;
+  }
+
+  .notifications-data-table .data-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: .5rem .7rem;
+    align-items: center;
+    margin: .55rem;
+    padding: .8rem;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(255,255,255,.025);
+  }
+
+  .notification-message-cell {
+    grid-column: 1 / -1;
+  }
+
+  .notification-recipient {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .notification-status {
+    justify-self: end;
+  }
+
+  .notification-route {
+    grid-column: 1 / -1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+

@@ -21,7 +21,8 @@ const safeRoute = (value: unknown) => {
   if (!route) return "home";
   if (/^(home|movies|series|library|search)$/.test(route)) return route;
   if (/^details\/[a-z0-9-]{1,150}$/.test(route)) return route;
-  if (/^watch\/[a-z0-9-]{1,150}(?:\/\d{1,4}\/\d{1,5})?$/.test(route)) return route;
+  if (/^watch\/movie\/[a-z0-9-]{1,150}$/.test(route)) return route;
+  if (/^watch\/series\/[a-z0-9-]{1,150}\/\d{1,4}\/\d{1,5}$/.test(route)) return route;
   return "home";
 };
 
@@ -134,17 +135,20 @@ Deno.serve(async (req: Request) => {
     data: additionalData,
     idempotency_key: crypto.randomUUID(),
     ttl: 259200,
+    priority: 10,
   };
 
   if (imageUrl) {
     oneSignalPayload.big_picture = imageUrl;
-    oneSignalPayload.large_icon = imageUrl;
   }
 
   if (audienceType === "user") {
     oneSignalPayload.include_aliases = { external_id: [targetUserId] };
   } else {
-    oneSignalPayload.included_segments = ["Subscribed Users"];
+    // OneSignal's current default push segment is "Active Subscriptions".
+    // "Subscribed Users" is not a valid segment in this app and caused
+    // broadcast sends to be rejected while direct alias sends still worked.
+    oneSignalPayload.included_segments = ["Active Subscriptions"];
   }
 
   let oneSignalResponse: Response;
@@ -186,7 +190,11 @@ Deno.serve(async (req: Request) => {
   const recipients = Math.max(0, Number(oneSignalResult.recipients) || 0);
   const apiError = Array.isArray(oneSignalResult.errors)
     ? oneSignalResult.errors.map((entry) => String(entry)).join(" · ")
+    : oneSignalResult.errors && typeof oneSignalResult.errors === "object"
+    ? cleanText(JSON.stringify(oneSignalResult.errors), 500)
     : cleanText(oneSignalResult.errors, 500);
+
+  const accepted = oneSignalResponse.ok && Boolean(notificationId);
 
   await admin.from("notification_logs").insert({
     title,
@@ -199,10 +207,10 @@ Deno.serve(async (req: Request) => {
     content_kind: contentKind,
     season,
     episode,
-    status: oneSignalResponse.ok ? "sent" : "failed",
+    status: accepted ? "sent" : "failed",
     onesignal_message_id: notificationId,
     recipients,
-    error_message: oneSignalResponse.ok ? "" : apiError || `HTTP ${oneSignalResponse.status}`,
+    error_message: accepted ? "" : apiError || (oneSignalResponse.ok ? "No eligible push subscriptions." : `HTTP ${oneSignalResponse.status}`),
     actor_uid: user.id,
   });
 
@@ -215,9 +223,10 @@ Deno.serve(async (req: Request) => {
   }
 
   return json({
-    ok: true,
+    ok: accepted,
     notificationId,
     recipients,
     audienceType,
+    warning: accepted ? "" : "no_recipients",
   });
 });
