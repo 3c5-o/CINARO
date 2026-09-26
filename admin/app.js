@@ -76,11 +76,11 @@
     const messages = {
       "auth/invalid-credential": "البريد أو كلمة المرور غير صحيحة.",
       "auth/invalid-login-credentials": "البريد أو كلمة المرور غير صحيحة.",
-      "auth/user-disabled": "هذا الحساب معطّل من Supabase.",
+      "auth/user-disabled": "هذا الحساب معطّل.",
       "auth/too-many-requests": "محاولات كثيرة. انتظر قليلاً ثم أعد المحاولة.",
       "auth/network-request-failed": "تعذّر الاتصال بالشبكة.",
       "permission-denied": "ليس لديك صلاحية لهذه العملية.",
-      "failed-precondition": "تأكد من إعداد Supabase قبل المتابعة."
+      "failed-precondition": "تأكد من إعداد النظام قبل المتابعة."
     };
     return messages[code] || asString(error && error.message, "حدث خطأ غير متوقع.");
   }
@@ -1418,7 +1418,7 @@
       const email = asString($("supervisorEmail").value).toLowerCase();
       const name = asString($("supervisorName").value);
       const sectionIds = parseCsv($("supervisorSections").value);
-      if (!/^[A-Za-z0-9_-]{8,150}$/.test(uid)) throw new Error("UID حساب Supabase غير صحيح.");
+      if (!/^[A-Za-z0-9_-]{8,150}$/.test(uid)) throw new Error("معرّف الحساب غير صحيح.");
       if (!email || !name || !sectionIds.length) throw new Error("UID والبريد والاسم وقسم واحد على الأقل حقول مطلوبة.");
       const payload = {
         uid, email, displayName: name.slice(0, 100), sectionIds, active: true,
@@ -1819,12 +1819,12 @@
       const stop = client.listenCollection(name, (rows) => {
         state[setter] = setter === "content" && !isAdmin() ? rows.filter(canManageContent) : rows;
         if (setter === "content" && isAdmin()) migrateManagementSections(rows);
-        setConnection("connected", "متصل بـ Supabase المباشر");
+        setConnection("connected", "النظام متصل ومحدّث");
         refresh();
       }, (error) => {
         console.warn("CINARO admin listener failed", label, error);
-        setConnection("error", "توجد مشكلة في صلاحيات Supabase");
-        showNotice(`تعذّر تحميل ${label}. راجع قواعد Supabase وصلاحيات الحساب.`, "error");
+        setConnection("error", "توجد مشكلة في صلاحيات النظام");
+        showNotice(`تعذّر تحميل ${label}. راجع صلاحيات الحساب وإعدادات النظام.`, "error");
       });
       state.unsubscribers.push(stop);
     };
@@ -1842,7 +1842,7 @@
         (error) => {
           console.warn("CINARO supervisor content listener failed", error);
           setConnection("error", "تعذّر تحميل محتوى الأقسام المسموحة");
-          showNotice("تعذّر تحميل محتوى الأقسام المسموحة. تحقق من تعيين المشرف وقواعد Supabase.", "error");
+          showNotice("تعذّر تحميل محتوى الأقسام المسموحة. تحقق من تعيين المشرف وصلاحيات الأقسام.", "error");
         }
       );
       state.unsubscribers.push(stopScopedContent);
@@ -1929,7 +1929,7 @@
       event.preventDefault();
       const form = event.currentTarget;
       setBusy(form, true);
-      setMessage("loginMessage", "جاري التحقق من Supabase…", "pending");
+      setMessage("loginMessage", "جاري التحقق من الحساب…", "pending");
       try {
         await state.firebase.login($("adminEmail").value, $("adminPassword").value);
         $("adminPassword").value = "";
@@ -2064,8 +2064,8 @@
 
   window.addEventListener("cinaro:admin-supabase-ready", (event) => connectSupabase(event.detail && event.detail.client));
   window.addEventListener("cinaro:admin-supabase-error", (event) => {
-    setConnection("error", "Supabase غير متاح");
-    setMessage("loginMessage", "تعذّر تحميل Supabase. تحقق من الاتصال وإعداد المشروع.", "error");
+    setConnection("error", "الخدمة غير متاحة");
+    setMessage("loginMessage", "تعذّر تحميل الخدمة. تحقق من الاتصال وحاول مجددًا.", "error");
     console.error(event.detail || {});
   });
   bindCopyProtection();
