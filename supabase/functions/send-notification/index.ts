@@ -21,7 +21,8 @@ const safeRoute = (value: unknown) => {
   if (!route) return "home";
   if (/^(home|movies|series|library|search)$/.test(route)) return route;
   if (/^details\/[a-z0-9-]{1,150}$/.test(route)) return route;
-  if (/^watch\/[a-z0-9-]{1,150}(?:\/\d{1,4}\/\d{1,5})?$/.test(route)) return route;
+  if (/^watch\/movie\/[a-z0-9-]{1,150}$/.test(route)) return route;
+  if (/^watch\/series\/[a-z0-9-]{1,150}\/\d{1,4}\/\d{1,5}$/.test(route)) return route;
   return "home";
 };
 
