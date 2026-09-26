@@ -220,7 +220,10 @@
     if (!isAdmin() || !state.firebase?.sendNotification) return null;
     try {
       const result = await state.firebase.sendNotification(payload);
-      if (!options.silent) toast(`تم إرسال الإشعار${result?.recipients ? ` إلى ${formatNumber(result.recipients)} جهاز` : ""}`);
+      if (!options.silent) {
+        if (result?.warning === "no_active_subscriptions") toast("تم تنفيذ الإرسال، لكن لا توجد أجهزة مشتركة نشطة حالياً.", "error");
+        else toast(`تم إرسال الإشعار${result?.recipients ? ` إلى ${formatNumber(result.recipients)} جهاز` : ""}`);
+      }
       return result;
     } catch (error) {
       console.warn("CINARO notification send failed", error);
@@ -356,11 +359,16 @@
         contentKind: item?.kind || ""
       });
       await state.firebase.logAudit("إرسال إشعار", item?.id || audienceType, `${title} · ${audienceType}`, state.authUser);
-      setMessage("notificationMessage", `تم الإرسال بنجاح${result?.recipients ? ` إلى ${formatNumber(result.recipients)} جهاز` : ""}.`, "success");
+      if (result?.warning === "no_active_subscriptions") {
+        setMessage("notificationMessage", "تم تنفيذ الطلب، لكن لا توجد أجهزة مشتركة نشطة تستقبل الإشعار حالياً.", "error");
+        toast("لا توجد أجهزة مشتركة نشطة حالياً.", "error");
+      } else {
+        setMessage("notificationMessage", `تم الإرسال بنجاح${result?.recipients ? ` إلى ${formatNumber(result.recipients)} جهاز` : ""}.`, "success");
+        toast(`تم إرسال الإشعار${result?.recipients ? ` إلى ${formatNumber(result.recipients)} جهاز` : ""}`);
+      }
       $("notificationTitle").value = "";
       $("notificationBody").value = "";
       $("notificationImage").value = "";
-      toast("تم إرسال الإشعار");
     } catch (error) {
       setMessage("notificationMessage", errorMessage(error), "error");
     } finally {
