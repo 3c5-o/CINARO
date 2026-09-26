@@ -5816,3 +5816,151 @@ main#appMain {
     width: 100%;
   }
 }
+
+/* ===== CINARO 2.7.1 — mobile layout polish ===== */
+@media (max-width: 760px) {
+  .app-header {
+    top: 8px;
+    width: calc(100% - 1rem);
+    height: 58px;
+    min-height: 58px;
+    padding-inline: 9px 10px;
+    border-radius: 18px;
+  }
+
+  .network-banner {
+    top: calc(74px + .45rem);
+  }
+
+  .details-backdrop {
+    min-height: 22rem;
+    background-position: center 24%;
+    border-radius: 0 0 26px 26px;
+    overflow: hidden;
+  }
+
+  .details-backdrop::after {
+    background:
+      linear-gradient(0deg, #050609 0%, rgba(5,6,9,.94) 14%, rgba(5,6,9,.58) 40%, rgba(5,6,9,.14) 72%, rgba(5,6,9,.08) 100%),
+      linear-gradient(90deg, rgba(5,6,9,.14), transparent 68%);
+  }
+
+  .back-button {
+    top: 76px;
+    right: 1rem;
+  }
+
+  .details-body {
+    display: block;
+    margin-top: -5.6rem;
+    padding-bottom: 6.75rem;
+  }
+
+  .details-poster {
+    width: min(42vw, 10rem);
+    margin-inline: auto;
+    border-radius: 18px;
+    box-shadow: 0 22px 58px rgba(0,0,0,.58);
+  }
+
+  .details-copy {
+    max-width: none;
+    margin-top: 1rem;
+    padding-bottom: 0;
+    text-align: center;
+  }
+
+  .details-copy h1 {
+    margin-top: .55rem;
+    font-size: clamp(1.75rem, 8.8vw, 2.5rem);
+    line-height: 1.08;
+  }
+
+  .details-copy .english-title {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .details-copy .meta-row,
+  .details-copy .genre-tags,
+  .details-copy .button-row {
+    grid-column: auto;
+    justify-content: center;
+  }
+
+  .details-copy .meta-row {
+    margin-inline: auto;
+  }
+
+  .details-copy .genre-tags {
+    margin: .85rem 0;
+  }
+
+  .details-description {
+    grid-column: auto;
+    max-width: 42rem;
+    margin: .9rem auto 0;
+    color: #aeb5c1;
+    text-align: start;
+  }
+
+  .details-copy .button-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .55rem;
+    margin-top: 1rem;
+  }
+
+  .details-copy .button-row .button {
+    width: 100%;
+    min-height: 46px;
+    padding-inline: .65rem;
+  }
+
+  .details-copy .button-row .button.primary {
+    grid-column: 1 / -1;
+  }
+
+  .series-area {
+    margin-top: 1.5rem;
+    padding: .9rem;
+    border-radius: 18px;
+  }
+
+  .series-heading {
+    gap: .7rem;
+  }
+
+  .season-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: .15rem;
+    scrollbar-width: none;
+  }
+
+  .season-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .episode-row {
+    min-height: 88px;
+    border-radius: 14px;
+  }
+}
+
+@media (max-width: 390px) {
+  .details-poster {
+    width: 9rem;
+  }
+
+  .details-copy .button-row {
+    grid-template-columns: 1fr;
+  }
+
+  .details-copy .button-row .button.primary {
+    grid-column: auto;
+  }
+}
+
