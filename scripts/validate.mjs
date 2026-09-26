@@ -25,6 +25,8 @@ const adminSupabase = read("admin/supabase.js");
 const adminStyles = read("admin/styles.css");
 const adminSw = read("admin/sw.js");
 const buildGradle = read("android-app/app/build.gradle");
+const mainActivity = read("android-app/app/src/main/java/com/cinaro/app/MainActivity.java");
+const pushFunction = read("supabase/functions/send-notification/index.ts");
 const workflow = read(".github/workflows/android-apk.yml");
 const packageJson = JSON.parse(read("package.json"));
 
@@ -33,8 +35,8 @@ assert(packageJson.scripts.test.includes("web/supabase.js"), "tests check user S
 assert(packageJson.scripts.test.includes("admin/supabase.js"), "tests check admin Supabase client");
 assert(!packageJson.scripts.test.includes("firebase.js"), "test command no longer depends on Firebase");
 
-assert(webHtml.includes('supabase.js?v=2.7.1'), "user shell loads Supabase 2.6 client");
-assert(adminHtml.includes('supabase.js?v=2.7.1'), "admin shell loads Supabase 2.6 client");
+assert(webHtml.includes('supabase.js?v=2.7.1'), "user shell loads Supabase 2.7.1 client");
+assert(adminHtml.includes('supabase.js?v=2.7.1'), "admin shell loads Supabase 2.7.1 client");
 assert(!webHtml.includes('firebase.js'), "user shell does not load Firebase");
 assert(!adminHtml.includes('firebase.js'), "admin shell does not load Firebase");
 assert(webHtml.includes('id="serviceGate"'), "user app has blocking service gate");
@@ -103,6 +105,15 @@ assert(adminSupabase.includes('from("account_status")'), "admin account blocking
 assert(adminSupabase.includes('listenContentForSections'), "admin supports scoped supervisor content");
 assert(adminApp.includes("canonicalSectionId"), "admin normalizes movie and series sections");
 assert(adminApp.includes("normalizeSectionSelection"), "admin keeps canonical content classification");
+assert(adminApp.includes("watch/series/"), "episode notifications use valid series deep links");
+
+assert(pushFunction.includes('included_segments = ["Active Subscriptions"]'), "broadcast push targets active OneSignal subscriptions");
+assert(!pushFunction.includes('included_segments = ["Subscribed Users"]'), "broadcast push does not target the obsolete segment name");
+assert(pushFunction.includes("watch\\/movie"), "push function allows movie deep links");
+assert(pushFunction.includes("watch\\/series"), "push function allows series deep links");
+assert(mainActivity.includes("configureSystemInsets()"), "Android WebView respects system bar insets");
+assert(mainActivity.includes("^watch/series/"), "native notification router accepts series deep links");
+assert(webStyles.includes("CINARO 2.7.1 — mobile layout polish"), "mobile top bar and details polish is present");
 
 assert(webStyles.includes("CINARO 2.6 — Aurora Cinema Design"), "Aurora Cinema user design system is present");
 assert(webStyles.includes("CINARO 2.6.3 — Premiere Splash"), "Premiere splash design system is present");
