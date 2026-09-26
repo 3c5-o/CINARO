@@ -89,11 +89,11 @@ jobs:
         run: |
           mkdir -p dist
           if [[ "$HAS_RELEASE_SIGNING" == "true" ]]; then
-            cp android-app/app/build/outputs/apk/user/release/app-user-release.apk dist/CINARO-User-v2.6.1.apk
-            cp android-app/app/build/outputs/apk/admin/release/app-admin-release.apk dist/CINARO-Admin-v2.6.1.apk
+            cp android-app/app/build/outputs/apk/user/release/app-user-release.apk dist/CINARO-User-v2.6.2.apk
+            cp android-app/app/build/outputs/apk/admin/release/app-admin-release.apk dist/CINARO-Admin-v2.6.2.apk
           else
-            cp android-app/app/build/outputs/apk/user/debug/app-user-debug.apk dist/CINARO-User-v2.6.1-beta.1.apk
-            cp android-app/app/build/outputs/apk/admin/debug/app-admin-debug.apk dist/CINARO-Admin-v2.6.1-beta.1.apk
+            cp android-app/app/build/outputs/apk/user/debug/app-user-debug.apk dist/CINARO-User-v2.6.2-beta.1.apk
+            cp android-app/app/build/outputs/apk/admin/debug/app-admin-debug.apk dist/CINARO-Admin-v2.6.2-beta.1.apk
           fi
           sha256sum dist/*.apk > dist/CINARO-Android.apk.sha256
           for apk in dist/*.apk; do
@@ -110,22 +110,22 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish CINARO v2.6.1 release
+      - name: Publish CINARO v2.6.2 release
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
           HAS_RELEASE_SIGNING: ${{ steps.signing.outputs.signed }}
         run: |
           if [[ "$HAS_RELEASE_SIGNING" == "true" ]]; then
-            TAG="v2.6.1"
-            TITLE="CINARO User + Admin v2.6.1"
+            TAG="v2.6.2"
+            TITLE="CINARO User + Admin v2.6.2"
             RELEASE_FLAGS=()
-            NOTES="CINARO 2.6.1 ينقل المستخدم والإدارة إلى Supabase مع RLS، تصميم جديد للنسختين، تحديث إجباري، إيقاف تلقائي لدعم الإصدار السابق بعد 7 أيام، وتحسينات في الطلبات والبلاغات والمشغل."
+            NOTES="CINARO 2.6.2 ينقل المستخدم والإدارة إلى Supabase مع RLS، تصميم جديد للنسختين، تحديث إجباري، إيقاف تلقائي لدعم الإصدار السابق بعد 7 أيام، وتحسينات في الطلبات والبلاغات والمشغل."
           else
-            TAG="v2.6.1-beta.1"
-            TITLE="CINARO User + Admin v2.6.1 Beta 1"
+            TAG="v2.6.2-beta.1"
+            TITLE="CINARO User + Admin v2.6.2 Beta 1"
             RELEASE_FLAGS=(--prerelease)
-            NOTES="نسخة اختبار CINARO 2.6.1 لأن أسرار التوقيع الثابت غير متاحة في سياق البناء الحالي."
+            NOTES="نسخة اختبار CINARO 2.6.2 لأن أسرار التوقيع الثابت غير متاحة في سياق البناء الحالي."
           fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/*.apk dist/CINARO-Android.apk.sha256 --clobber
