@@ -939,8 +939,8 @@
   function fillSettings() {
     $("settingFeatured").value = toArray(state.config.featured).join(", ");
     $("settingAnnouncement").value = asString(state.config.announcement);
-    $("settingLatestVersion").value = asString(state.config.latestVersion, "2.6.2");
-    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.6.2");
+    $("settingLatestVersion").value = asString(state.config.latestVersion, "2.6.3");
+    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.6.3");
     $("settingUpdateUrl").value = asString(state.config.updateUrl, "https://github.com/3c5-o/CINARO/releases");
     $("settingUpdateNotes").value = asString(state.config.updateNotes);
     if ($("settingUpdateReleasedAt")) $("settingUpdateReleasedAt").value = toLocalDateTimeInput(state.config.updateReleasedAt);
@@ -1050,13 +1050,34 @@
     }));
   }
 
+  function canonicalSectionId(kind) {
+    return kind === "series" ? "series" : "movies";
+  }
+
+  function normalizeSectionSelection(kind, selectedIds) {
+    const ids = [...new Set(toArray(selectedIds).map((id) => asString(id)).filter(Boolean))];
+    if (!isAdmin()) return ids.slice(0, 30);
+    const canonical = canonicalSectionId(kind);
+    const opposite = kind === "series" ? "movies" : "series";
+    const canonicalExists = state.sections.some((section) => section.id === canonical && section.active !== false);
+    const cleaned = ids.filter((id) => id !== opposite && id !== canonical);
+    return canonicalExists ? [canonical, ...cleaned].slice(0, 30) : ids.slice(0, 30);
+  }
+
   function toggleKindFields() {
-    const series = $("contentKind").value === "series";
+    const kind = $("contentKind").value === "series" ? "series" : "movie";
+    const series = kind === "series";
     $("movieMediaFields")?.classList.toggle("is-hidden", series);
     $("seriesMediaFields")?.classList.toggle("is-hidden", !series);
     if (series && !state.seasonDraft.length) {
       state.seasonDraft = [newSeason(1)];
       renderSeasonBuilder();
+    }
+    if (isAdmin() && !state.editingContentId) {
+      const current = parseCsv($("contentSections").value);
+      const next = normalizeSectionSelection(kind, current);
+      $("contentSections").value = next.join(", ");
+      renderSectionPickers();
     }
   }
 
@@ -1257,7 +1278,8 @@
       if (willPublish && kind === "series" && seasons.some((season) => season.episodes.some((episode) => !episode.sources.length))) {
         throw new Error("لا يمكن نشر المسلسل قبل إضافة رابط تشغيل لكل حلقة.");
       }
-      const sectionIds = parseCsv($("contentSections").value);
+      let sectionIds = parseCsv($("contentSections").value);
+      if (isAdmin()) sectionIds = normalizeSectionSelection(kind, sectionIds);
       if (!isAdmin()) {
         const allowed = assignedSectionIds();
         if (!sectionIds.length || sectionIds.some((sectionId) => !allowed.includes(sectionId))) {
@@ -1275,7 +1297,9 @@
         duration: Math.max(0, Math.round(asNumber($("contentDuration").value))),
         genres: parseCsv($("contentGenres").value),
         sectionIds,
-        managementSectionId: sectionIds.includes(existing?.managementSectionId) ? existing.managementSectionId : (sectionIds[0] || ""),
+        managementSectionId: isAdmin()
+          ? (sectionIds.includes(canonicalSectionId(kind)) ? canonicalSectionId(kind) : (sectionIds[0] || ""))
+          : (sectionIds.includes(existing?.managementSectionId) ? existing.managementSectionId : (sectionIds[0] || "")),
         description: asString($("contentDescription").value).slice(0, 3000),
         poster,
         backdrop,
@@ -1487,8 +1511,8 @@
     const form = $("settingsForm");
     setBusy(form, true);
     try {
-      const latestVersion = asString($("settingLatestVersion").value, "2.6.2").slice(0, 20);
-      const versionChanged = latestVersion !== asString(state.config.latestVersion, "2.6.2");
+      const latestVersion = asString($("settingLatestVersion").value, "2.6.3").slice(0, 20);
+      const versionChanged = latestVersion !== asString(state.config.latestVersion, "2.6.3");
       const releaseAt = versionChanged
         ? new Date().toISOString()
         : localDateTimeToIso($("settingUpdateReleasedAt")?.value) || state.config.updateReleasedAt || new Date().toISOString();
@@ -1499,7 +1523,7 @@
         featured: parseCsv($("settingFeatured").value),
         announcement: asString($("settingAnnouncement").value).slice(0, 500),
         latestVersion,
-        minimumVersion: asString($("settingMinVersion").value, "2.6.2").slice(0, 20),
+        minimumVersion: asString($("settingMinVersion").value, "2.6.3").slice(0, 20),
         updateNotes: asString($("settingUpdateNotes").value).slice(0, 1000),
         updateUrl: validMediaUrl($("settingUpdateUrl").value) || "https://github.com/3c5-o/CINARO/releases",
         maintenance: $("settingMaintenance").checked,
@@ -1532,7 +1556,7 @@
     if (!isAdmin()) return;
     const payload = {
       schema: "cinaro-backup-v1",
-      appVersion: "2.6.2",
+      appVersion: "2.6.3",
       exportedAt: new Date().toISOString(),
       content: state.content.map((item) => ({ ...item })),
       sections: state.sections.map((item) => ({ ...item })),
@@ -2050,6 +2074,6 @@
   renderDashboard();
   if (window.CINARO_ADMIN_SUPABASE) connectSupabase(window.CINARO_ADMIN_SUPABASE);
   if (!window.CinaroNative && "serviceWorker" in navigator && location.protocol === "https:") {
-    navigator.serviceWorker.register("sw.js?v=2.6.2", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
+    navigator.serviceWorker.register("sw.js?v=2.6.3", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
   }
 })();
