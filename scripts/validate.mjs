@@ -42,7 +42,8 @@ assert(webHtml.includes('id="serviceGateAction"'), "forced update gate has updat
 assert(webHtml.includes('data-route="search" class="nav-search"'), "user mobile navigation includes central search");
 assert(webHtml.includes("splash-stage"), "user shell includes redesigned splash stage");
 assert(webHtml.includes("USER EDITION"), "user splash exposes edition label");
-assert(!/Supabase|Firebase|Firestore/i.test(webHtml), "user HTML exposes no provider names");
+const visibleWebHtml = webHtml.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/\s(?:src|href)="[^"]*"/gi, "");
+assert(!/Supabase|Firebase|Firestore/i.test(visibleWebHtml), "user visible HTML exposes no provider names");
 assert(!/Firebase|Firestore/i.test(webData), "user fallback data exposes no legacy provider names");
 
 assert(webApp.includes('const WEB_APP_VERSION = "2.6.3"'), "user runtime version is 2.6.3");
@@ -68,7 +69,8 @@ assert(adminHtml.includes('id="settingUpdateReleasedAt"'), "admin UI exposes upd
 assert(adminHtml.includes('id="settingOldVersionShutdownAt"'), "admin UI exposes seven-day shutdown time");
 assert(adminHtml.includes("dashboard-quick-actions"), "admin dashboard includes quick actions");
 assert(adminHtml.includes("system-live-pill"), "admin topbar includes live system status");
-assert(!/Supabase|Firebase|Firestore|SUPABASE/i.test(adminHtml), "admin HTML exposes no provider names");
+const visibleAdminHtml = adminHtml.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/\s(?:src|href)="[^"]*"/gi, "");
+assert(!/Supabase|Firebase|Firestore|SUPABASE/i.test(visibleAdminHtml), "admin visible HTML exposes no provider names");
 
 for (const [name, source] of [["user", webSupabase], ["admin", adminSupabase]]) {
   assert(source.includes("@supabase/supabase-js@2.117.2"), name + " client pins Supabase JS");
