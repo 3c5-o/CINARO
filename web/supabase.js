@@ -4,7 +4,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const SUPABASE_URL = "https://zmkkoggsqvwvwkanlyux.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_yYSX8h3eAkbP3_Xg6ZNpoA_E1CwAvJJ";
-const APP_VERSION = "2.7.1";
+const APP_VERSION = "2.8.0";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
@@ -48,13 +48,25 @@ const mediaUrl = (value, fallback = "") => {
   return fallback;
 };
 
+const STORAGE_ID_RE = /^CIN-[MS]-[A-Z0-9]{10}$/i;
+
 const normalizeSources = (sources) => (Array.isArray(sources) ? sources : [])
   .slice(0, 12)
   .map((source, index) => {
+    const label = textValue(source?.label, "المصدر " + (index + 1), 40);
+    const storageId = textValue(source?.storageId || source?.storage_id, "", 32).toUpperCase();
+    if (STORAGE_ID_RE.test(storageId)) {
+      return {
+        label,
+        storageId,
+        provider: "telegram",
+        type: "video/mp4"
+      };
+    }
     const url = mediaUrl(source?.url);
     if (!url) return null;
     return {
-      label: textValue(source?.label, "المصدر " + (index + 1), 40),
+      label,
       url,
       type: textValue(source?.type, /\.m3u8(?:$|[?#])/i.test(url) ? "application/vnd.apple.mpegurl" : "video/mp4", 80)
     };

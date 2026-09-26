@@ -2,7 +2,7 @@
   "use strict";
 
   let DATA = window.CINARO_DATA;
-  const WEB_APP_VERSION = "2.7.1";
+  const WEB_APP_VERSION = "2.8.0";
   const URL_APP_VERSION = new URLSearchParams(location.search).get("v")?.match(/^\d+\.\d+\.\d+$/)?.[0] || "";
   const NATIVE_APP_VERSION = navigator.userAgent.match(/CINARO\/(\d+\.\d+\.\d+)/i)?.[1] || "";
   const APP_VERSION = URL_APP_VERSION || NATIVE_APP_VERSION || WEB_APP_VERSION;
@@ -164,6 +164,27 @@
       }
     } catch (_) {}
     return fallback;
+  }
+
+  const STORAGE_ID_RE = /^CIN-[MS]-[A-Z0-9]{10}$/i;
+
+  function normalizeStorageId(value) {
+    const id = String(value || "").trim().toUpperCase();
+    return STORAGE_ID_RE.test(id) ? id : "";
+  }
+
+  function telegramGatewayBase() {
+    const raw = state.remoteConfig?.settings?.telegramGatewayUrl || "";
+    return safeMediaUrl(raw, "").replace(/\/+$/, "");
+  }
+
+  function sourcePlaybackUrl(source) {
+    const storageId = normalizeStorageId(source?.storageId || source?.storage_id);
+    if (storageId) {
+      const base = telegramGatewayBase();
+      return base ? `${base}/stream/${encodeURIComponent(storageId)}` : "";
+    }
+    return safeMediaUrl(source?.url, "");
   }
 
   function cssImage(value) {
@@ -1919,10 +1940,15 @@
       showPlayerError("لا يوجد مصدر فيديو صالح لهذا المحتوى.");
       return;
     }
-    const sourceUrl = safeMediaUrl(source.url, "");
+    const storageId = normalizeStorageId(source?.storageId || source?.storage_id);
+    const sourceUrl = sourcePlaybackUrl(source);
     if (!sourceUrl) {
       player.failedSources.add(index);
-      handlePlayerError();
+      if (storageId && !telegramGatewayBase() && player.media.sources.length === 1) {
+        showPlayerError("مصدر CINARO Storage غير متصل حالياً. جرّب لاحقاً أو اختر مصدراً آخر.");
+      } else {
+        handlePlayerError();
+      }
       return;
     }
     player.restoreTime = Number(restoreTime) || 0;

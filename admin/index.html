@@ -7,10 +7,10 @@
   <meta name="description" content="لوحة إدارة CINARO للمحتوى والمستخدمين والمشرفين">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; connect-src 'self' https: wss:; frame-src 'self' https://zmkkoggsqvwvwkanlyux.supabase.co; style-src 'self' 'unsafe-inline'; script-src 'self' https://cdn.jsdelivr.net; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>CINARO Admin</title>
-  <link rel="manifest" href="manifest.webmanifest?v=2.7.1">
+  <link rel="manifest" href="manifest.webmanifest?v=2.8.0">
   <link rel="icon" type="image/png" href="assets/icons/favicon-32.png">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=2.7.1">
+  <link rel="stylesheet" href="styles.css?v=2.8.0">
 </head>
 <body class="admin-booting">
   <div id="loginView" class="admin-login-view">
@@ -65,7 +65,7 @@
       <section id="view-dashboard" class="admin-view active" data-title="نظرة عامة">
         <div class="dashboard-hero">
           <div class="dashboard-hero-copy">
-            <span>CINARO CONTROL / 2.7.1</span>
+            <span>CINARO CONTROL / 2.8.0</span>
             <h2>كل المنصة تحت سيطرتك من شاشة واحدة</h2>
             <p>محتوى، طلبات، بلاغات، مستخدمون وإصدارات بتصميم أسرع ومهيأ للموبايل.</p>
             <div class="dashboard-quick-actions">
@@ -102,7 +102,7 @@
       </section>
 
       <section id="view-editor" class="admin-view" data-title="محرر المحتوى">
-        <div class="section-toolbar"><div><span id="editorKicker">محتوى جديد</span><h2 id="editorTitle">إضافة محتوى</h2><p>احفظ روابط HTTPS مباشرة فقط، ثم عاين المحتوى قبل نشره.</p></div><button class="admin-button ghost" type="button" data-view="content"><svg><use href="#i-arrow-right"></use></svg> العودة للمحتوى</button></div>
+        <div class="section-toolbar"><div><span id="editorKicker">محتوى جديد</span><h2 id="editorTitle">إضافة محتوى</h2><p>استخدم روابط HTTPS أو معرّفات CINARO Storage من البوت، ثم عاين المصدر قبل النشر.</p></div><button class="admin-button ghost" type="button" data-view="content"><svg><use href="#i-arrow-right"></use></svg> العودة للمحتوى</button></div>
         <form id="contentForm" class="panel editor-form">
           <div class="form-section import-source-section">
             <div class="form-section-title"><span>طريقة إضافة المحتوى</span><b>00</b></div>
@@ -133,8 +133,8 @@
           <input id="contentTmdbId" type="hidden">
           <div class="form-section"><div class="form-section-title"><span>المعلومات الأساسية</span><b>01</b></div><div class="form-grid two"><label><span>المعرّف الفريد</span><input id="contentId" required pattern="[a-z0-9-]+" placeholder="movie-example"><small>أحرف إنجليزية صغيرة وأرقام وشرطة فقط.</small></label><label><span>نوع المحتوى</span><select id="contentKind"><option value="movie">فيلم</option><option value="series">مسلسل</option></select></label><label><span>العنوان العربي</span><input id="contentTitle" required maxlength="180"></label><label><span>العنوان الإنجليزي</span><input id="contentEnglishTitle" maxlength="180"></label><label><span>السنة</span><input id="contentYear" type="number" min="1888" max="2200" required></label><label><span>التقييم</span><input id="contentRating" type="number" min="0" max="10" step="0.1" value="0"></label><label><span>التصنيف العمري</span><input id="contentAgeRating" value="عام" maxlength="20"></label><label><span>المدة بالدقائق</span><input id="contentDuration" type="number" min="0" value="0"></label><label><span>التصنيفات</span><input id="contentGenres" placeholder="أكشن، إثارة، جريمة" required></label><label class="section-picker-field"><span>الأقسام المخصصة</span><input id="contentSections" class="allow-select" readonly placeholder="اختر من الأقسام أدناه"><div id="contentSectionsPicker" class="section-picker" aria-label="اختيار أقسام المحتوى"></div><small>اختر قسماً واحداً أو أكثر. أول قسم يصبح نطاق الإدارة الأساسي للمشرفين.</small></label></div><label><span>الوصف</span><textarea id="contentDescription" rows="4" maxlength="3000" required></textarea></label></div>
           <div class="form-section"><div class="form-section-title"><span>الصور</span><b>02</b></div><div class="form-grid two"><label><span>رابط البوستر</span><input id="contentPoster" type="url" placeholder="https://…" required></label><label><span>رابط الخلفية</span><input id="contentBackdrop" type="url" placeholder="https://…"><small>اختياري؛ عند تركه فارغاً يُستخدم البوستر.</small></label></div><div class="media-preview-grid"><figure><img id="posterPreview" src="../web/assets/images/poster-placeholder.webp" alt="معاينة البوستر"><figcaption>معاينة البوستر</figcaption></figure><figure class="wide"><img id="backdropPreview" src="../web/assets/images/poster-placeholder.webp" alt="معاينة الخلفية"><figcaption>معاينة الخلفية</figcaption></figure></div></div>
-          <div id="movieMediaFields" class="form-section"><div class="form-section-title"><span>تشغيل الفيلم</span><b>03</b></div><label><span>رابط الفيلم المباشر</span><input id="movieSourceUrl" type="url" inputmode="url" placeholder="https://…/video.mp4"><small>رابط HTTPS مباشر بصيغة MP4 أو مصدر فيديو قابل للتشغيل.</small></label><div class="form-grid two"><label><span>رابط احتياطي</span><input id="movieBackupUrl" type="url" inputmode="url" placeholder="اختياري"></label><label><span>رابط الترجمة VTT</span><input id="movieSubtitleUrl" type="url" inputmode="url" placeholder="اختياري"></label></div><button class="admin-button ghost media-preview-button" type="button" data-action="preview-movie"><svg><use href="#i-eye"></use></svg> معاينة رابط الفيلم</button></div>
-          <div id="seriesMediaFields" class="form-section is-hidden"><div class="form-section-title"><span>المواسم والحلقات</span><b>03</b></div><p class="field-help">أضف موسماً، ثم أضف داخله الحلقات بالاسم والرقم والرابط. لا تحتاج لكتابة JSON.</p><div id="seasonBuilder" class="season-builder"></div><button id="addSeasonButton" class="admin-button ghost add-builder-button" type="button"><svg><use href="#i-plus"></use></svg> إضافة موسم</button></div>
+          <div id="movieMediaFields" class="form-section"><div class="form-section-title"><span>تشغيل الفيلم</span><b>03</b></div><label><span>مصدر الفيلم</span><input id="movieSourceUrl" type="text" inputmode="url" autocomplete="off" placeholder="https://…/video.mp4 أو CIN-M-XXXXXXXXXX"><small>يدعم رابط HTTPS مباشر أو معرّف CINARO Storage القادم من البوت.</small></label><div class="form-grid two"><label><span>مصدر احتياطي</span><input id="movieBackupUrl" type="text" inputmode="url" autocomplete="off" placeholder="رابط أو CIN-M-XXXXXXXXXX"></label><label><span>رابط الترجمة VTT</span><input id="movieSubtitleUrl" type="url" inputmode="url" placeholder="اختياري"></label></div><button class="admin-button ghost media-preview-button" type="button" data-action="preview-movie"><svg><use href="#i-eye"></use></svg> معاينة مصدر الفيلم</button></div>
+          <div id="seriesMediaFields" class="form-section is-hidden"><div class="form-section-title"><span>المواسم والحلقات</span><b>03</b></div><p class="field-help">أضف موسماً ثم الحلقات. كل حلقة تدعم رابط HTTPS مباشر أو معرّف CINARO Storage من البوت، بدون JSON.</p><div id="seasonBuilder" class="season-builder"></div><button id="addSeasonButton" class="admin-button ghost add-builder-button" type="button"><svg><use href="#i-plus"></use></svg> إضافة موسم</button></div>
           <div class="form-section"><div class="form-section-title"><span>النشر والظهور</span><b>04</b></div><div class="form-grid three"><label><span>عدد المشاهدات الابتدائي</span><input id="contentViews" type="number" min="0" value="0"></label><label><span>ترتيب الظهور</span><input id="contentOrder" type="number" value="0"></label><label class="check-field"><input id="contentFeatured" type="checkbox"><span>محتوى مميز</span></label><label class="check-field"><input id="contentPublished" type="checkbox"><span>نشر للمستخدمين</span></label></div></div>
           <div class="form-actions"><button class="admin-button ghost" type="button" data-view="content">إلغاء</button><button id="validateContentButton" class="admin-button ghost" type="button"><svg><use href="#i-check"></use></svg> فحص روابط التشغيل</button><button class="admin-button primary" type="submit"><svg><use href="#i-save"></use></svg> حفظ المحتوى</button></div><p id="contentFormMessage" class="form-message" role="status"></p>
         </form>
@@ -192,8 +192,8 @@
             <label><span>معرّفات المحتوى المميز</span><textarea id="settingFeatured" rows="3" placeholder="movie-id, series-id"></textarea></label>
             <label><span>رسالة عامة للمستخدمين</span><textarea id="settingAnnouncement" rows="3" placeholder="اختياري"></textarea></label>
             <div class="form-grid two">
-              <label><span>أحدث إصدار متاح</span><input id="settingLatestVersion" value="2.7.1"></label>
-              <label><span>الحد الأدنى للإصدار المدعوم</span><input id="settingMinVersion" value="2.7.1"></label>
+              <label><span>أحدث إصدار متاح</span><input id="settingLatestVersion" value="2.8.0"></label>
+              <label><span>الحد الأدنى للإصدار المدعوم</span><input id="settingMinVersion" value="2.8.0"></label>
               <label><span>رابط تنزيل تحديث المستخدم</span><input id="settingUpdateUrl" type="url" value="https://github.com/3c5-o/CINARO/releases"></label>
               <label><span>ملاحظات التحديث</span><textarea id="settingUpdateNotes" rows="3" placeholder="مثلاً: إصلاح المشغل وإضافة طلبات المحتوى"></textarea></label><label><span>تاريخ إطلاق التحديث</span><input id="settingUpdateReleasedAt" type="datetime-local"><small>يُحدَّث تلقائياً عند تغيير رقم الإصدار.</small></label><label><span>إيقاف النسخة السابقة نهائياً</span><input id="settingOldVersionShutdownAt" type="datetime-local"><small>الافتراضي: بعد 7 أيام من إطلاق التحديث.</small></label>
               <label class="check-field"><input id="settingMaintenance" type="checkbox"><span>وضع الصيانة</span></label>
@@ -275,8 +275,8 @@
     <symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
   </svg>
 
-  <script src="supabase.js?v=2.7.1" type="module"></script>
+  <script src="supabase.js?v=2.8.0" type="module"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="app.js?v=2.7.1" defer></script>
+  <script src="app.js?v=2.8.0" defer></script>
 </body>
 </html>

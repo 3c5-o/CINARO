@@ -89,11 +89,11 @@ jobs:
         run: |
           mkdir -p dist
           if [[ "$HAS_RELEASE_SIGNING" == "true" ]]; then
-            cp android-app/app/build/outputs/apk/user/release/app-user-release.apk dist/CINARO-User-v2.7.1.apk
-            cp android-app/app/build/outputs/apk/admin/release/app-admin-release.apk dist/CINARO-Admin-v2.7.1.apk
+            cp android-app/app/build/outputs/apk/user/release/app-user-release.apk dist/CINARO-User-v2.8.0.apk
+            cp android-app/app/build/outputs/apk/admin/release/app-admin-release.apk dist/CINARO-Admin-v2.8.0.apk
           else
-            cp android-app/app/build/outputs/apk/user/debug/app-user-debug.apk dist/CINARO-User-v2.7.1-beta.1.apk
-            cp android-app/app/build/outputs/apk/admin/debug/app-admin-debug.apk dist/CINARO-Admin-v2.7.1-beta.1.apk
+            cp android-app/app/build/outputs/apk/user/debug/app-user-debug.apk dist/CINARO-User-v2.8.0-beta.1.apk
+            cp android-app/app/build/outputs/apk/admin/debug/app-admin-debug.apk dist/CINARO-Admin-v2.8.0-beta.1.apk
           fi
           sha256sum dist/*.apk > dist/CINARO-Android.apk.sha256
           for apk in dist/*.apk; do
@@ -110,22 +110,22 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish CINARO v2.7.1 release
+      - name: Publish CINARO v2.8.0 release
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
           HAS_RELEASE_SIGNING: ${{ steps.signing.outputs.signed }}
         run: |
           if [[ "$HAS_RELEASE_SIGNING" == "true" ]]; then
-            TAG="v2.7.1"
-            TITLE="CINARO User + Admin v2.7.1"
+            TAG="v2.8.0"
+            TITLE="CINARO User + Admin v2.8.0"
             RELEASE_FLAGS=()
-            NOTES="CINARO 2.7.1: إصلاح الإرسال الجماعي للإشعارات، تحسين فتح المحتوى من الإشعار، وضبط الواجهة العلوية وصفحة تفاصيل الأفلام والمسلسلات."
+            NOTES="CINARO 2.8.0: دعم مصادر MP4 وCINARO Storage، بوابة Telegram للبث، وإدارة رفع فردي وجماعي من البوت."
           else
-            TAG="v2.7.1-beta.1"
-            TITLE="CINARO User + Admin v2.7.1 Beta 1"
+            TAG="v2.8.0-beta.1"
+            TITLE="CINARO User + Admin v2.8.0 Beta 1"
             RELEASE_FLAGS=(--prerelease)
-            NOTES="نسخة اختبار CINARO 2.7.1 لإصلاح الإشعارات والواجهة؛ تُستخدم عندما لا تتوفر أسرار التوقيع الثابت في سياق البناء."
+            NOTES="نسخة اختبار CINARO 2.8.0 لإصلاح الإشعارات والواجهة؛ تُستخدم عندما لا تتوفر أسرار التوقيع الثابت في سياق البناء."
           fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/*.apk dist/CINARO-Android.apk.sha256 --clobber
