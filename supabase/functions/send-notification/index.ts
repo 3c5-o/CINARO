@@ -134,17 +134,20 @@ Deno.serve(async (req: Request) => {
     data: additionalData,
     idempotency_key: crypto.randomUUID(),
     ttl: 259200,
+    priority: 10,
   };
 
   if (imageUrl) {
     oneSignalPayload.big_picture = imageUrl;
-    oneSignalPayload.large_icon = imageUrl;
   }
 
   if (audienceType === "user") {
     oneSignalPayload.include_aliases = { external_id: [targetUserId] };
   } else {
-    oneSignalPayload.included_segments = ["Subscribed Users"];
+    // OneSignal's current default push segment is "Active Subscriptions".
+    // "Subscribed Users" is not a valid segment in this app and caused
+    // broadcast sends to be rejected while direct alias sends still worked.
+    oneSignalPayload.included_segments = ["Active Subscriptions"];
   }
 
   let oneSignalResponse: Response;
@@ -186,6 +189,8 @@ Deno.serve(async (req: Request) => {
   const recipients = Math.max(0, Number(oneSignalResult.recipients) || 0);
   const apiError = Array.isArray(oneSignalResult.errors)
     ? oneSignalResult.errors.map((entry) => String(entry)).join(" · ")
+    : oneSignalResult.errors && typeof oneSignalResult.errors === "object"
+    ? cleanText(JSON.stringify(oneSignalResult.errors), 500)
     : cleanText(oneSignalResult.errors, 500);
 
   await admin.from("notification_logs").insert({
@@ -219,5 +224,6 @@ Deno.serve(async (req: Request) => {
     notificationId,
     recipients,
     audienceType,
+    warning: recipients === 0 ? "no_active_subscriptions" : "",
   });
 });
