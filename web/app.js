@@ -2,7 +2,7 @@
   "use strict";
 
   let DATA = window.CINARO_DATA;
-  const WEB_APP_VERSION = "2.6.0";
+  const WEB_APP_VERSION = "2.6.1";
   const URL_APP_VERSION = new URLSearchParams(location.search).get("v")?.match(/^\d+\.\d+\.\d+$/)?.[0] || "";
   const NATIVE_APP_VERSION = navigator.userAgent.match(/CINARO\/(\d+\.\d+\.\d+)/i)?.[1] || "";
   const APP_VERSION = URL_APP_VERSION || NATIVE_APP_VERSION || WEB_APP_VERSION;
@@ -24,7 +24,7 @@
     favorites: "cinaro:favorites:v1",
     history: "cinaro:watch-history:v2",
     settings: "cinaro:settings:v1",
-    splash: "cinaro:splash-seen:v1",
+    splash: "cinaro:splash-seen:v2",
     authChoice: "cinaro:auth-choice:v1",
     cloudOwner: "cinaro:cloud-owner:v1"
   };
@@ -601,7 +601,8 @@
         : updateMessage || String(state.remoteConfig.announcement || "").trim();
       elements.remoteNotice.hidden = !message;
       elements.remoteNotice.textContent = message;
-      elements.remoteNotice.classList.toggle("maintenance", Boolean(state.remoteConfig.maintenance || (needsUpdate && state.remoteConfig.forceUpdate)));
+      const forcedUpdateNotice = Boolean((belowMinimum || updateAvailable) && state.remoteConfig.forceUpdate !== false);
+      elements.remoteNotice.classList.toggle("maintenance", Boolean(state.remoteConfig.maintenance || forcedUpdateNotice));
     }
     updateServiceGate();
     updateUpdateControl();
@@ -636,7 +637,7 @@
       replaceCatalog,
       (error) => {
         console.warn("CINARO content listener failed", error);
-        setSupabaseStatus("error", "تعذّرت قراءة Firestore — يعرض التطبيق المحتوى المحفوظ");
+        setSupabaseStatus("error", "تعذّرت قراءة Supabase — يعرض التطبيق آخر محتوى متاح");
       }
     );
 
@@ -1480,23 +1481,37 @@
     $$(".view").forEach((view) => view.classList.toggle("active", view.dataset.view === route.name));
     updateNavigation(route);
 
-    if (route.name === "home") {
-      renderHome();
-      setDocumentTitle("");
-    } else if (route.name === "movies") {
-      renderCatalog("movie");
-      setDocumentTitle("الأفلام");
-    } else if (route.name === "series") {
-      renderCatalog("series");
-      setDocumentTitle("المسلسلات");
-    } else if (route.name === "library") {
-      renderLibrary();
-      setDocumentTitle("قائمتي");
-    } else if (route.name === "search") {
-      renderSearch();
-      setDocumentTitle("البحث");
-    } else if (route.name === "details") {
-      renderDetails(route.parts[1]);
+    try {
+      if (route.name === "home") {
+        renderHome();
+        setDocumentTitle("");
+      } else if (route.name === "movies") {
+        renderCatalog("movie");
+        setDocumentTitle("الأفلام");
+      } else if (route.name === "series") {
+        renderCatalog("series");
+        setDocumentTitle("المسلسلات");
+      } else if (route.name === "library") {
+        renderLibrary();
+        setDocumentTitle("قائمتي");
+      } else if (route.name === "search") {
+        renderSearch();
+        setDocumentTitle("البحث");
+      } else if (route.name === "details") {
+        renderDetails(route.parts[1]);
+      }
+    } catch (error) {
+      console.error("CINARO view render failed", route.name, error);
+      const target = route.name === "home" ? elements.home
+        : route.name === "movies" ? elements.movies
+        : route.name === "series" ? elements.series
+        : route.name === "library" ? elements.library
+        : route.name === "search" ? elements.search
+        : elements.details;
+      if (target) {
+        target.innerHTML = `<div class="content-shell page-shell"><div class="empty-state view-recovery">${icon("alert")}<h2>تعذّر عرض هذا القسم</h2><p>حدث خلل مؤقت في الواجهة، لكن بقية التطبيق ما زالت تعمل.</p><button class="button primary" type="button" data-route="home">العودة للرئيسية</button></div></div>`;
+      }
+      toast("تم عزل خطأ الواجهة حتى لا يتوقف التطبيق بالكامل.", "error");
     }
 
     window.scrollTo({ top: 0, behavior: settings.reduceMotion ? "auto" : "smooth" });
@@ -2570,7 +2585,8 @@
       if (!event?.error || state.runtimeErrorShown) return;
       state.runtimeErrorShown = true;
       console.error("CINARO runtime error", event.error);
-      toast("صار خطأ بالواجهة. إذا توقف زر عن العمل أعد فتح التطبيق.", "error");
+      toast("تم احتواء خطأ في الواجهة. جرّب القسم مرة ثانية.", "error");
+      window.setTimeout(() => { state.runtimeErrorShown = false; }, 2500);
     });
     window.addEventListener("unhandledrejection", (event) => {
       if (state.runtimeErrorShown) return;
@@ -2667,7 +2683,7 @@
     if (!("serviceWorker" in navigator) || !/^https?:$/.test(location.protocol)) return;
     window.addEventListener("load", async () => {
       try {
-        const registration = await navigator.serviceWorker.register("./sw.js?v=2.4.1", { scope: "./", updateViaCache: "none" });
+        const registration = await navigator.serviceWorker.register(`./sw.js?v=${encodeURIComponent(WEB_APP_VERSION)}`, { scope: "./", updateViaCache: "none" });
         registration.addEventListener("updatefound", () => {
           const worker = registration.installing;
           worker?.addEventListener("statechange", () => {
@@ -2684,7 +2700,7 @@
 
   function finishSplash() {
     const previouslySeen = storage.get(STORAGE.splash, false);
-    const delay = settings.reduceMotion ? 120 : previouslySeen ? 650 : 1750;
+    const delay = settings.reduceMotion ? 120 : previouslySeen ? 520 : 1500;
     window.setTimeout(() => {
       elements.splash.classList.add("is-done");
       document.body.classList.remove("booting");

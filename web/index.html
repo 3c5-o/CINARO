@@ -17,10 +17,10 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; media-src 'self' https: blob:; connect-src 'self' https: wss:; frame-src 'self' https://zmkkoggsqvwvwkanlyux.supabase.co; style-src 'self' 'unsafe-inline'; script-src 'self' https://cdn.jsdelivr.net; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>CINARO — كل قصة تبدأ هنا</title>
-  <link rel="manifest" href="manifest.webmanifest?v=2.6.0">
+  <link rel="manifest" href="manifest.webmanifest?v=2.6.1">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=2.6.0">
+  <link rel="stylesheet" href="styles.css?v=2.6.1">
 </head>
 <body class="booting">
   <noscript>
@@ -28,11 +28,26 @@
   </noscript>
 
   <div id="splash" class="splash" aria-label="جاري تشغيل CINARO">
-    <div class="splash-glow"></div>
-    <img src="assets/icons/icon-192.png" alt="شعار CINARO" width="104" height="104">
-    <div class="splash-word">CINARO</div>
-    <div class="splash-tagline">كل قصة تبدأ هنا</div>
-    <div class="splash-loader" aria-hidden="true"><span></span></div>
+    <div class="splash-backdrop" aria-hidden="true">
+      <span class="splash-orb orb-one"></span>
+      <span class="splash-orb orb-two"></span>
+      <span class="splash-grid"></span>
+      <span class="splash-vignette"></span>
+    </div>
+    <div class="splash-stage">
+      <div class="splash-logo-wrap">
+        <span class="splash-logo-ring" aria-hidden="true"></span>
+        <img src="assets/icons/icon-192.png" alt="شعار CINARO" width="112" height="112">
+      </div>
+      <div class="splash-brand">
+        <span class="splash-edition">CINARO • STREAMING</span>
+        <div class="splash-word">CINARO</div>
+        <div class="splash-tagline">كل قصة تبدأ هنا</div>
+      </div>
+      <div class="splash-loader" aria-hidden="true"><span></span></div>
+      <div class="splash-status"><span></span><b>جاري تجهيز تجربتك</b></div>
+    </div>
+    <div class="splash-footer"><span>USER EDITION</span><b>2.6.1</b></div>
   </div>
 
   <div id="offlineBanner" class="network-banner" role="status" hidden>
@@ -341,7 +356,7 @@
     </div>
     <div class="about-app">
       <img src="assets/icons/icon-192.png" alt="" width="48" height="48">
-      <div><b>CINARO</b><small>الإصدار 2.6.0 · نسخة المستخدم</small></div>
+      <div><b>CINARO</b><small>الإصدار 2.6.1 · نسخة المستخدم</small></div>
     </div>
     <p class="tmdb-credit">This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
   </aside>
@@ -450,8 +465,8 @@
   </svg>
 
   <script src="data.js" defer></script>
-  <script src="supabase.js?v=2.6.0" type="module"></script>
+  <script src="supabase.js?v=2.6.1" type="module"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="app.js?v=2.6.0" defer></script>
+  <script src="app.js?v=2.6.1" defer></script>
 </body>
 </html>
