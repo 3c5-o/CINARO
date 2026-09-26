@@ -98,17 +98,63 @@ def human_size(size: int) -> str:
     return f"{size / 1_000:.0f} KB"
 
 
-def is_private_admin(event: Any) -> bool:
-    return int(getattr(event, "sender_id", 0) or 0) == ADMIN_ID
+def sender_id(event: Any) -> int:
+    return int(getattr(event, "sender_id", 0) or 0)
 
 
-def main_menu() -> list[list[Button]]:
-    return [
-        [Button.inline("رفع فيلم", b"movie_single"), Button.inline("رفع حلقة", b"series_single")],
-        [Button.inline("رفع جماعي أفلام", b"bulk_movies"), Button.inline("رفع جماعي حلقات", b"bulk_series")],
-        [Button.inline("إعداد القنوات", b"channels"), Button.inline("آخر الملفات", b"recent")],
-        [Button.inline("حالة النظام", b"status"), Button.inline("إلغاء العملية", b"cancel")],
-    ]
+def role_label(role: str) -> str:
+    return {
+        "owner": "المالك",
+        "admin": "أدمن ثانوي",
+        "supervisor": "مشرف",
+    }.get(role, "مشرف")
+
+
+def can_upload(member: dict[str, Any], kind: str) -> bool:
+    role = str(member.get("role") or "")
+    if role in {"owner", "admin"}:
+        return True
+    if role != "supervisor":
+        return False
+    return bool(member.get("can_movies")) if kind == "movie" else bool(member.get("can_series"))
+
+
+def can_manage_channels(member: dict[str, Any]) -> bool:
+    return str(member.get("role") or "") in {"owner", "admin"}
+
+
+def can_manage_team(member: dict[str, Any]) -> bool:
+    return str(member.get("role") or "") in {"owner", "admin"}
+
+
+def main_menu(member: dict[str, Any]) -> list[list[Button]]:
+    rows: list[list[Button]] = []
+    upload_row: list[Button] = []
+    bulk_row: list[Button] = []
+    if can_upload(member, "movie"):
+        upload_row.append(Button.inline("رفع فيلم", b"movie_single"))
+        bulk_row.append(Button.inline("رفع جماعي أفلام", b"bulk_movies"))
+    if can_upload(member, "series"):
+        upload_row.append(Button.inline("رفع حلقة", b"series_single"))
+        bulk_row.append(Button.inline("رفع جماعي حلقات", b"bulk_series"))
+    if upload_row:
+        rows.append(upload_row)
+    if bulk_row:
+        rows.append(bulk_row)
+
+    utility_row = [Button.inline("آخر الملفات", b"recent"), Button.inline("حالة النظام", b"status")]
+    rows.append(utility_row)
+
+    manage_row: list[Button] = []
+    if can_manage_channels(member):
+        manage_row.append(Button.inline("إعداد القنوات", b"channels"))
+    if can_manage_team(member):
+        manage_row.append(Button.inline("إدارة الفريق", b"team"))
+    if manage_row:
+        rows.append(manage_row)
+
+    rows.append([Button.inline("إلغاء العملية", b"cancel")])
+    return rows
 
 
 def channels_menu() -> list[list[Button]]:
@@ -118,6 +164,19 @@ def channels_menu() -> list[list[Button]]:
         [Button.inline("اختبار القنوات", b"test_channels")],
         [Button.inline("رجوع", b"menu")],
     ]
+
+
+def team_menu(member: dict[str, Any]) -> list[list[Button]]:
+    rows: list[list[Button]] = []
+    if str(member.get("role")) == "owner":
+        rows.append([Button.inline("إضافة أدمن ثانوي", b"team_add_admin")])
+    rows.extend([
+        [Button.inline("مشرف أفلام + مسلسلات", b"team_add_supervisor_all")],
+        [Button.inline("مشرف أفلام فقط", b"team_add_supervisor_movies"), Button.inline("مشرف مسلسلات فقط", b"team_add_supervisor_series")],
+        [Button.inline("عرض الفريق", b"team_list"), Button.inline("حذف عضو", b"team_remove")],
+        [Button.inline("رجوع", b"menu")],
+    ])
+    return rows
 
 
 def db_headers() -> dict[str, str]:
@@ -159,12 +218,158 @@ async def db_request(
         return None
 
 
-async def get_session() -> dict[str, Any] | None:
+async def ensure_owner_member() -> None:
+    await db_request(
+        "POST",
+        "telegram_bot_members",
+        params={"on_conflict": "telegram_user_id"},
+        json={
+            "telegram_user_id": ADMIN_ID,
+            "role": "owner",
+            "display_name": "مالك CINARO",
+            "active": True,
+            "can_movies": True,
+            "can_series": True,
+            "added_by": ADMIN_ID,
+            "updated_at": now_iso(),
+        },
+        prefer="resolution=merge-duplicates",
+    )
+
+
+async def get_member(user_id: int) -> dict[str, Any] | None:
+    rows = await db_request(
+        "GET",
+        "telegram_bot_members",
+        params={
+            "telegram_user_id": f"eq.{int(user_id)}",
+            "active": "eq.true",
+            "select": "telegram_user_id,role,display_name,username,active,can_movies,can_series,added_by,created_at,updated_at,last_seen_at",
+            "limit": "1",
+        },
+    )
+    if rows:
+        return rows[0]
+    if int(user_id) == ADMIN_ID:
+        return {
+            "telegram_user_id": ADMIN_ID,
+            "role": "owner",
+            "display_name": "مالك CINARO",
+            "username": "",
+            "active": True,
+            "can_movies": True,
+            "can_series": True,
+            "added_by": ADMIN_ID,
+        }
+    return None
+
+
+async def touch_member_identity(user_id: int, event: Any) -> None:
+    try:
+        sender = await event.get_sender()
+        first_name = str(getattr(sender, "first_name", "") or "").strip()
+        last_name = str(getattr(sender, "last_name", "") or "").strip()
+        display_name = " ".join(part for part in (first_name, last_name) if part)[:120]
+        username = str(getattr(sender, "username", "") or "")[:100]
+        await db_request(
+            "PATCH",
+            "telegram_bot_members",
+            params={"telegram_user_id": f"eq.{int(user_id)}"},
+            json={
+                "display_name": display_name,
+                "username": username,
+                "last_seen_at": now_iso(),
+                "updated_at": now_iso(),
+            },
+        )
+    except Exception:
+        pass
+
+
+async def list_team_members() -> list[dict[str, Any]]:
+    rows = await db_request(
+        "GET",
+        "telegram_bot_members",
+        params={
+            "active": "eq.true",
+            "select": "telegram_user_id,role,display_name,username,can_movies,can_series,added_by,created_at,last_seen_at",
+            "order": "role.asc,created_at.asc",
+            "limit": "100",
+        },
+    )
+    return rows or []
+
+
+async def add_team_member(
+    actor: dict[str, Any],
+    target_user_id: int,
+    role: str,
+    can_movies: bool = True,
+    can_series: bool = True,
+) -> dict[str, Any]:
+    actor_role = str(actor.get("role") or "")
+    if role not in {"admin", "supervisor"}:
+        raise ValueError("الدور غير مدعوم.")
+    if role == "admin" and actor_role != "owner":
+        raise PermissionError("إضافة الأدمن الثانوي متاحة للمالك فقط.")
+    if role == "supervisor" and actor_role not in {"owner", "admin"}:
+        raise PermissionError("لا تملك صلاحية إضافة مشرف.")
+    if int(target_user_id) == ADMIN_ID:
+        raise ValueError("حساب المالك لا يمكن تغييره.")
+    rows = await db_request(
+        "POST",
+        "telegram_bot_members",
+        params={"on_conflict": "telegram_user_id"},
+        json={
+            "telegram_user_id": int(target_user_id),
+            "role": role,
+            "display_name": "",
+            "username": "",
+            "active": True,
+            "can_movies": True if role == "admin" else bool(can_movies),
+            "can_series": True if role == "admin" else bool(can_series),
+            "added_by": int(actor.get("telegram_user_id") or ADMIN_ID),
+            "updated_at": now_iso(),
+        },
+        prefer="resolution=merge-duplicates,return=representation",
+    )
+    if not rows:
+        raise RuntimeError("تعذر حفظ عضو الفريق.")
+    return rows[0]
+
+
+async def remove_team_member(actor: dict[str, Any], target_user_id: int) -> None:
+    target_user_id = int(target_user_id)
+    if target_user_id == ADMIN_ID:
+        raise ValueError("لا يمكن حذف مالك CINARO.")
+    target = await get_member(target_user_id)
+    if not target:
+        raise ValueError("العضو غير موجود أو غير مفعل.")
+    actor_role = str(actor.get("role") or "")
+    target_role = str(target.get("role") or "")
+    if actor_role == "admin" and target_role != "supervisor":
+        raise PermissionError("الأدمن الثانوي يستطيع حذف المشرفين فقط.")
+    if actor_role not in {"owner", "admin"}:
+        raise PermissionError("لا تملك صلاحية حذف أعضاء الفريق.")
+    await db_request(
+        "PATCH",
+        "telegram_bot_members",
+        params={"telegram_user_id": f"eq.{target_user_id}"},
+        json={"active": False, "updated_at": now_iso()},
+    )
+    await db_request(
+        "DELETE",
+        "telegram_bot_sessions",
+        params={"telegram_user_id": f"eq.{target_user_id}"},
+    )
+
+
+async def get_session(user_id: int) -> dict[str, Any] | None:
     rows = await db_request(
         "GET",
         "telegram_bot_sessions",
         params={
-            "telegram_user_id": f"eq.{ADMIN_ID}",
+            "telegram_user_id": f"eq.{int(user_id)}",
             "select": "flow,step,draft,updated_at",
             "limit": "1",
         },
@@ -172,13 +377,13 @@ async def get_session() -> dict[str, Any] | None:
     return rows[0] if rows else None
 
 
-async def set_session(flow: str, step: str, draft: dict[str, Any] | None = None) -> None:
+async def set_session(user_id: int, flow: str, step: str, draft: dict[str, Any] | None = None) -> None:
     await db_request(
         "POST",
         "telegram_bot_sessions",
         params={"on_conflict": "telegram_user_id"},
         json={
-            "telegram_user_id": ADMIN_ID,
+            "telegram_user_id": int(user_id),
             "flow": flow,
             "step": step,
             "draft": draft or {},
@@ -188,11 +393,11 @@ async def set_session(flow: str, step: str, draft: dict[str, Any] | None = None)
     )
 
 
-async def clear_session() -> None:
+async def clear_session(user_id: int) -> None:
     await db_request(
         "DELETE",
         "telegram_bot_sessions",
-        params={"telegram_user_id": f"eq.{ADMIN_ID}"},
+        params={"telegram_user_id": f"eq.{int(user_id)}"},
     )
 
 
@@ -210,7 +415,7 @@ async def get_channel_row(key: str) -> dict[str, Any] | None:
     return rows[0] if rows else None
 
 
-async def upsert_channel(key: str, entity: Any) -> dict[str, Any]:
+async def upsert_channel(key: str, entity: Any, configured_by: int) -> dict[str, Any]:
     marked_id = int(utils.get_peer_id(entity))
     title = str(getattr(entity, "title", "") or "")[:180]
     username = str(getattr(entity, "username", "") or "")[:100]
@@ -224,7 +429,7 @@ async def upsert_channel(key: str, entity: Any) -> dict[str, Any]:
             "title": title,
             "username": username,
             "active": True,
-            "configured_by": ADMIN_ID,
+            "configured_by": int(configured_by),
             "verified_at": now_iso(),
             "updated_at": now_iso(),
         },
@@ -294,7 +499,7 @@ async def verify_channel_access(entity: Any) -> None:
         pass
 
 
-async def create_batch(kind: str, season: int | None = None, start_episode: int | None = None) -> dict[str, Any]:
+async def create_batch(kind: str, created_by: int, season: int | None = None, start_episode: int | None = None) -> dict[str, Any]:
     code = batch_code(kind)
     rows = await db_request(
         "POST",
@@ -307,7 +512,7 @@ async def create_batch(kind: str, season: int | None = None, start_episode: int 
             "start_episode": start_episode,
             "next_episode": start_episode,
             "total_files": 0,
-            "created_by": ADMIN_ID,
+            "created_by": int(created_by),
             "updated_at": now_iso(),
         },
         prefer="return=representation",
@@ -422,7 +627,7 @@ async def store_message(
         "episode": episode,
         "source_chat_id": int(event.chat_id or 0),
         "source_message_id": int(event.message.id),
-        "created_by": ADMIN_ID,
+        "created_by": sender_id(event),
         "status": "active",
         "updated_at": now_iso(),
     }
@@ -522,9 +727,25 @@ def parse_range(value: str | None, total: int) -> tuple[int, int, bool]:
     return start, end, True
 
 
-async def show_main(chat_id: int, text: str = "CINARO Storage\nاختر العملية المطلوبة.") -> None:
-    if telegram_client:
-        await telegram_client.send_message(chat_id, text, buttons=main_menu())
+async def show_main(
+    chat_id: int,
+    member: dict[str, Any],
+    text: str = "CINARO Storage\nاختر العملية المطلوبة.",
+) -> None:
+    if not telegram_client:
+        return
+    role = role_label(str(member.get("role") or "supervisor"))
+    scope = []
+    if can_upload(member, "movie"):
+        scope.append("أفلام")
+    if can_upload(member, "series"):
+        scope.append("مسلسلات")
+    scope_text = " + ".join(scope) if scope else "بدون صلاحية رفع"
+    await telegram_client.send_message(
+        chat_id,
+        f"{text}\n\nالدور: {role} · {scope_text}",
+        buttons=main_menu(member),
+    )
 
 
 async def show_channels(chat_id: int) -> None:
@@ -545,10 +766,87 @@ async def show_channels(chat_id: int) -> None:
     )
 
 
-async def finish_current_batch(chat_id: int) -> None:
-    session = await get_session()
+def member_permissions_text(member: dict[str, Any]) -> str:
+    role = str(member.get("role") or "supervisor")
+    if role in {"owner", "admin"}:
+        return "أفلام + مسلسلات"
+    allowed = []
+    if bool(member.get("can_movies")):
+        allowed.append("أفلام")
+    if bool(member.get("can_series")):
+        allowed.append("مسلسلات")
+    return " + ".join(allowed) if allowed else "بدون رفع"
+
+
+def member_display(member: dict[str, Any]) -> str:
+    name = str(member.get("display_name") or "").strip()
+    username = str(member.get("username") or "").strip()
+    if username:
+        username = "@" + username.lstrip("@")
+    return name or username or str(member.get("telegram_user_id") or "—")
+
+
+async def show_team(chat_id: int, actor: dict[str, Any]) -> None:
+    if not can_manage_team(actor):
+        await telegram_client.send_message(chat_id, "لا تملك صلاحية إدارة الفريق.", buttons=main_menu(actor))
+        return
+    members = await list_team_members()
+    lines = ["فريق CINARO Storage"]
+    for item in members:
+        uid = int(item.get("telegram_user_id") or 0)
+        lines.append(
+            f"• {member_display(item)}\n"
+            f"  ID: {uid} · {role_label(str(item.get('role') or 'supervisor'))} · {member_permissions_text(item)}"
+        )
+    if len(lines) == 1:
+        lines.append("لا يوجد أعضاء.")
+    await telegram_client.send_message(
+        chat_id,
+        "\n".join(lines)[:3900],
+        buttons=team_menu(actor),
+    )
+
+
+async def show_remove_member_menu(chat_id: int, actor: dict[str, Any]) -> None:
+    members = await list_team_members()
+    actor_role = str(actor.get("role") or "")
+    removable = []
+    for item in members:
+        uid = int(item.get("telegram_user_id") or 0)
+        role = str(item.get("role") or "")
+        if uid == ADMIN_ID or role == "owner":
+            continue
+        if actor_role == "admin" and role != "supervisor":
+            continue
+        removable.append(item)
+
+    if not removable:
+        await telegram_client.send_message(chat_id, "لا يوجد أعضاء يمكنك حذفهم.", buttons=team_menu(actor))
+        return
+
+    buttons: list[list[Button]] = []
+    for item in removable[:30]:
+        uid = int(item["telegram_user_id"])
+        label = f"{member_display(item)} · {role_label(str(item.get('role') or 'supervisor'))}"
+        buttons.append([Button.inline(label[:54], f"team_remove_id:{uid}".encode())])
+    buttons.append([Button.inline("رجوع", b"team")])
+    await telegram_client.send_message(chat_id, "اختر العضو المطلوب إلغاء صلاحياته:", buttons=buttons)
+
+
+async def cancel_current_flow(user_id: int) -> None:
+    session = await get_session(user_id)
+    if session and (session.get("draft") or {}).get("batch_id"):
+        try:
+            await close_batch(str(session["draft"]["batch_id"]), "cancelled")
+        except Exception:
+            pass
+    await clear_session(user_id)
+
+
+async def finish_current_batch(chat_id: int, user_id: int, member: dict[str, Any]) -> None:
+    session = await get_session(user_id)
     if not session or session.get("flow") not in {"bulk_movies", "bulk_series"}:
-        await telegram_client.send_message(chat_id, "لا توجد دفعة رفع مفتوحة.", buttons=main_menu())
+        await telegram_client.send_message(chat_id, "لا توجد دفعة رفع مفتوحة.", buttons=main_menu(member))
         return
     draft = session.get("draft") or {}
     batch_id = str(draft.get("batch_id") or "")
@@ -556,120 +854,184 @@ async def finish_current_batch(chat_id: int) -> None:
         await close_batch(batch_id, "completed")
     count = int(draft.get("count") or 0)
     items = draft.get("items") if isinstance(draft.get("items"), list) else []
-    await clear_session()
+    await clear_session(user_id)
     summary = "\n".join(str(item) for item in items[-30:])
     text = f"اكتملت الدفعة.\nعدد الملفات: {count}"
     if summary:
         text += f"\n\n{summary}"
-    await telegram_client.send_message(chat_id, text[:3900], buttons=main_menu())
+    await telegram_client.send_message(chat_id, text[:3900], buttons=main_menu(member))
 
 
 async def handle_admin_message(event: Any) -> None:
-    if not is_private_admin(event):
-        if getattr(event, "is_private", False) and telegram_client:
-            await event.respond("هذا البوت مخصص لإدارة CINARO فقط.")
+    if not getattr(event, "is_private", False):
         return
     if not database_configured():
         await event.respond("قاعدة بيانات البوابة غير مهيأة بعد.")
         return
 
+    user_id = sender_id(event)
+    member = await get_member(user_id)
+    if not member:
+        await event.respond(
+            "هذا البوت مخصص لفريق CINARO فقط.\n"
+            f"معرف حسابك: {user_id}\n"
+            "أرسل هذا المعرف إلى مالك النظام ليضيفك كأدمن أو مشرف."
+        )
+        return
+
+    await touch_member_identity(user_id, event)
     text = str(getattr(event.message, "message", "") or "").strip()
     command = text.split()[0].lower() if text.startswith("/") else ""
+
     if command in {"/start", "/menu"}:
-        await clear_session()
-        await show_main(event.chat_id)
+        await clear_session(user_id)
+        await show_main(event.chat_id, member)
         return
     if command in {"/cancel", "/الغاء"}:
-        session = await get_session()
-        if session and (session.get("draft") or {}).get("batch_id"):
-            try:
-                await close_batch(str(session["draft"]["batch_id"]), "cancelled")
-            except Exception:
-                pass
-        await clear_session()
-        await show_main(event.chat_id, "تم إلغاء العملية الحالية.")
+        await cancel_current_flow(user_id)
+        await show_main(event.chat_id, member, "تم إلغاء العملية الحالية.")
         return
     if command == "/done":
-        await finish_current_batch(event.chat_id)
+        await finish_current_batch(event.chat_id, user_id, member)
+        return
+    if command == "/team":
+        await show_team(event.chat_id, member)
         return
     if command == "/status":
         movies, series = await asyncio.gather(get_channel_row("movies"), get_channel_row("series"))
+        team = await list_team_members()
         await event.respond(
             "حالة CINARO Storage\n"
             f"Telegram: {'متصل' if telegram_client and telegram_client.is_connected() else 'غير متصل'}\n"
             f"قناة الأفلام: {'جاهزة' if movies else 'غير محددة'}\n"
             f"قناة المسلسلات: {'جاهزة' if series else 'غير محددة'}\n"
+            f"الفريق النشط: {len(team)}\n"
+            f"دورك: {role_label(str(member.get('role') or 'supervisor'))}\n"
             "الحد: 1.95 GB"
         )
         return
 
-    session = await get_session()
+    session = await get_session(user_id)
     if not session:
         if getattr(event.message, "media", None):
-            await event.respond("اختر نوع الرفع أولاً من القائمة.", buttons=main_menu())
+            await event.respond("اختر نوع الرفع أولاً من القائمة.", buttons=main_menu(member))
         else:
-            await show_main(event.chat_id)
+            await show_main(event.chat_id, member)
         return
 
     flow = str(session.get("flow") or "")
     step = str(session.get("step") or "")
     draft = session.get("draft") if isinstance(session.get("draft"), dict) else {}
 
+    if flow == "team_add" and step == "user_id":
+        if not can_manage_team(member):
+            await clear_session(user_id)
+            await event.respond("لا تملك صلاحية إدارة الفريق.", buttons=main_menu(member))
+            return
+        candidate = re.sub(r"\D", "", text)
+        if not candidate or len(candidate) < 5 or len(candidate) > 20:
+            await event.respond("أرسل Telegram User ID صحيحاً بالأرقام فقط.")
+            return
+        target_user_id = int(candidate)
+        role = str(draft.get("role") or "supervisor")
+        can_movies_value = bool(draft.get("can_movies", True))
+        can_series_value = bool(draft.get("can_series", True))
+        try:
+            added = await add_team_member(
+                member,
+                target_user_id,
+                role,
+                can_movies=can_movies_value,
+                can_series=can_series_value,
+            )
+            await clear_session(user_id)
+            await event.respond(
+                "تمت إضافة العضو بنجاح.\n"
+                f"ID: {target_user_id}\n"
+                f"الدور: {role_label(str(added.get('role') or role))}\n"
+                f"الصلاحيات: {member_permissions_text(added)}\n\n"
+                "خليه يفتح البوت ويرسل /start.",
+                buttons=main_menu(member),
+            )
+        except Exception as exc:
+            await event.respond(f"تعذر إضافة العضو: {str(exc)[:500]}")
+        return
+
     if flow == "set_channel" and step == "reference":
+        if not can_manage_channels(member):
+            await clear_session(user_id)
+            await event.respond("لا تملك صلاحية تعديل القنوات.", buttons=main_menu(member))
+            return
         try:
             entity = await resolve_channel_reference(text)
             await verify_channel_access(entity)
-            row = await upsert_channel(str(draft.get("channel_key")), entity)
-            await clear_session()
+            row = await upsert_channel(str(draft.get("channel_key")), entity, user_id)
+            await clear_session(user_id)
             label = row.get("title") or row.get("username") or row.get("telegram_channel_id")
-            await event.respond(f"تم ربط القناة بنجاح: {label}", buttons=main_menu())
+            await event.respond(f"تم ربط القناة بنجاح: {label}", buttons=main_menu(member))
         except Exception as exc:
             await event.respond(f"تعذر ربط القناة: {str(exc)[:500]}")
         return
 
     if flow == "series_single" and step == "season":
+        if not can_upload(member, "series"):
+            await clear_session(user_id)
+            await event.respond("لا تملك صلاحية رفع المسلسلات.", buttons=main_menu(member))
+            return
         if not text.isdigit() or int(text) < 1 or int(text) > 999:
             await event.respond("أرسل رقم موسم صحيح.")
             return
         draft["season"] = int(text)
-        await set_session(flow, "episode", draft)
+        await set_session(user_id, flow, "episode", draft)
         await event.respond("أرسل رقم الحلقة.")
         return
 
     if flow == "series_single" and step == "episode":
+        if not can_upload(member, "series"):
+            await clear_session(user_id)
+            await event.respond("لا تملك صلاحية رفع المسلسلات.", buttons=main_menu(member))
+            return
         if not text.isdigit() or int(text) < 1 or int(text) > 99999:
             await event.respond("أرسل رقم حلقة صحيح.")
             return
         draft["episode"] = int(text)
-        await set_session(flow, "file", draft)
+        await set_session(user_id, flow, "file", draft)
         await event.respond("أرسل ملف الحلقة بصيغة MP4. الحد 1.95 GB.")
         return
 
     if flow == "bulk_series" and step == "season":
+        if not can_upload(member, "series"):
+            await clear_session(user_id)
+            await event.respond("لا تملك صلاحية رفع المسلسلات.", buttons=main_menu(member))
+            return
         if not text.isdigit() or int(text) < 1 or int(text) > 999:
             await event.respond("أرسل رقم موسم صحيح.")
             return
         draft["season"] = int(text)
-        await set_session(flow, "start_episode", draft)
+        await set_session(user_id, flow, "start_episode", draft)
         await event.respond("أرسل رقم أول حلقة في الدفعة.")
         return
 
     if flow == "bulk_series" and step == "start_episode":
+        if not can_upload(member, "series"):
+            await clear_session(user_id)
+            await event.respond("لا تملك صلاحية رفع المسلسلات.", buttons=main_menu(member))
+            return
         if not text.isdigit() or int(text) < 1 or int(text) > 99999:
             await event.respond("أرسل رقم حلقة صحيح.")
             return
-        start = int(text)
-        batch = await create_batch("series", int(draft["season"]), start)
+        start_episode = int(text)
+        batch = await create_batch("series", user_id, int(draft["season"]), start_episode)
         draft.update({
             "batch_id": batch["id"],
             "batch_code": batch["batch_code"],
-            "next_episode": start,
+            "next_episode": start_episode,
             "count": 0,
             "items": [],
         })
-        await set_session(flow, "files", draft)
+        await set_session(user_id, flow, "files", draft)
         await event.respond(
-            f"دفعة الحلقات جاهزة. الموسم {draft['season']}، البداية من الحلقة {start}.\n"
+            f"دفعة الحلقات جاهزة. الموسم {draft['season']}، البداية من الحلقة {start_episode}.\n"
             "أرسل ملفات MP4 بالترتيب. عند الانتهاء أرسل /done."
         )
         return
@@ -680,30 +1042,36 @@ async def handle_admin_message(event: Any) -> None:
 
     try:
         if flow == "movie_single" and step == "file":
+            if not can_upload(member, "movie"):
+                raise PermissionError("لا تملك صلاحية رفع الأفلام.")
             row = await store_message(event, kind="movie")
-            await clear_session()
+            await clear_session(user_id)
             await event.respond(
                 f"تم تخزين الفيلم.\nID: {row['storage_id']}\nالحجم: {human_size(int(row['file_size']))}",
-                buttons=main_menu(),
+                buttons=main_menu(member),
             )
             return
 
         if flow == "series_single" and step == "file":
+            if not can_upload(member, "series"):
+                raise PermissionError("لا تملك صلاحية رفع المسلسلات.")
             row = await store_message(
                 event,
                 kind="series",
                 season=int(draft.get("season") or 1),
                 episode=int(draft.get("episode") or 1),
             )
-            await clear_session()
+            await clear_session(user_id)
             await event.respond(
                 f"تم تخزين الحلقة.\nS{int(draft['season']):02d}E{int(draft['episode']):02d}\n"
                 f"ID: {row['storage_id']}\nالحجم: {human_size(int(row['file_size']))}",
-                buttons=main_menu(),
+                buttons=main_menu(member),
             )
             return
 
         if flow == "bulk_movies" and step == "files":
+            if not can_upload(member, "movie"):
+                raise PermissionError("لا تملك صلاحية رفع الأفلام.")
             count = int(draft.get("count") or 0) + 1
             row = await store_message(
                 event,
@@ -715,11 +1083,13 @@ async def handle_admin_message(event: Any) -> None:
             items.append(f"{count}. {row['storage_id']}")
             draft.update({"count": count, "items": items[-100:]})
             await increment_batch(str(draft["batch_id"]), count)
-            await set_session(flow, "files", draft)
+            await set_session(user_id, flow, "files", draft)
             await event.respond(f"{count}. تم الرفع\nID: {row['storage_id']}\nأرسل الملف التالي أو /done")
             return
 
         if flow == "bulk_series" and step == "files":
+            if not can_upload(member, "series"):
+                raise PermissionError("لا تملك صلاحية رفع المسلسلات.")
             count = int(draft.get("count") or 0) + 1
             episode = int(draft.get("next_episode") or 1)
             season = int(draft.get("season") or 1)
@@ -735,7 +1105,7 @@ async def handle_admin_message(event: Any) -> None:
             items.append(f"S{season:02d}E{episode:02d} → {row['storage_id']}")
             draft.update({"count": count, "next_episode": episode + 1, "items": items[-100:]})
             await increment_batch(str(draft["batch_id"]), count, episode + 1)
-            await set_session(flow, "files", draft)
+            await set_session(user_id, flow, "files", draft)
             await event.respond(
                 f"S{season:02d}E{episode:02d} تم الرفع\nID: {row['storage_id']}\n"
                 "أرسل الحلقة التالية أو /done"
@@ -746,34 +1116,49 @@ async def handle_admin_message(event: Any) -> None:
 
 
 async def handle_callback(event: Any) -> None:
-    if int(getattr(event, "sender_id", 0) or 0) != ADMIN_ID:
+    user_id = sender_id(event)
+    member = await get_member(user_id)
+    if not member:
         await event.answer("غير مصرح", alert=True)
         return
+
+    await touch_member_identity(user_id, event)
     data = bytes(getattr(event, "data", b"") or b"").decode("utf-8", "ignore")
     await event.answer()
     chat_id = int(event.chat_id)
 
     if data == "menu":
-        await clear_session()
-        await show_main(chat_id)
-    elif data == "cancel":
-        session = await get_session()
-        if session and (session.get("draft") or {}).get("batch_id"):
-            try:
-                await close_batch(str(session["draft"]["batch_id"]), "cancelled")
-            except Exception:
-                pass
-        await clear_session()
-        await show_main(chat_id, "تم إلغاء العملية الحالية.")
-    elif data == "movie_single":
-        await set_session("movie_single", "file", {})
+        await clear_session(user_id)
+        await show_main(chat_id, member)
+        return
+
+    if data == "cancel":
+        await cancel_current_flow(user_id)
+        await show_main(chat_id, member, "تم إلغاء العملية الحالية.")
+        return
+
+    if data == "movie_single":
+        if not can_upload(member, "movie"):
+            await telegram_client.send_message(chat_id, "لا تملك صلاحية رفع الأفلام.", buttons=main_menu(member))
+            return
+        await set_session(user_id, "movie_single", "file", {})
         await telegram_client.send_message(chat_id, "أرسل ملف الفيلم بصيغة MP4. الحد 1.95 GB.")
-    elif data == "series_single":
-        await set_session("series_single", "season", {})
+        return
+
+    if data == "series_single":
+        if not can_upload(member, "series"):
+            await telegram_client.send_message(chat_id, "لا تملك صلاحية رفع المسلسلات.", buttons=main_menu(member))
+            return
+        await set_session(user_id, "series_single", "season", {})
         await telegram_client.send_message(chat_id, "أرسل رقم الموسم.")
-    elif data == "bulk_movies":
-        batch = await create_batch("movie")
-        await set_session("bulk_movies", "files", {
+        return
+
+    if data == "bulk_movies":
+        if not can_upload(member, "movie"):
+            await telegram_client.send_message(chat_id, "لا تملك صلاحية رفع الأفلام.", buttons=main_menu(member))
+            return
+        batch = await create_batch("movie", user_id)
+        await set_session(user_id, "bulk_movies", "files", {
             "batch_id": batch["id"],
             "batch_code": batch["batch_code"],
             "count": 0,
@@ -783,24 +1168,49 @@ async def handle_callback(event: Any) -> None:
             chat_id,
             "بدأت دفعة أفلام. أرسل ملفات MP4 واحداً بعد الآخر. عند الانتهاء أرسل /done.",
         )
-    elif data == "bulk_series":
-        await set_session("bulk_series", "season", {})
+        return
+
+    if data == "bulk_series":
+        if not can_upload(member, "series"):
+            await telegram_client.send_message(chat_id, "لا تملك صلاحية رفع المسلسلات.", buttons=main_menu(member))
+            return
+        await set_session(user_id, "bulk_series", "season", {})
         await telegram_client.send_message(chat_id, "أرسل رقم الموسم لهذه الدفعة.")
-    elif data == "channels":
+        return
+
+    if data == "channels":
+        if not can_manage_channels(member):
+            await telegram_client.send_message(chat_id, "لا تملك صلاحية إعداد القنوات.", buttons=main_menu(member))
+            return
         await show_channels(chat_id)
-    elif data == "set_channel_movies":
-        await set_session("set_channel", "reference", {"channel_key": "movies"})
+        return
+
+    if data == "set_channel_movies":
+        if not can_manage_channels(member):
+            await telegram_client.send_message(chat_id, "لا تملك صلاحية إعداد القنوات.", buttons=main_menu(member))
+            return
+        await set_session(user_id, "set_channel", "reference", {"channel_key": "movies"})
         await telegram_client.send_message(
             chat_id,
             "أرسل ID قناة الأفلام مثل -100... أو @username. يجب أن يكون البوت مديراً فيها بصلاحية النشر.",
         )
-    elif data == "set_channel_series":
-        await set_session("set_channel", "reference", {"channel_key": "series"})
+        return
+
+    if data == "set_channel_series":
+        if not can_manage_channels(member):
+            await telegram_client.send_message(chat_id, "لا تملك صلاحية إعداد القنوات.", buttons=main_menu(member))
+            return
+        await set_session(user_id, "set_channel", "reference", {"channel_key": "series"})
         await telegram_client.send_message(
             chat_id,
             "أرسل ID قناة المسلسلات مثل -100... أو @username. يجب أن يكون البوت مديراً فيها بصلاحية النشر.",
         )
-    elif data == "test_channels":
+        return
+
+    if data == "test_channels":
+        if not can_manage_channels(member):
+            await telegram_client.send_message(chat_id, "لا تملك صلاحية اختبار القنوات.", buttons=main_menu(member))
+            return
         results = []
         for key, label in (("movies", "الأفلام"), ("series", "المسلسلات")):
             try:
@@ -814,10 +1224,68 @@ async def handle_callback(event: Any) -> None:
             except Exception as exc:
                 results.append(f"{label}: فشل ({str(exc)[:120]})")
         await telegram_client.send_message(chat_id, "فحص القنوات\n" + "\n".join(results), buttons=channels_menu())
-    elif data == "recent":
+        return
+
+    if data == "team":
+        await show_team(chat_id, member)
+        return
+
+    if data == "team_add_admin":
+        if str(member.get("role") or "") != "owner":
+            await telegram_client.send_message(chat_id, "إضافة الأدمن الثانوي متاحة للمالك فقط.", buttons=team_menu(member))
+            return
+        await set_session(user_id, "team_add", "user_id", {
+            "role": "admin",
+            "can_movies": True,
+            "can_series": True,
+        })
+        await telegram_client.send_message(chat_id, "أرسل Telegram User ID للأدمن الثانوي.")
+        return
+
+    if data in {"team_add_supervisor_all", "team_add_supervisor_movies", "team_add_supervisor_series"}:
+        if not can_manage_team(member):
+            await telegram_client.send_message(chat_id, "لا تملك صلاحية إضافة مشرف.", buttons=main_menu(member))
+            return
+        can_movies_value = data in {"team_add_supervisor_all", "team_add_supervisor_movies"}
+        can_series_value = data in {"team_add_supervisor_all", "team_add_supervisor_series"}
+        await set_session(user_id, "team_add", "user_id", {
+            "role": "supervisor",
+            "can_movies": can_movies_value,
+            "can_series": can_series_value,
+        })
+        scope = "أفلام + مسلسلات" if can_movies_value and can_series_value else ("أفلام فقط" if can_movies_value else "مسلسلات فقط")
+        await telegram_client.send_message(chat_id, f"أرسل Telegram User ID للمشرف.\nالصلاحية: {scope}")
+        return
+
+    if data == "team_list":
+        await show_team(chat_id, member)
+        return
+
+    if data == "team_remove":
+        if not can_manage_team(member):
+            await telegram_client.send_message(chat_id, "لا تملك صلاحية حذف أعضاء الفريق.", buttons=main_menu(member))
+            return
+        await show_remove_member_menu(chat_id, member)
+        return
+
+    if data.startswith("team_remove_id:"):
+        if not can_manage_team(member):
+            await telegram_client.send_message(chat_id, "لا تملك صلاحية حذف أعضاء الفريق.", buttons=main_menu(member))
+            return
+        try:
+            target_id = int(data.split(":", 1)[1])
+            target = await get_member(target_id)
+            label = member_display(target or {"telegram_user_id": target_id})
+            await remove_team_member(member, target_id)
+            await telegram_client.send_message(chat_id, f"تم إلغاء صلاحيات {label}.", buttons=team_menu(member))
+        except Exception as exc:
+            await telegram_client.send_message(chat_id, f"تعذر حذف العضو: {str(exc)[:500]}", buttons=team_menu(member))
+        return
+
+    if data == "recent":
         rows = await recent_media(12)
         if not rows:
-            await telegram_client.send_message(chat_id, "لا توجد ملفات مخزنة بعد.", buttons=main_menu())
+            await telegram_client.send_message(chat_id, "لا توجد ملفات مخزنة بعد.", buttons=main_menu(member))
             return
         lines = []
         for row in rows:
@@ -825,9 +1293,12 @@ async def handle_callback(event: Any) -> None:
             if row.get("media_kind") == "series" and row.get("season") and row.get("episode"):
                 extra = f" S{int(row['season']):02d}E{int(row['episode']):02d}"
             lines.append(f"{row['storage_id']}{extra} · {human_size(int(row.get('file_size') or 0))}")
-        await telegram_client.send_message(chat_id, "آخر الملفات\n\n" + "\n".join(lines), buttons=main_menu())
-    elif data == "status":
+        await telegram_client.send_message(chat_id, "آخر الملفات\n\n" + "\n".join(lines), buttons=main_menu(member))
+        return
+
+    if data == "status":
         movies, series = await asyncio.gather(get_channel_row("movies"), get_channel_row("series"))
+        team = await list_team_members()
         await telegram_client.send_message(
             chat_id,
             "حالة CINARO Storage\n"
@@ -835,15 +1306,23 @@ async def handle_callback(event: Any) -> None:
             f"Database: {'متصل' if database_configured() else 'غير مهيأ'}\n"
             f"قناة الأفلام: {'جاهزة' if movies else 'غير محددة'}\n"
             f"قناة المسلسلات: {'جاهزة' if series else 'غير محددة'}\n"
+            f"الفريق النشط: {len(team)}\n"
+            f"دورك: {role_label(str(member.get('role') or 'supervisor'))}\n"
             "الحد: 1.95 GB",
-            buttons=main_menu(),
+            buttons=main_menu(member),
         )
+        return
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global telegram_client, http_client
     http_client = httpx.AsyncClient(follow_redirects=False)
+    if database_configured():
+        try:
+            await ensure_owner_member()
+        except Exception as exc:
+            print(f"Owner bootstrap failed: {exc}", flush=True)
     if telegram_configured():
         try:
             telegram_client = TelegramClient(None, API_ID, API_HASH)
@@ -869,7 +1348,7 @@ async def lifespan(app: FastAPI):
         await http_client.aclose()
 
 
-app = FastAPI(title="CINARO Telegram Storage Gateway", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="CINARO Telegram Storage Gateway", version="1.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -882,17 +1361,23 @@ app.add_middleware(
 
 @app.get("/")
 async def root() -> dict[str, Any]:
-    return {"name": "CINARO Gateway", "ok": True, "storage": "private-media", "version": "1.0.0"}
+    return {"name": "CINARO Gateway", "ok": True, "storage": "private-media", "version": "1.1.0"}
 
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
     movies = series = False
+    team_count = 0
     if database_configured():
         try:
-            movies_row, series_row = await asyncio.gather(get_channel_row("movies"), get_channel_row("series"))
+            movies_row, series_row, team_rows = await asyncio.gather(
+                get_channel_row("movies"),
+                get_channel_row("series"),
+                list_team_members(),
+            )
             movies = bool(movies_row)
             series = bool(series_row)
+            team_count = len(team_rows)
         except Exception:
             pass
     return {
@@ -903,6 +1388,8 @@ async def health() -> dict[str, Any]:
         "databaseConfigured": database_configured(),
         "moviesChannelConfigured": movies,
         "seriesChannelConfigured": series,
+        "teamMembers": team_count,
+        "multiAdmin": True,
         "maxMediaBytes": MAX_MEDIA_BYTES,
         "maxMediaGB": 1.95,
         "rangeStreaming": True,
