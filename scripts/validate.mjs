@@ -27,13 +27,13 @@ const buildGradle = read("android-app/app/build.gradle");
 const workflow = read(".github/workflows/android-apk.yml");
 const packageJson = JSON.parse(read("package.json"));
 
-assert(packageJson.version === "2.6.1", "package version is 2.6.1");
+assert(packageJson.version === "2.6.2", "package version is 2.6.2");
 assert(packageJson.scripts.test.includes("web/supabase.js"), "tests check user Supabase client");
 assert(packageJson.scripts.test.includes("admin/supabase.js"), "tests check admin Supabase client");
 assert(!packageJson.scripts.test.includes("firebase.js"), "test command no longer depends on Firebase");
 
-assert(webHtml.includes('supabase.js?v=2.6.1'), "user shell loads Supabase 2.6 client");
-assert(adminHtml.includes('supabase.js?v=2.6.1'), "admin shell loads Supabase 2.6 client");
+assert(webHtml.includes('supabase.js?v=2.6.2'), "user shell loads Supabase 2.6 client");
+assert(adminHtml.includes('supabase.js?v=2.6.2'), "admin shell loads Supabase 2.6 client");
 assert(!webHtml.includes('firebase.js'), "user shell does not load Firebase");
 assert(!adminHtml.includes('firebase.js'), "admin shell does not load Firebase");
 assert(webHtml.includes('id="serviceGate"'), "user app has blocking service gate");
@@ -42,12 +42,15 @@ assert(webHtml.includes('data-route="search" class="nav-search"'), "user mobile 
 assert(webHtml.includes("splash-stage"), "user shell includes redesigned splash stage");
 assert(webHtml.includes("USER EDITION"), "user splash exposes edition label");
 
-assert(webApp.includes('const WEB_APP_VERSION = "2.6.1"'), "user runtime version is 2.6.1");
+assert(webApp.includes('const WEB_APP_VERSION = "2.6.2"'), "user runtime version is 2.6.2");
 assert(webApp.includes("URL_APP_VERSION"), "user runtime reads APK version from URL");
 assert(webApp.includes("NATIVE_APP_VERSION"), "user runtime can read native version");
 assert(webApp.includes("updateAvailable"), "forced update checks latest version");
 assert(webApp.includes("state.remoteConfig.forceUpdate !== false"), "forced update defaults to enabled");
 assert(!webApp.includes("(needsUpdate && state.remoteConfig.forceUpdate)"), "user config render has no stale needsUpdate reference");
+assert(!/\$\([\s\S]{0,240}?\)\s*\.forEach\(/.test(webApp), "user app does not call forEach on querySelector results");
+assert(webApp.includes("runBootStep"), "user boot isolates feature initialization failures");
+assert(webApp.includes("CINARO realtime view refresh failed"), "realtime refresh has an error boundary");
 assert(webApp.includes("forcedUpdateNotice"), "user config notice uses defined forced-update state");
 assert(webApp.includes("CINARO view render failed"), "user navigation has a render recovery boundary");
 assert(webApp.includes("encodeURIComponent(WEB_APP_VERSION)"), "service worker registration follows current user version");
@@ -82,22 +85,22 @@ assert(adminSupabase.includes('from("account_status")'), "admin account blocking
 assert(adminSupabase.includes('listenContentForSections'), "admin supports scoped supervisor content");
 
 assert(webStyles.includes("CINARO 2.6 — Aurora Cinema Design"), "Aurora Cinema user design system is present");
-assert(webStyles.includes("CINARO 2.6.1 — Premiere Splash"), "Premiere splash design system is present");
+assert(webStyles.includes("CINARO 2.6.2 — Premiere Splash"), "Premiere splash design system is present");
 assert(adminStyles.includes("CINARO Admin 2.6 — Obsidian Control Design"), "Obsidian Control admin design system is present");
-assert(webSw.includes('cinaro-v2.6.1'), "user PWA cache bumped");
+assert(webSw.includes('cinaro-v2.6.2'), "user PWA cache bumped");
 assert(webSw.includes('"./supabase.js"'), "user PWA caches Supabase client");
-assert(adminSw.includes('cinaro-admin-v2.6.1'), "admin PWA cache bumped");
+assert(adminSw.includes('cinaro-admin-v2.6.2'), "admin PWA cache bumped");
 assert(adminSw.includes('"./supabase.js"'), "admin PWA caches Supabase client");
 
-assert(buildGradle.includes("versionCode 14"), "Android versionCode bumped");
-assert(buildGradle.includes('versionName "2.6.1"'), "Android user version is 2.6.1");
-assert(buildGradle.includes('versionName "2.6.1-admin"'), "Android admin version is 2.6.1-admin");
-assert(buildGradle.includes("?v=2.6.1#home"), "user APK URL carries native release version");
-assert(buildGradle.includes("?v=2.6.1#dashboard"), "admin APK URL carries native release version");
+assert(buildGradle.includes("versionCode 15"), "Android versionCode bumped");
+assert(buildGradle.includes('versionName "2.6.2"'), "Android user version is 2.6.2");
+assert(buildGradle.includes('versionName "2.6.2-admin"'), "Android admin version is 2.6.2-admin");
+assert(buildGradle.includes("?v=2.6.2#home"), "user APK URL carries native release version");
+assert(buildGradle.includes("?v=2.6.2#dashboard"), "admin APK URL carries native release version");
 
-assert(workflow.includes("CINARO-User-v2.6.1.apk"), "workflow names user APK 2.6.1");
-assert(workflow.includes("CINARO-Admin-v2.6.1.apk"), "workflow names admin APK 2.6.1");
-assert(workflow.includes('TAG="v2.6.1"'), "workflow publishes v2.6.1");
+assert(workflow.includes("CINARO-User-v2.6.2.apk"), "workflow names user APK 2.6.2");
+assert(workflow.includes("CINARO-Admin-v2.6.2.apk"), "workflow names admin APK 2.6.2");
+assert(workflow.includes('TAG="v2.6.2"'), "workflow publishes v2.6.2");
 assert(workflow.includes("CINARO_KEYSTORE_BASE64"), "stable signing secrets remain configured");
 
 if (process.exitCode) {
