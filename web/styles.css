@@ -3327,7 +3327,7 @@ main {
   }
 }
 
-/* Firebase authentication and account experience */
+/* Authentication and account experience */
 body.auth-open {
   overflow: hidden;
 }
@@ -5511,7 +5511,7 @@ main#appMain {
 }
 
 
-/* ===== CINARO 2.6.2 — Premiere Splash ===== */
+/* ===== CINARO 2.6.3 — Premiere Splash ===== */
 .splash {
   overflow: hidden;
   background: #040508;

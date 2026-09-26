@@ -76,11 +76,11 @@
     const messages = {
       "auth/invalid-credential": "البريد أو كلمة المرور غير صحيحة.",
       "auth/invalid-login-credentials": "البريد أو كلمة المرور غير صحيحة.",
-      "auth/user-disabled": "هذا الحساب معطّل من Supabase.",
+      "auth/user-disabled": "هذا الحساب معطّل.",
       "auth/too-many-requests": "محاولات كثيرة. انتظر قليلاً ثم أعد المحاولة.",
       "auth/network-request-failed": "تعذّر الاتصال بالشبكة.",
       "permission-denied": "ليس لديك صلاحية لهذه العملية.",
-      "failed-precondition": "تأكد من إعداد Supabase قبل المتابعة."
+      "failed-precondition": "تأكد من إعداد النظام قبل المتابعة."
     };
     return messages[code] || asString(error && error.message, "حدث خطأ غير متوقع.");
   }
@@ -939,8 +939,8 @@
   function fillSettings() {
     $("settingFeatured").value = toArray(state.config.featured).join(", ");
     $("settingAnnouncement").value = asString(state.config.announcement);
-    $("settingLatestVersion").value = asString(state.config.latestVersion, "2.6.2");
-    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.6.2");
+    $("settingLatestVersion").value = asString(state.config.latestVersion, "2.6.3");
+    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.6.3");
     $("settingUpdateUrl").value = asString(state.config.updateUrl, "https://github.com/3c5-o/CINARO/releases");
     $("settingUpdateNotes").value = asString(state.config.updateNotes);
     if ($("settingUpdateReleasedAt")) $("settingUpdateReleasedAt").value = toLocalDateTimeInput(state.config.updateReleasedAt);
@@ -1050,13 +1050,34 @@
     }));
   }
 
+  function canonicalSectionId(kind) {
+    return kind === "series" ? "series" : "movies";
+  }
+
+  function normalizeSectionSelection(kind, selectedIds) {
+    const ids = [...new Set(toArray(selectedIds).map((id) => asString(id)).filter(Boolean))];
+    if (!isAdmin()) return ids.slice(0, 30);
+    const canonical = canonicalSectionId(kind);
+    const opposite = kind === "series" ? "movies" : "series";
+    const canonicalExists = state.sections.some((section) => section.id === canonical && section.active !== false);
+    const cleaned = ids.filter((id) => id !== opposite && id !== canonical);
+    return canonicalExists ? [canonical, ...cleaned].slice(0, 30) : ids.slice(0, 30);
+  }
+
   function toggleKindFields() {
-    const series = $("contentKind").value === "series";
+    const kind = $("contentKind").value === "series" ? "series" : "movie";
+    const series = kind === "series";
     $("movieMediaFields")?.classList.toggle("is-hidden", series);
     $("seriesMediaFields")?.classList.toggle("is-hidden", !series);
     if (series && !state.seasonDraft.length) {
       state.seasonDraft = [newSeason(1)];
       renderSeasonBuilder();
+    }
+    if (isAdmin() && !state.editingContentId) {
+      const current = parseCsv($("contentSections").value);
+      const next = normalizeSectionSelection(kind, current);
+      $("contentSections").value = next.join(", ");
+      renderSectionPickers();
     }
   }
 
@@ -1257,7 +1278,8 @@
       if (willPublish && kind === "series" && seasons.some((season) => season.episodes.some((episode) => !episode.sources.length))) {
         throw new Error("لا يمكن نشر المسلسل قبل إضافة رابط تشغيل لكل حلقة.");
       }
-      const sectionIds = parseCsv($("contentSections").value);
+      let sectionIds = parseCsv($("contentSections").value);
+      if (isAdmin()) sectionIds = normalizeSectionSelection(kind, sectionIds);
       if (!isAdmin()) {
         const allowed = assignedSectionIds();
         if (!sectionIds.length || sectionIds.some((sectionId) => !allowed.includes(sectionId))) {
@@ -1275,7 +1297,9 @@
         duration: Math.max(0, Math.round(asNumber($("contentDuration").value))),
         genres: parseCsv($("contentGenres").value),
         sectionIds,
-        managementSectionId: sectionIds.includes(existing?.managementSectionId) ? existing.managementSectionId : (sectionIds[0] || ""),
+        managementSectionId: isAdmin()
+          ? (sectionIds.includes(canonicalSectionId(kind)) ? canonicalSectionId(kind) : (sectionIds[0] || ""))
+          : (sectionIds.includes(existing?.managementSectionId) ? existing.managementSectionId : (sectionIds[0] || "")),
         description: asString($("contentDescription").value).slice(0, 3000),
         poster,
         backdrop,
@@ -1394,7 +1418,7 @@
       const email = asString($("supervisorEmail").value).toLowerCase();
       const name = asString($("supervisorName").value);
       const sectionIds = parseCsv($("supervisorSections").value);
-      if (!/^[A-Za-z0-9_-]{8,150}$/.test(uid)) throw new Error("UID حساب Supabase غير صحيح.");
+      if (!/^[A-Za-z0-9_-]{8,150}$/.test(uid)) throw new Error("معرّف الحساب غير صحيح.");
       if (!email || !name || !sectionIds.length) throw new Error("UID والبريد والاسم وقسم واحد على الأقل حقول مطلوبة.");
       const payload = {
         uid, email, displayName: name.slice(0, 100), sectionIds, active: true,
@@ -1487,8 +1511,8 @@
     const form = $("settingsForm");
     setBusy(form, true);
     try {
-      const latestVersion = asString($("settingLatestVersion").value, "2.6.2").slice(0, 20);
-      const versionChanged = latestVersion !== asString(state.config.latestVersion, "2.6.2");
+      const latestVersion = asString($("settingLatestVersion").value, "2.6.3").slice(0, 20);
+      const versionChanged = latestVersion !== asString(state.config.latestVersion, "2.6.3");
       const releaseAt = versionChanged
         ? new Date().toISOString()
         : localDateTimeToIso($("settingUpdateReleasedAt")?.value) || state.config.updateReleasedAt || new Date().toISOString();
@@ -1499,7 +1523,7 @@
         featured: parseCsv($("settingFeatured").value),
         announcement: asString($("settingAnnouncement").value).slice(0, 500),
         latestVersion,
-        minimumVersion: asString($("settingMinVersion").value, "2.6.2").slice(0, 20),
+        minimumVersion: asString($("settingMinVersion").value, "2.6.3").slice(0, 20),
         updateNotes: asString($("settingUpdateNotes").value).slice(0, 1000),
         updateUrl: validMediaUrl($("settingUpdateUrl").value) || "https://github.com/3c5-o/CINARO/releases",
         maintenance: $("settingMaintenance").checked,
@@ -1532,7 +1556,7 @@
     if (!isAdmin()) return;
     const payload = {
       schema: "cinaro-backup-v1",
-      appVersion: "2.6.2",
+      appVersion: "2.6.3",
       exportedAt: new Date().toISOString(),
       content: state.content.map((item) => ({ ...item })),
       sections: state.sections.map((item) => ({ ...item })),
@@ -1795,12 +1819,12 @@
       const stop = client.listenCollection(name, (rows) => {
         state[setter] = setter === "content" && !isAdmin() ? rows.filter(canManageContent) : rows;
         if (setter === "content" && isAdmin()) migrateManagementSections(rows);
-        setConnection("connected", "متصل بـ Supabase المباشر");
+        setConnection("connected", "النظام متصل ومحدّث");
         refresh();
       }, (error) => {
         console.warn("CINARO admin listener failed", label, error);
-        setConnection("error", "توجد مشكلة في صلاحيات Supabase");
-        showNotice(`تعذّر تحميل ${label}. راجع قواعد Supabase وصلاحيات الحساب.`, "error");
+        setConnection("error", "توجد مشكلة في صلاحيات النظام");
+        showNotice(`تعذّر تحميل ${label}. راجع صلاحيات الحساب وإعدادات النظام.`, "error");
       });
       state.unsubscribers.push(stop);
     };
@@ -1818,7 +1842,7 @@
         (error) => {
           console.warn("CINARO supervisor content listener failed", error);
           setConnection("error", "تعذّر تحميل محتوى الأقسام المسموحة");
-          showNotice("تعذّر تحميل محتوى الأقسام المسموحة. تحقق من تعيين المشرف وقواعد Supabase.", "error");
+          showNotice("تعذّر تحميل محتوى الأقسام المسموحة. تحقق من تعيين المشرف وصلاحيات الأقسام.", "error");
         }
       );
       state.unsubscribers.push(stopScopedContent);
@@ -1905,7 +1929,7 @@
       event.preventDefault();
       const form = event.currentTarget;
       setBusy(form, true);
-      setMessage("loginMessage", "جاري التحقق من Supabase…", "pending");
+      setMessage("loginMessage", "جاري التحقق من الحساب…", "pending");
       try {
         await state.firebase.login($("adminEmail").value, $("adminPassword").value);
         $("adminPassword").value = "";
@@ -2040,8 +2064,8 @@
 
   window.addEventListener("cinaro:admin-supabase-ready", (event) => connectSupabase(event.detail && event.detail.client));
   window.addEventListener("cinaro:admin-supabase-error", (event) => {
-    setConnection("error", "Supabase غير متاح");
-    setMessage("loginMessage", "تعذّر تحميل Supabase. تحقق من الاتصال وإعداد المشروع.", "error");
+    setConnection("error", "الخدمة غير متاحة");
+    setMessage("loginMessage", "تعذّر تحميل الخدمة. تحقق من الاتصال وحاول مجددًا.", "error");
     console.error(event.detail || {});
   });
   bindCopyProtection();
@@ -2050,6 +2074,6 @@
   renderDashboard();
   if (window.CINARO_ADMIN_SUPABASE) connectSupabase(window.CINARO_ADMIN_SUPABASE);
   if (!window.CinaroNative && "serviceWorker" in navigator && location.protocol === "https:") {
-    navigator.serviceWorker.register("sw.js?v=2.6.2", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
+    navigator.serviceWorker.register("sw.js?v=2.6.3", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
   }
 })();
