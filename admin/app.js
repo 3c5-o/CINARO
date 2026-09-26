@@ -1519,6 +1519,12 @@
       if (willPublish && kind === "series" && seasons.some((season) => season.episodes.some((episode) => !episode.sources.length))) {
         throw new Error("لا يمكن نشر المسلسل قبل إضافة مصدر تشغيل لكل حلقة.");
       }
+      const usesTelegramStorage = kind === "movie"
+        ? sources.some((source) => Boolean(normalizeStorageId(source?.storageId)))
+        : seasons.some((season) => season.episodes.some((episode) => episode.sources.some((source) => Boolean(normalizeStorageId(source?.storageId)))));
+      if (willPublish && usesTelegramStorage && !telegramGatewayBase()) {
+        throw new Error("بوابة CINARO Storage غير مربوطة بعد. يمكن حفظ المحتوى كمسودة، لكن لا يمكن نشر مصدر Telegram قبل تشغيل البوابة.");
+      }
       let sectionIds = parseCsv($("contentSections").value);
       if (isAdmin()) sectionIds = normalizeSectionSelection(kind, sectionIds);
       if (!isAdmin()) {
