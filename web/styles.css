@@ -3327,7 +3327,7 @@ main {
   }
 }
 
-/* Firebase authentication and account experience */
+/* Authentication and account experience */
 body.auth-open {
   overflow: hidden;
 }
