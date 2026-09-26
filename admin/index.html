@@ -7,10 +7,10 @@
   <meta name="description" content="لوحة إدارة CINARO للمحتوى والمستخدمين والمشرفين">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; connect-src 'self' https: wss:; frame-src 'self' https://zmkkoggsqvwvwkanlyux.supabase.co; style-src 'self' 'unsafe-inline'; script-src 'self' https://cdn.jsdelivr.net; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>CINARO Admin</title>
-  <link rel="manifest" href="manifest.webmanifest?v=2.5.0">
+  <link rel="manifest" href="manifest.webmanifest?v=2.6.0">
   <link rel="icon" type="image/png" href="assets/icons/favicon-32.png">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=2.5.0">
+  <link rel="stylesheet" href="styles.css?v=2.6.0">
 </head>
 <body class="admin-booting">
   <div id="loginView" class="admin-login-view">
@@ -52,13 +52,30 @@
       <header class="admin-topbar">
         <button id="menuButton" class="icon-button mobile-only" type="button" aria-label="فتح القائمة" aria-controls="adminSidebar" aria-expanded="false"><svg><use href="#i-menu"></use></svg></button>
         <div><span class="topbar-kicker">CINARO CONTROL CENTER</span><h1 id="viewTitle">نظرة عامة</h1></div>
-        <div class="topbar-actions"><div class="admin-user"><span id="adminUserAvatar">A</span><div><b id="adminUserName">مدير CINARO</b><small id="adminUserEmail">—</small></div></div><button id="logoutButton" class="icon-button" type="button" aria-label="تسجيل الخروج"><svg><use href="#i-logout"></use></svg></button></div>
+        <div class="topbar-actions">
+          <div class="system-live-pill"><span></span><b>SUPABASE</b><small>LIVE</small></div>
+          <div class="admin-user"><span id="adminUserAvatar">A</span><div><b id="adminUserName">مدير CINARO</b><small id="adminUserEmail">—</small></div></div>
+          <button id="logoutButton" class="icon-button" type="button" aria-label="تسجيل الخروج"><svg><use href="#i-logout"></use></svg></button>
+        </div>
       </header>
 
       <div id="adminNotice" class="admin-notice" hidden></div>
 
       <section id="view-dashboard" class="admin-view active" data-title="نظرة عامة">
-        <div class="dashboard-hero"><div><span>مركز قيادة CINARO 2.0</span><h2>إدارة أسرع، أوضح، وأكثر أماناً</h2><p>راقب المحتوى والطلبات والبلاغات والإصدارات من لوحة واحدة مصممة للهاتف.</p></div><div class="hero-orbit"><span></span><b>LIVE</b></div></div>
+        <div class="dashboard-hero">
+          <div class="dashboard-hero-copy">
+            <span>CINARO CONTROL / 2.6</span>
+            <h2>كل المنصة تحت سيطرتك من شاشة واحدة</h2>
+            <p>محتوى، طلبات، بلاغات، مستخدمون وإصدارات بتصميم أسرع ومهيأ للموبايل.</p>
+            <div class="dashboard-quick-actions">
+              <button type="button" class="quick-action primary" data-view="editor"><svg><use href="#i-plus"></use></svg><span><b>إضافة محتوى</b><small>فيلم أو مسلسل</small></span></button>
+              <button type="button" class="quick-action" data-view="requests" data-admin-only><svg><use href="#i-film"></use></svg><span><b>الطلبات</b><small>مراجعة الطلبات</small></span></button>
+              <button type="button" class="quick-action" data-view="reports" data-admin-only><svg><use href="#i-alert"></use></svg><span><b>البلاغات</b><small>مشاكل التشغيل</small></span></button>
+              <button type="button" class="quick-action" data-view="settings" data-admin-only><svg><use href="#i-settings"></use></svg><span><b>الإعدادات</b><small>الإصدار والصيانة</small></span></button>
+            </div>
+          </div>
+          <div class="hero-orbit"><span></span><b>LIVE</b><small>CONTROL</small></div>
+        </div>
         <div class="stats-grid">
           <article class="stat-card"><span class="stat-icon red"><svg><use href="#i-film"></use></svg></span><div><small>كل المحتوى</small><strong id="statContent">0</strong><span id="statPublished">0 منشور</span></div></article>
           <article class="stat-card" data-admin-only><span class="stat-icon blue"><svg><use href="#i-users"></use></svg></span><div><small>المستخدمون</small><strong id="statUsers">0</strong><span id="statActiveUsers">0 نشط</span></div></article>
@@ -140,8 +157,8 @@
             <label><span>معرّفات المحتوى المميز</span><textarea id="settingFeatured" rows="3" placeholder="movie-id, series-id"></textarea></label>
             <label><span>رسالة عامة للمستخدمين</span><textarea id="settingAnnouncement" rows="3" placeholder="اختياري"></textarea></label>
             <div class="form-grid two">
-              <label><span>أحدث إصدار متاح</span><input id="settingLatestVersion" value="2.5.0"></label>
-              <label><span>الحد الأدنى للإصدار المدعوم</span><input id="settingMinVersion" value="2.5.0"></label>
+              <label><span>أحدث إصدار متاح</span><input id="settingLatestVersion" value="2.6.0"></label>
+              <label><span>الحد الأدنى للإصدار المدعوم</span><input id="settingMinVersion" value="2.6.0"></label>
               <label><span>رابط تنزيل تحديث المستخدم</span><input id="settingUpdateUrl" type="url" value="https://github.com/3c5-o/CINARO/releases"></label>
               <label><span>ملاحظات التحديث</span><textarea id="settingUpdateNotes" rows="3" placeholder="مثلاً: إصلاح المشغل وإضافة طلبات المحتوى"></textarea></label><label><span>تاريخ إطلاق التحديث</span><input id="settingUpdateReleasedAt" type="datetime-local"><small>يُحدَّث تلقائياً عند تغيير رقم الإصدار.</small></label><label><span>إيقاف النسخة السابقة نهائياً</span><input id="settingOldVersionShutdownAt" type="datetime-local"><small>الافتراضي: بعد 7 أيام من إطلاق التحديث.</small></label>
               <label class="check-field"><input id="settingMaintenance" type="checkbox"><span>وضع الصيانة</span></label>
@@ -179,7 +196,13 @@
       <section id="view-activity" class="admin-view" data-title="سجل العمليات"><div class="section-toolbar"><div><span>التدقيق والأمان</span><h2>سجل العمليات</h2><p>كل عملية إدارية مهمة تُحفظ مع منفذها ووقتها.</p></div></div><div class="panel table-panel"><div id="activityTable" class="data-table-wrap"></div></div></section>
     </main>
 
-    <nav id="mobileNav" class="mobile-nav" aria-label="تنقل الإدارة"><button class="active" type="button" data-view="dashboard"><svg><use href="#i-grid"></use></svg><span>الرئيسية</span></button><button type="button" data-view="content"><svg><use href="#i-film"></use></svg><span>المحتوى</span></button><button type="button" data-view="requests" data-admin-only><svg><use href="#i-film"></use></svg><span>الطلبات</span><em id="mobileRequestsCount">0</em></button><button type="button" data-view="reports" data-admin-only><svg><use href="#i-alert"></use></svg><span>البلاغات</span></button><button type="button" data-view="users" data-admin-only><svg><use href="#i-users"></use></svg><span>المستخدمون</span></button><button type="button" data-view="settings" data-admin-only><svg><use href="#i-settings"></use></svg><span>الإعدادات</span></button></nav>
+    <nav id="mobileNav" class="mobile-nav" aria-label="تنقل الإدارة">
+      <button class="active" type="button" data-view="dashboard"><svg><use href="#i-grid"></use></svg><span>الرئيسية</span></button>
+      <button type="button" data-view="content"><svg><use href="#i-film"></use></svg><span>المحتوى</span></button>
+      <button class="mobile-nav-focus" type="button" data-view="requests" data-admin-only><span class="mobile-nav-orb"><svg><use href="#i-film"></use></svg></span><span>الطلبات</span><em id="mobileRequestsCount">0</em></button>
+      <button type="button" data-view="reports" data-admin-only><svg><use href="#i-alert"></use></svg><span>البلاغات</span></button>
+      <button type="button" data-view="settings" data-admin-only><svg><use href="#i-settings"></use></svg><span>الإعدادات</span></button>
+    </nav>
   </div>
 
   <div id="mediaPreviewDialog" class="preview-dialog" hidden>
@@ -217,8 +240,8 @@
     <symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
   </svg>
 
-  <script src="supabase.js?v=2.5.0" type="module"></script>
+  <script src="supabase.js?v=2.6.0" type="module"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="app.js?v=2.5.0" defer></script>
+  <script src="app.js?v=2.6.0" defer></script>
 </body>
 </html>
