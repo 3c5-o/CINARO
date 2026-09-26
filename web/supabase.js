@@ -4,7 +4,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const SUPABASE_URL = "https://zmkkoggsqvwvwkanlyux.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_yYSX8h3eAkbP3_Xg6ZNpoA_E1CwAvJJ";
-const APP_VERSION = "2.6.3";
+const APP_VERSION = "2.7.0";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
@@ -512,7 +512,8 @@ const client = {
       autoplayNext: payload?.settings?.autoplayNext !== false,
       reduceMotion: Boolean(payload?.settings?.reduceMotion),
       playbackRate: numberValue(payload?.settings?.playbackRate, 1, 0.5, 2),
-      captionsEnabled: Boolean(payload?.settings?.captionsEnabled)
+      captionsEnabled: Boolean(payload?.settings?.captionsEnabled),
+      notificationsEnabled: payload?.settings?.notificationsEnabled !== false
     };
     const { error } = await supabase.from("user_states").upsert({
       user_id: uid,
