@@ -194,6 +194,8 @@ Deno.serve(async (req: Request) => {
     ? cleanText(JSON.stringify(oneSignalResult.errors), 500)
     : cleanText(oneSignalResult.errors, 500);
 
+  const accepted = oneSignalResponse.ok && Boolean(notificationId);
+
   await admin.from("notification_logs").insert({
     title,
     message,
@@ -205,10 +207,10 @@ Deno.serve(async (req: Request) => {
     content_kind: contentKind,
     season,
     episode,
-    status: oneSignalResponse.ok ? "sent" : "failed",
+    status: accepted ? "sent" : "failed",
     onesignal_message_id: notificationId,
     recipients,
-    error_message: oneSignalResponse.ok ? "" : apiError || `HTTP ${oneSignalResponse.status}`,
+    error_message: accepted ? "" : apiError || (oneSignalResponse.ok ? "No eligible push subscriptions." : `HTTP ${oneSignalResponse.status}`),
     actor_uid: user.id,
   });
 
@@ -221,10 +223,10 @@ Deno.serve(async (req: Request) => {
   }
 
   return json({
-    ok: true,
+    ok: accepted,
     notificationId,
     recipients,
     audienceType,
-    warning: recipients === 0 ? "no_active_subscriptions" : "",
+    warning: accepted ? "" : "no_recipients",
   });
 });
