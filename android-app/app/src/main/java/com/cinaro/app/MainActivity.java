@@ -33,6 +33,9 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
+import com.onesignal.Continue;
+import com.onesignal.OneSignal;
+
 public class MainActivity extends Activity {
     private static final String APP_HOST = "3c5-o.github.io";
 
@@ -42,6 +45,7 @@ public class MainActivity extends Activity {
     private WebChromeClient.CustomViewCallback fullscreenCallback;
     private boolean usingOfflineFallback;
     private boolean refreshAfterUpgrade;
+    private String pendingNotificationRoute;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,6 +62,7 @@ public class MainActivity extends Activity {
         setContentView(rootView);
 
         configureWebView();
+        captureNotificationIntent(getIntent());
 
         SharedPreferences runtimePreferences = getSharedPreferences("cinaro_runtime", MODE_PRIVATE);
         int lastVersionCode = runtimePreferences.getInt("last_version_code", -1);
@@ -117,7 +122,7 @@ public class MainActivity extends Activity {
         settings.setAllowUniversalAccessFromFileURLs(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setUserAgentString(settings.getUserAgentString() + " CINARO/2.4.1 AndroidApp");
+        settings.setUserAgentString(settings.getUserAgentString() + " CINARO/" + BuildConfig.VERSION_NAME + " AndroidApp");
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.setSafeBrowsingEnabled(true);
@@ -138,6 +143,8 @@ public class MainActivity extends Activity {
         @Override
         public void onPageFinished(WebView view, String url) {
             super.onPageFinished(view, url);
+            dispatchPendingNotificationRoute(view);
+            maybePromptForNotifications();
             if (!refreshAfterUpgrade || url == null || !url.startsWith("https://" + APP_HOST + BuildConfig.APP_PATH)) {
                 return;
             }
@@ -255,6 +262,90 @@ public class MainActivity extends Activity {
         public void requestPortrait() {
             runOnUiThread(MainActivity.this::restorePortraitOrientation);
         }
+
+        @JavascriptInterface
+        public boolean notificationsAvailable() {
+            return BuildConfig.ENABLE_PUSH;
+        }
+
+        @JavascriptInterface
+        public void setNotificationUser(String externalId) {
+            if (!BuildConfig.ENABLE_PUSH) return;
+            String safeExternalId = externalId == null ? "" : externalId.trim();
+            if (safeExternalId.isEmpty() || safeExternalId.length() > 160) return;
+            runOnUiThread(() -> OneSignal.login(safeExternalId));
+        }
+
+        @JavascriptInterface
+        public void clearNotificationUser() {
+            if (!BuildConfig.ENABLE_PUSH) return;
+            runOnUiThread(OneSignal::logout);
+        }
+
+        @JavascriptInterface
+        public void requestPushPermission() {
+            if (!BuildConfig.ENABLE_PUSH) return;
+            runOnUiThread(() -> OneSignal.getNotifications().requestPermission(true, Continue.none()));
+        }
+
+        @JavascriptInterface
+        public void setPushEnabled(boolean enabled) {
+            if (!BuildConfig.ENABLE_PUSH) return;
+            runOnUiThread(() -> {
+                if (enabled) {
+                    OneSignal.getUser().getPushSubscription().optIn();
+                    OneSignal.getNotifications().requestPermission(true, Continue.none());
+                } else {
+                    OneSignal.getUser().getPushSubscription().optOut();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public boolean isPushOptedIn() {
+            return BuildConfig.ENABLE_PUSH && OneSignal.getUser().getPushSubscription().getOptedIn();
+        }
+    }
+
+    private void captureNotificationIntent(Intent intent) {
+        if (!BuildConfig.ENABLE_PUSH || intent == null) return;
+        String route = intent.getStringExtra(CinaroApplication.EXTRA_NOTIFICATION_ROUTE);
+        pendingNotificationRoute = sanitizeNotificationRoute(route);
+        intent.removeExtra(CinaroApplication.EXTRA_NOTIFICATION_ROUTE);
+    }
+
+    private String sanitizeNotificationRoute(String route) {
+        String value = route == null ? "" : route.trim().replaceFirst("^#", "");
+        if (value.matches("^(home|movies|series|library|search)$")) return value;
+        if (value.matches("^details/[a-z0-9-]{1,150}$")) return value;
+        if (value.matches("^watch/[a-z0-9-]{1,150}(?:/\\d{1,4}/\\d{1,5})?$")) return value;
+        return value.isEmpty() ? null : "home";
+    }
+
+    private void dispatchPendingNotificationRoute(WebView view) {
+        if (view == null || pendingNotificationRoute == null) return;
+        String route = pendingNotificationRoute;
+        pendingNotificationRoute = null;
+        view.evaluateJavascript(
+                "location.hash=" + org.json.JSONObject.quote("#" + route),
+                null
+        );
+    }
+
+    private void maybePromptForNotifications() {
+        if (!BuildConfig.ENABLE_PUSH) return;
+        SharedPreferences preferences = getSharedPreferences("cinaro_runtime", MODE_PRIVATE);
+        if (preferences.getBoolean("notification_permission_requested", false)) return;
+        preferences.edit().putBoolean("notification_permission_requested", true).apply();
+        OneSignal.getNotifications().requestPermission(false, Continue.none());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        captureNotificationIntent(intent);
+        if (webView != null) dispatchPendingNotificationRoute(webView);
     }
 
     private void restorePortraitOrientation() {
