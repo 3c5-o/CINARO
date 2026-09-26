@@ -396,6 +396,8 @@
     }
   }
 
+  const STORAGE_ID_RE = /^CIN-[MS]-[A-Z0-9]{10}$/i;
+
   function validMediaUrl(value) {
     const input = asString(value);
     if (/^assets\/[a-z0-9_./-]+$/i.test(input)) return input;
@@ -405,6 +407,47 @@
     } catch (_) {
       return "";
     }
+  }
+
+  function normalizeStorageId(value) {
+    const id = asString(value).toUpperCase();
+    return STORAGE_ID_RE.test(id) ? id : "";
+  }
+
+  function sourceInputValue(source) {
+    return normalizeStorageId(source?.storageId || source?.storage_id) || asString(source?.url);
+  }
+
+  function telegramGatewayBase() {
+    const raw = state.config?.settings?.telegramGatewayUrl || "";
+    return validMediaUrl(raw).replace(/\/+$/, "");
+  }
+
+  function gatewayStreamUrl(value) {
+    const id = normalizeStorageId(value);
+    const base = telegramGatewayBase();
+    return id && base ? `${base}/stream/${encodeURIComponent(id)}` : "";
+  }
+
+  function sourceFromInput(value, label = "تلقائي", previousType = "video/mp4") {
+    const input = asString(value);
+    const storageId = normalizeStorageId(input);
+    if (storageId) {
+      return { label: asString(label, "Telegram").slice(0, 40), storageId, provider: "telegram", type: "video/mp4" };
+    }
+    const url = validMediaUrl(input);
+    if (!url) throw new Error("مصدر التشغيل يجب أن يكون رابط HTTPS أو CINARO Storage ID صالحاً.");
+    return {
+      label: asString(label, "تلقائي").slice(0, 40),
+      url,
+      type: inferMediaType(url, previousType)
+    };
+  }
+
+  function playbackInputUrl(value) {
+    const storageId = normalizeStorageId(value);
+    if (storageId) return gatewayStreamUrl(storageId);
+    return validMediaUrl(value);
   }
 
   function inferMediaType(url, fallback = "video/mp4") {
@@ -421,12 +464,21 @@
 
   function normalizeSources(value) {
     return toArray(value).slice(0, 8).map((source, index) => {
-      const url = validMediaUrl(source && source.url);
-      if (!url) throw new Error(`رابط المصدر رقم ${index + 1} يجب أن يكون HTTPS.`);
+      const storageId = normalizeStorageId(source?.storageId || source?.storage_id);
+      if (storageId) {
+        return {
+          label: asString(source?.label, `المصدر ${index + 1}`).slice(0, 40),
+          storageId,
+          provider: "telegram",
+          type: "video/mp4"
+        };
+      }
+      const url = validMediaUrl(source?.url);
+      if (!url) throw new Error(`المصدر رقم ${index + 1} يجب أن يكون رابط HTTPS أو CINARO Storage ID صالحاً.`);
       return {
-        label: asString(source.label, `المصدر ${index + 1}`).slice(0, 40),
+        label: asString(source?.label, `المصدر ${index + 1}`).slice(0, 40),
         url,
-        type: asString(source.type, "video/mp4").slice(0, 80)
+        type: asString(source?.type, inferMediaType(url)).slice(0, 80)
       };
     });
   }
@@ -468,26 +520,34 @@
 
   function collectDraftPlaybackUrls() {
     const kind = $("contentKind")?.value === "series" ? "series" : "movie";
-    const urls = [];
+    const sources = [];
+    const collect = (value) => {
+      const input = asString(value);
+      if (input) sources.push(input);
+    };
     if (kind === "movie") {
-      [$("movieSourceUrl")?.value, $("movieBackupUrl")?.value].forEach((value) => {
-        const url = validMediaUrl(value);
-        if (url) urls.push(url);
-      });
+      collect($("movieSourceUrl")?.value);
+      collect($("movieBackupUrl")?.value);
     } else {
       state.seasonDraft.forEach((season) => {
         toArray(season.episodes).forEach((episode) => {
-          [episode.url, episode.backupUrl].forEach((value) => {
-            const url = validMediaUrl(value);
-            if (url) urls.push(url);
-          });
+          collect(episode.url);
+          collect(episode.backupUrl);
         });
       });
     }
-    return Array.from(new Set(urls));
+    return Array.from(new Set(sources));
   }
 
-  function probePlaybackUrl(url) {
+  function probePlaybackUrl(input) {
+    const storageId = normalizeStorageId(input);
+    const url = playbackInputUrl(input);
+    if (storageId && !url) {
+      return Promise.resolve({ input, ok: false, reason: "بوابة Telegram غير مربوطة بالمشروع بعد." });
+    }
+    if (!url) {
+      return Promise.resolve({ input, ok: false, reason: "المصدر ليس رابط HTTPS ولا CINARO Storage ID صالحاً." });
+    }
     return new Promise((resolve) => {
       const video = document.createElement("video");
       video.preload = "metadata";
@@ -502,7 +562,7 @@
         try { hls?.destroy?.(); } catch (_) {}
         video.removeAttribute("src");
         try { video.load(); } catch (_) {}
-        resolve({ url, ok, reason });
+        resolve({ input, url, ok, reason });
       };
       const timer = window.setTimeout(() => finish(false, "انتهت مهلة الفحص"), 9000);
       video.addEventListener("loadedmetadata", () => finish(true), { once: true });
@@ -529,11 +589,11 @@
     const button = $("validateContentButton");
     const urls = collectDraftPlaybackUrls();
     if (!urls.length) {
-      setMessage("contentFormMessage", "لا توجد روابط تشغيل لفحصها.", "error");
+      setMessage("contentFormMessage", "لا توجد مصادر تشغيل لفحصها.", "error");
       return;
     }
     button.disabled = true;
-    setMessage("contentFormMessage", `جاري فحص ${urls.length} رابط تشغيل…`, "pending");
+    setMessage("contentFormMessage", `جاري فحص ${urls.length} مصدر تشغيل…`, "pending");
     const results = [];
     try {
       for (let offset = 0; offset < urls.length; offset += 3) {
@@ -544,11 +604,12 @@
       const failed = results.filter((item) => !item.ok);
       if (failed.length) {
         console.warn("CINARO failed playback probes", failed);
-        setMessage("contentFormMessage", `فشل ${failed.length} من ${results.length} رابط. راجع الروابط قبل النشر.`, "error");
-        toast("بعض روابط التشغيل لا تعمل", "error");
+        const firstReason = asString(failed[0]?.reason);
+        setMessage("contentFormMessage", `فشل ${failed.length} من ${results.length} مصدر.${firstReason ? ` ${firstReason}` : ""}`, "error");
+        toast("بعض مصادر التشغيل غير جاهزة", "error");
       } else {
-        setMessage("contentFormMessage", `كل روابط التشغيل (${results.length}) استجابت بنجاح.`, "success");
-        toast("فحص روابط التشغيل ناجح");
+        setMessage("contentFormMessage", `كل مصادر التشغيل (${results.length}) استجابت بنجاح.`, "success");
+        toast("فحص مصادر التشغيل ناجح");
       }
     } finally {
       button.disabled = false;
@@ -1177,8 +1238,8 @@
           <div class="episode-builder-row">
             <label><span>رقم الحلقة</span><input type="number" min="1" value="${escapeHTML(episode.number)}" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="number"></label>
             <label><span>اسم الحلقة</span><input value="${escapeHTML(episode.title)}" maxlength="150" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="title"></label>
-            <label><span>رابط الحلقة الأساسي</span><input type="url" inputmode="url" value="${escapeHTML(episode.url || "")}" placeholder="https://…/video.mp4 أو stream.m3u8" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="url"></label>
-            <label><span>رابط احتياطي</span><input type="url" inputmode="url" value="${escapeHTML(episode.backupUrl || "")}" placeholder="اختياري" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="backupUrl"></label>
+            <label><span>مصدر الحلقة الأساسي</span><input type="text" inputmode="url" autocomplete="off" value="${escapeHTML(episode.url || "")}" placeholder="https://… أو CIN-S-XXXXXXXXXX" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="url"></label>
+            <label><span>مصدر احتياطي</span><input type="text" inputmode="url" autocomplete="off" value="${escapeHTML(episode.backupUrl || "")}" placeholder="رابط أو CIN-S-XXXXXXXXXX" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="backupUrl"></label>
             <label><span>صورة الحلقة</span><input type="url" inputmode="url" value="${escapeHTML(episode.thumbnail || "")}" placeholder="https://…/episode.webp" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="thumbnail"></label>
             <label><span>ترجمة عربية VTT</span><input type="url" inputmode="url" value="${escapeHTML(episode.subtitleUrl || "")}" placeholder="اختياري" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="subtitleUrl"></label>
             <label><span>المدة</span><input type="number" min="0" value="${escapeHTML(episode.duration)}" data-season-index="${seasonIndex}" data-episode-index="${episodeIndex}" data-episode-field="duration"></label>
@@ -1198,18 +1259,10 @@
         const backupUrl = asString(episode.backupUrl);
         const sourceCandidates = [];
         if (primaryUrl) {
-          sourceCandidates.push({
-            label: asString(episode.primarySource?.label, "تلقائي"),
-            url: primaryUrl,
-            type: inferMediaType(primaryUrl, episode.primarySource?.type)
-          });
+          sourceCandidates.push(sourceFromInput(primaryUrl, asString(episode.primarySource?.label, "تلقائي"), episode.primarySource?.type));
         }
         if (backupUrl) {
-          sourceCandidates.push({
-            label: asString(episode.backupSource?.label, "احتياطي"),
-            url: backupUrl,
-            type: inferMediaType(backupUrl, episode.backupSource?.type)
-          });
+          sourceCandidates.push(sourceFromInput(backupUrl, asString(episode.backupSource?.label, "احتياطي"), episode.backupSource?.type));
         }
         sourceCandidates.push(...toArray(episode.extraSources));
 
@@ -1365,8 +1418,8 @@
     $("contentBackdrop").value = item.backdrop || "";
     $("posterPreview").src = item.poster || "../web/assets/images/poster-placeholder.webp";
     $("backdropPreview").src = item.backdrop || item.poster || "../web/assets/images/poster-placeholder.webp";
-    $("movieSourceUrl").value = item.kind === "movie" ? asString(item.sources?.[0]?.url) : "";
-    $("movieBackupUrl").value = item.kind === "movie" ? asString(item.sources?.[1]?.url) : "";
+    $("movieSourceUrl").value = item.kind === "movie" ? sourceInputValue(item.sources?.[0]) : "";
+    $("movieBackupUrl").value = item.kind === "movie" ? sourceInputValue(item.sources?.[1]) : "";
     $("movieSubtitleUrl").value = item.kind === "movie" ? asString(item.subtitles?.[0]?.src) : "";
     state.seasonDraft = item.kind === "series" ? toArray(item.seasons).map((season, seasonIndex) => ({
       number: asNumber(season.number, seasonIndex + 1),
@@ -1380,8 +1433,8 @@
           title: asString(episode.title, `الحلقة ${episodeIndex + 1}`),
           duration: asNumber(episode.duration),
           thumbnail: asString(episode.thumbnail),
-          url: asString(sources[0]?.url),
-          backupUrl: asString(sources[1]?.url),
+          url: sourceInputValue(sources[0]),
+          backupUrl: sourceInputValue(sources[1]),
           subtitleUrl: asString(subtitles[0]?.src),
           primarySource: sources[0] || null,
           backupSource: sources[1] || null,
@@ -1433,18 +1486,10 @@
       const backupMovieUrl = asString($("movieBackupUrl").value);
       const movieSourceCandidates = [];
       if (primaryMovieUrl) {
-        movieSourceCandidates.push({
-          label: asString(existingMovieSources[0]?.label, "تلقائي"),
-          url: primaryMovieUrl,
-          type: inferMediaType(primaryMovieUrl, existingMovieSources[0]?.type)
-        });
+        movieSourceCandidates.push(sourceFromInput(primaryMovieUrl, asString(existingMovieSources[0]?.label, "تلقائي"), existingMovieSources[0]?.type));
       }
       if (backupMovieUrl) {
-        movieSourceCandidates.push({
-          label: asString(existingMovieSources[1]?.label, "احتياطي"),
-          url: backupMovieUrl,
-          type: inferMediaType(backupMovieUrl, existingMovieSources[1]?.type)
-        });
+        movieSourceCandidates.push(sourceFromInput(backupMovieUrl, asString(existingMovieSources[1]?.label, "احتياطي"), existingMovieSources[1]?.type));
       }
       movieSourceCandidates.push(...existingMovieSources.slice(2));
       const sources = kind === "movie" ? normalizeSources(movieSourceCandidates) : [];
@@ -1853,16 +1898,19 @@
     state.previewHls = null;
   }
 
-  function openMediaPreview(url, title = "معاينة الفيديو") {
-    const safeUrl = validMediaUrl(url);
+  function openMediaPreview(sourceInput, title = "معاينة الفيديو") {
+    const storageId = normalizeStorageId(sourceInput);
+    const safeUrl = playbackInputUrl(sourceInput);
     if (!safeUrl) {
-      toast("أدخل رابط فيديو HTTPS صالحاً أولاً", "error");
+      toast(storageId ? "بوابة Telegram غير مربوطة بالمشروع بعد" : "أدخل رابط HTTPS أو CINARO Storage ID صالحاً أولاً", "error");
       return;
     }
     const dialog = $("mediaPreviewDialog");
     const video = $("mediaPreviewVideo");
     $("mediaPreviewTitle").textContent = title;
-    $("mediaPreviewMessage").textContent = "إذا لم يبدأ الفيديو، فتحقق أن الرابط مباشر ويسمح بالتشغيل من التطبيق.";
+    $("mediaPreviewMessage").textContent = storageId
+      ? `معاينة CINARO Storage: ${storageId}`
+      : "إذا لم يبدأ الفيديو، فتحقق أن الرابط مباشر ويسمح بالتشغيل من التطبيق.";
     $("mediaPreviewMessage").className = "form-message";
     dialog.hidden = false;
     video.pause();
