@@ -1448,7 +1448,7 @@
       const item = itemMap.get(route.parts[1]);
       active = item?.kind === "series" ? "series" : "movies";
     }
-    $('[data-route="home"], [data-route="movies"], [data-route="series"], [data-route="search"], [data-route="library"]')
+    document.querySelectorAll('[data-route="home"], [data-route="movies"], [data-route="series"], [data-route="search"], [data-route="library"]')
       .forEach((button) => button.classList.toggle("active", button.dataset.route === active));
   }
 
@@ -1839,7 +1839,7 @@
   }
 
   function populateSubtitleTracks(tracks) {
-    $('track[data-cinaro-track="true"]', player.video).forEach((track) => track.remove());
+    player.video.querySelectorAll('track[data-cinaro-track="true"]').forEach((track) => track.remove());
     tracks.forEach((trackData, index) => {
       const track = document.createElement("track");
       track.kind = "subtitles";
