@@ -98,17 +98,63 @@ def human_size(size: int) -> str:
     return f"{size / 1_000:.0f} KB"
 
 
-def is_private_admin(event: Any) -> bool:
-    return int(getattr(event, "sender_id", 0) or 0) == ADMIN_ID
+def sender_id(event: Any) -> int:
+    return int(getattr(event, "sender_id", 0) or 0)
 
 
-def main_menu() -> list[list[Button]]:
-    return [
-        [Button.inline("رفع فيلم", b"movie_single"), Button.inline("رفع حلقة", b"series_single")],
-        [Button.inline("رفع جماعي أفلام", b"bulk_movies"), Button.inline("رفع جماعي حلقات", b"bulk_series")],
-        [Button.inline("إعداد القنوات", b"channels"), Button.inline("آخر الملفات", b"recent")],
-        [Button.inline("حالة النظام", b"status"), Button.inline("إلغاء العملية", b"cancel")],
-    ]
+def role_label(role: str) -> str:
+    return {
+        "owner": "المالك",
+        "admin": "أدمن ثانوي",
+        "supervisor": "مشرف",
+    }.get(role, "مشرف")
+
+
+def can_upload(member: dict[str, Any], kind: str) -> bool:
+    role = str(member.get("role") or "")
+    if role in {"owner", "admin"}:
+        return True
+    if role != "supervisor":
+        return False
+    return bool(member.get("can_movies")) if kind == "movie" else bool(member.get("can_series"))
+
+
+def can_manage_channels(member: dict[str, Any]) -> bool:
+    return str(member.get("role") or "") in {"owner", "admin"}
+
+
+def can_manage_team(member: dict[str, Any]) -> bool:
+    return str(member.get("role") or "") in {"owner", "admin"}
+
+
+def main_menu(member: dict[str, Any]) -> list[list[Button]]:
+    rows: list[list[Button]] = []
+    upload_row: list[Button] = []
+    bulk_row: list[Button] = []
+    if can_upload(member, "movie"):
+        upload_row.append(Button.inline("رفع فيلم", b"movie_single"))
+        bulk_row.append(Button.inline("رفع جماعي أفلام", b"bulk_movies"))
+    if can_upload(member, "series"):
+        upload_row.append(Button.inline("رفع حلقة", b"series_single"))
+        bulk_row.append(Button.inline("رفع جماعي حلقات", b"bulk_series"))
+    if upload_row:
+        rows.append(upload_row)
+    if bulk_row:
+        rows.append(bulk_row)
+
+    utility_row = [Button.inline("آخر الملفات", b"recent"), Button.inline("حالة النظام", b"status")]
+    rows.append(utility_row)
+
+    manage_row: list[Button] = []
+    if can_manage_channels(member):
+        manage_row.append(Button.inline("إعداد القنوات", b"channels"))
+    if can_manage_team(member):
+        manage_row.append(Button.inline("إدارة الفريق", b"team"))
+    if manage_row:
+        rows.append(manage_row)
+
+    rows.append([Button.inline("إلغاء العملية", b"cancel")])
+    return rows
 
 
 def channels_menu() -> list[list[Button]]:
@@ -118,6 +164,19 @@ def channels_menu() -> list[list[Button]]:
         [Button.inline("اختبار القنوات", b"test_channels")],
         [Button.inline("رجوع", b"menu")],
     ]
+
+
+def team_menu(member: dict[str, Any]) -> list[list[Button]]:
+    rows: list[list[Button]] = []
+    if str(member.get("role")) == "owner":
+        rows.append([Button.inline("إضافة أدمن ثانوي", b"team_add_admin")])
+    rows.extend([
+        [Button.inline("مشرف أفلام + مسلسلات", b"team_add_supervisor_all")],
+        [Button.inline("مشرف أفلام فقط", b"team_add_supervisor_movies"), Button.inline("مشرف مسلسلات فقط", b"team_add_supervisor_series")],
+        [Button.inline("عرض الفريق", b"team_list"), Button.inline("حذف عضو", b"team_remove")],
+        [Button.inline("رجوع", b"menu")],
+    ])
+    return rows
 
 
 def db_headers() -> dict[str, str]:
