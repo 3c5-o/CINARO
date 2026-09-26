@@ -24,7 +24,7 @@
     favorites: "cinaro:favorites:v1",
     history: "cinaro:watch-history:v2",
     settings: "cinaro:settings:v1",
-    splash: "cinaro:splash-seen:v1",
+    splash: "cinaro:splash-seen:v2",
     authChoice: "cinaro:auth-choice:v1",
     cloudOwner: "cinaro:cloud-owner:v1"
   };
@@ -2700,7 +2700,7 @@
 
   function finishSplash() {
     const previouslySeen = storage.get(STORAGE.splash, false);
-    const delay = settings.reduceMotion ? 120 : previouslySeen ? 650 : 1750;
+    const delay = settings.reduceMotion ? 120 : previouslySeen ? 520 : 1500;
     window.setTimeout(() => {
       elements.splash.classList.add("is-done");
       document.body.classList.remove("booting");
