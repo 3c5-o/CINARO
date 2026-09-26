@@ -1318,6 +1318,11 @@ async def handle_callback(event: Any) -> None:
 async def lifespan(app: FastAPI):
     global telegram_client, http_client
     http_client = httpx.AsyncClient(follow_redirects=False)
+    if database_configured():
+        try:
+            await ensure_owner_member()
+        except Exception as exc:
+            print(f"Owner bootstrap failed: {exc}", flush=True)
     if telegram_configured():
         try:
             telegram_client = TelegramClient(None, API_ID, API_HASH)
@@ -1343,7 +1348,7 @@ async def lifespan(app: FastAPI):
         await http_client.aclose()
 
 
-app = FastAPI(title="CINARO Telegram Storage Gateway", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="CINARO Telegram Storage Gateway", version="1.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -1356,17 +1361,23 @@ app.add_middleware(
 
 @app.get("/")
 async def root() -> dict[str, Any]:
-    return {"name": "CINARO Gateway", "ok": True, "storage": "private-media", "version": "1.0.0"}
+    return {"name": "CINARO Gateway", "ok": True, "storage": "private-media", "version": "1.1.0"}
 
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
     movies = series = False
+    team_count = 0
     if database_configured():
         try:
-            movies_row, series_row = await asyncio.gather(get_channel_row("movies"), get_channel_row("series"))
+            movies_row, series_row, team_rows = await asyncio.gather(
+                get_channel_row("movies"),
+                get_channel_row("series"),
+                list_team_members(),
+            )
             movies = bool(movies_row)
             series = bool(series_row)
+            team_count = len(team_rows)
         except Exception:
             pass
     return {
@@ -1377,6 +1388,8 @@ async def health() -> dict[str, Any]:
         "databaseConfigured": database_configured(),
         "moviesChannelConfigured": movies,
         "seriesChannelConfigured": series,
+        "teamMembers": team_count,
+        "multiAdmin": True,
         "maxMediaBytes": MAX_MEDIA_BYTES,
         "maxMediaGB": 1.95,
         "rangeStreaming": True,
