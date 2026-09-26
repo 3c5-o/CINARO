@@ -218,12 +218,158 @@ async def db_request(
         return None
 
 
-async def get_session() -> dict[str, Any] | None:
+async def ensure_owner_member() -> None:
+    await db_request(
+        "POST",
+        "telegram_bot_members",
+        params={"on_conflict": "telegram_user_id"},
+        json={
+            "telegram_user_id": ADMIN_ID,
+            "role": "owner",
+            "display_name": "مالك CINARO",
+            "active": True,
+            "can_movies": True,
+            "can_series": True,
+            "added_by": ADMIN_ID,
+            "updated_at": now_iso(),
+        },
+        prefer="resolution=merge-duplicates",
+    )
+
+
+async def get_member(user_id: int) -> dict[str, Any] | None:
+    rows = await db_request(
+        "GET",
+        "telegram_bot_members",
+        params={
+            "telegram_user_id": f"eq.{int(user_id)}",
+            "active": "eq.true",
+            "select": "telegram_user_id,role,display_name,username,active,can_movies,can_series,added_by,created_at,updated_at,last_seen_at",
+            "limit": "1",
+        },
+    )
+    if rows:
+        return rows[0]
+    if int(user_id) == ADMIN_ID:
+        return {
+            "telegram_user_id": ADMIN_ID,
+            "role": "owner",
+            "display_name": "مالك CINARO",
+            "username": "",
+            "active": True,
+            "can_movies": True,
+            "can_series": True,
+            "added_by": ADMIN_ID,
+        }
+    return None
+
+
+async def touch_member_identity(user_id: int, event: Any) -> None:
+    try:
+        sender = await event.get_sender()
+        first_name = str(getattr(sender, "first_name", "") or "").strip()
+        last_name = str(getattr(sender, "last_name", "") or "").strip()
+        display_name = " ".join(part for part in (first_name, last_name) if part)[:120]
+        username = str(getattr(sender, "username", "") or "")[:100]
+        await db_request(
+            "PATCH",
+            "telegram_bot_members",
+            params={"telegram_user_id": f"eq.{int(user_id)}"},
+            json={
+                "display_name": display_name,
+                "username": username,
+                "last_seen_at": now_iso(),
+                "updated_at": now_iso(),
+            },
+        )
+    except Exception:
+        pass
+
+
+async def list_team_members() -> list[dict[str, Any]]:
+    rows = await db_request(
+        "GET",
+        "telegram_bot_members",
+        params={
+            "active": "eq.true",
+            "select": "telegram_user_id,role,display_name,username,can_movies,can_series,added_by,created_at,last_seen_at",
+            "order": "role.asc,created_at.asc",
+            "limit": "100",
+        },
+    )
+    return rows or []
+
+
+async def add_team_member(
+    actor: dict[str, Any],
+    target_user_id: int,
+    role: str,
+    can_movies: bool = True,
+    can_series: bool = True,
+) -> dict[str, Any]:
+    actor_role = str(actor.get("role") or "")
+    if role not in {"admin", "supervisor"}:
+        raise ValueError("الدور غير مدعوم.")
+    if role == "admin" and actor_role != "owner":
+        raise PermissionError("إضافة الأدمن الثانوي متاحة للمالك فقط.")
+    if role == "supervisor" and actor_role not in {"owner", "admin"}:
+        raise PermissionError("لا تملك صلاحية إضافة مشرف.")
+    if int(target_user_id) == ADMIN_ID:
+        raise ValueError("حساب المالك لا يمكن تغييره.")
+    rows = await db_request(
+        "POST",
+        "telegram_bot_members",
+        params={"on_conflict": "telegram_user_id"},
+        json={
+            "telegram_user_id": int(target_user_id),
+            "role": role,
+            "display_name": "",
+            "username": "",
+            "active": True,
+            "can_movies": True if role == "admin" else bool(can_movies),
+            "can_series": True if role == "admin" else bool(can_series),
+            "added_by": int(actor.get("telegram_user_id") or ADMIN_ID),
+            "updated_at": now_iso(),
+        },
+        prefer="resolution=merge-duplicates,return=representation",
+    )
+    if not rows:
+        raise RuntimeError("تعذر حفظ عضو الفريق.")
+    return rows[0]
+
+
+async def remove_team_member(actor: dict[str, Any], target_user_id: int) -> None:
+    target_user_id = int(target_user_id)
+    if target_user_id == ADMIN_ID:
+        raise ValueError("لا يمكن حذف مالك CINARO.")
+    target = await get_member(target_user_id)
+    if not target:
+        raise ValueError("العضو غير موجود أو غير مفعل.")
+    actor_role = str(actor.get("role") or "")
+    target_role = str(target.get("role") or "")
+    if actor_role == "admin" and target_role != "supervisor":
+        raise PermissionError("الأدمن الثانوي يستطيع حذف المشرفين فقط.")
+    if actor_role not in {"owner", "admin"}:
+        raise PermissionError("لا تملك صلاحية حذف أعضاء الفريق.")
+    await db_request(
+        "PATCH",
+        "telegram_bot_members",
+        params={"telegram_user_id": f"eq.{target_user_id}"},
+        json={"active": False, "updated_at": now_iso()},
+    )
+    await db_request(
+        "DELETE",
+        "telegram_bot_sessions",
+        params={"telegram_user_id": f"eq.{target_user_id}"},
+    )
+
+
+async def get_session(user_id: int) -> dict[str, Any] | None:
     rows = await db_request(
         "GET",
         "telegram_bot_sessions",
         params={
-            "telegram_user_id": f"eq.{ADMIN_ID}",
+            "telegram_user_id": f"eq.{int(user_id)}",
             "select": "flow,step,draft,updated_at",
             "limit": "1",
         },
@@ -231,13 +377,13 @@ async def get_session() -> dict[str, Any] | None:
     return rows[0] if rows else None
 
 
-async def set_session(flow: str, step: str, draft: dict[str, Any] | None = None) -> None:
+async def set_session(user_id: int, flow: str, step: str, draft: dict[str, Any] | None = None) -> None:
     await db_request(
         "POST",
         "telegram_bot_sessions",
         params={"on_conflict": "telegram_user_id"},
         json={
-            "telegram_user_id": ADMIN_ID,
+            "telegram_user_id": int(user_id),
             "flow": flow,
             "step": step,
             "draft": draft or {},
@@ -247,11 +393,11 @@ async def set_session(flow: str, step: str, draft: dict[str, Any] | None = None)
     )
 
 
-async def clear_session() -> None:
+async def clear_session(user_id: int) -> None:
     await db_request(
         "DELETE",
         "telegram_bot_sessions",
-        params={"telegram_user_id": f"eq.{ADMIN_ID}"},
+        params={"telegram_user_id": f"eq.{int(user_id)}"},
     )
 
 
@@ -269,7 +415,7 @@ async def get_channel_row(key: str) -> dict[str, Any] | None:
     return rows[0] if rows else None
 
 
-async def upsert_channel(key: str, entity: Any) -> dict[str, Any]:
+async def upsert_channel(key: str, entity: Any, configured_by: int) -> dict[str, Any]:
     marked_id = int(utils.get_peer_id(entity))
     title = str(getattr(entity, "title", "") or "")[:180]
     username = str(getattr(entity, "username", "") or "")[:100]
@@ -283,7 +429,7 @@ async def upsert_channel(key: str, entity: Any) -> dict[str, Any]:
             "title": title,
             "username": username,
             "active": True,
-            "configured_by": ADMIN_ID,
+            "configured_by": int(configured_by),
             "verified_at": now_iso(),
             "updated_at": now_iso(),
         },
@@ -353,7 +499,7 @@ async def verify_channel_access(entity: Any) -> None:
         pass
 
 
-async def create_batch(kind: str, season: int | None = None, start_episode: int | None = None) -> dict[str, Any]:
+async def create_batch(kind: str, created_by: int, season: int | None = None, start_episode: int | None = None) -> dict[str, Any]:
     code = batch_code(kind)
     rows = await db_request(
         "POST",
@@ -366,7 +512,7 @@ async def create_batch(kind: str, season: int | None = None, start_episode: int 
             "start_episode": start_episode,
             "next_episode": start_episode,
             "total_files": 0,
-            "created_by": ADMIN_ID,
+            "created_by": int(created_by),
             "updated_at": now_iso(),
         },
         prefer="return=representation",
@@ -481,7 +627,7 @@ async def store_message(
         "episode": episode,
         "source_chat_id": int(event.chat_id or 0),
         "source_message_id": int(event.message.id),
-        "created_by": ADMIN_ID,
+        "created_by": sender_id(event),
         "status": "active",
         "updated_at": now_iso(),
     }
