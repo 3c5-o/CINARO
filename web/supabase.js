@@ -408,14 +408,14 @@ const client = {
         supabase.from("sections").select("*").eq("active", true).order("sort_order", { ascending: false })
       ]);
 
-      // Published content is the only mandatory dataset for the user experience.
+      // Published content and release controls are mandatory; sections are decorative.
       throwIf(contentResult.error);
-      if (configResult.error) console.warn("CINARO config refresh skipped", configResult.error);
+      throwIf(configResult.error);
       if (sectionsResult.error) console.warn("CINARO sections refresh skipped", sectionsResult.error);
       if (stopped) return;
 
       const items = (contentResult.data || []).map(normalizeContentRow).filter(Boolean);
-      const configRow = configResult.error ? {} : (configResult.data || {});
+      const configRow = configResult.data || {};
       const configured = Array.isArray(configRow.featured) ? configRow.featured.map(String).slice(0, 12) : [];
       const present = new Set(items.map((item) => item.id));
       const featured = configured.filter((id) => present.has(id));
