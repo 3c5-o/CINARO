@@ -221,7 +221,7 @@
     try {
       const result = await state.firebase.sendNotification(payload);
       if (!options.silent) {
-        if (result?.warning === "no_active_subscriptions") toast("تم تنفيذ الإرسال، لكن لا توجد أجهزة مشتركة نشطة حالياً.", "error");
+        if (result?.warning === "no_recipients") toast("تم تنفيذ الإرسال، لكن لا توجد أجهزة مستهدفة قابلة لاستلام الإشعار حالياً.", "error");
         else toast(`تم إرسال الإشعار${result?.recipients ? ` إلى ${formatNumber(result.recipients)} جهاز` : ""}`);
       }
       return result;
@@ -359,9 +359,9 @@
         contentKind: item?.kind || ""
       });
       await state.firebase.logAudit("إرسال إشعار", item?.id || audienceType, `${title} · ${audienceType}`, state.authUser);
-      if (result?.warning === "no_active_subscriptions") {
+      if (result?.warning === "no_recipients") {
         setMessage("notificationMessage", "تم تنفيذ الطلب، لكن لا توجد أجهزة مشتركة نشطة تستقبل الإشعار حالياً.", "error");
-        toast("لا توجد أجهزة مشتركة نشطة حالياً.", "error");
+        toast("لا توجد أجهزة مستهدفة قابلة للاستلام حالياً.", "error");
       } else {
         setMessage("notificationMessage", `تم الإرسال بنجاح${result?.recipients ? ` إلى ${formatNumber(result.recipients)} جهاز` : ""}.`, "success");
         toast(`تم إرسال الإشعار${result?.recipients ? ` إلى ${formatNumber(result.recipients)} جهاز` : ""}`);
