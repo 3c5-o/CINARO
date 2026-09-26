@@ -4,7 +4,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const SUPABASE_URL = "https://zmkkoggsqvwvwkanlyux.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_yYSX8h3eAkbP3_Xg6ZNpoA_E1CwAvJJ";
-const APP_VERSION = "2.6.2";
+const APP_VERSION = "2.6.3";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
@@ -398,42 +398,64 @@ const client = {
   listenContent(callback, onError) {
     let stopped = false;
     let refreshTimer = 0;
-    const schedule = () => {
-      clearTimeout(refreshTimer);
-      refreshTimer = window.setTimeout(() => load().catch((error) => onError?.(error)), 80);
-    };
+    let retryTimer = 0;
+    let retryAttempt = 0;
+
     const load = async () => {
       const [contentResult, configResult, sectionsResult] = await Promise.all([
         supabase.from("content").select("*").eq("published", true).order("sort_order", { ascending: false }).order("added_at", { ascending: false }),
         supabase.from("app_config").select("*").eq("id", "public").maybeSingle(),
         supabase.from("sections").select("*").eq("active", true).order("sort_order", { ascending: false })
       ]);
+
+      // Published content is the only mandatory dataset for the user experience.
       throwIf(contentResult.error);
-      throwIf(configResult.error);
-      throwIf(sectionsResult.error);
+      if (configResult.error) console.warn("CINARO config refresh skipped", configResult.error);
+      if (sectionsResult.error) console.warn("CINARO sections refresh skipped", sectionsResult.error);
       if (stopped) return;
+
       const items = (contentResult.data || []).map(normalizeContentRow).filter(Boolean);
-      const configRow = configResult.data || {};
+      const configRow = configResult.error ? {} : (configResult.data || {});
       const configured = Array.isArray(configRow.featured) ? configRow.featured.map(String).slice(0, 12) : [];
       const present = new Set(items.map((item) => item.id));
       const featured = configured.filter((id) => present.has(id));
+
+      retryAttempt = 0;
+      clearTimeout(retryTimer);
       callback({
         items,
         featured: featured.length ? featured : items.filter((item) => item.featured).map((item) => item.id).slice(0, 8),
         config: mapConfig(configRow),
-        sections: (sectionsResult.data || []).map(mapSection),
+        sections: sectionsResult.error ? [] : (sectionsResult.data || []).map(mapSection),
         fromCache: false
       });
     };
+
+    const runLoad = () => load().catch((error) => {
+      if (stopped) return;
+      onError?.(error);
+      clearTimeout(retryTimer);
+      const delay = Math.min(30000, 1500 * (2 ** Math.min(retryAttempt, 4)));
+      retryAttempt += 1;
+      retryTimer = window.setTimeout(runLoad, delay);
+    });
+
+    const schedule = () => {
+      clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(runLoad, 100);
+    };
+
     const channels = [
       supabase.channel("cinaro-public-content").on("postgres_changes", { event: "*", schema: "public", table: "content" }, schedule).subscribe(),
       supabase.channel("cinaro-public-config").on("postgres_changes", { event: "*", schema: "public", table: "app_config" }, schedule).subscribe(),
       supabase.channel("cinaro-public-sections").on("postgres_changes", { event: "*", schema: "public", table: "sections" }, schedule).subscribe()
     ];
-    load().catch((error) => onError?.(error));
+
+    runLoad();
     return () => {
       stopped = true;
       clearTimeout(refreshTimer);
+      clearTimeout(retryTimer);
       channels.forEach((channel) => supabase.removeChannel(channel).catch(() => {}));
     };
   },
