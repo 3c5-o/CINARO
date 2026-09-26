@@ -23,6 +23,7 @@
     logs: [],
     reports: [],
     requests: [],
+    notifications: [],
     migratedManagementSections: new Set(),
     seasonDraft: [],
     config: {},
@@ -35,7 +36,7 @@
 
   const $ = (id) => document.getElementById(id);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
-  const views = ["dashboard", "content", "editor", "reports", "requests", "users", "supervisors", "sections", "settings", "activity"];
+  const views = ["dashboard", "content", "editor", "reports", "requests", "notifications", "users", "supervisors", "sections", "settings", "activity"];
 
   function escapeHTML(value) {
     return String(value == null ? "" : value).replace(/[&<>'"]/g, (character) => ({
@@ -80,7 +81,9 @@
       "auth/too-many-requests": "محاولات كثيرة. انتظر قليلاً ثم أعد المحاولة.",
       "auth/network-request-failed": "تعذّر الاتصال بالشبكة.",
       "permission-denied": "ليس لديك صلاحية لهذه العملية.",
-      "failed-precondition": "تأكد من إعداد النظام قبل المتابعة."
+      "failed-precondition": "تأكد من إعداد النظام قبل المتابعة.",
+      "onesignal_not_configured": "مفتاح إرسال OneSignal غير مضاف إلى إعدادات الخادم بعد.",
+      "forbidden": "هذا الحساب لا يملك صلاحية إرسال الإشعارات."
     };
     return messages[code] || asString(error && error.message, "حدث خطأ غير متوقع.");
   }
@@ -192,6 +195,177 @@
     return item.published === true
       ? '<span class="status-chip published">منشور</span>'
       : '<span class="status-chip draft">مسودة</span>';
+  }
+
+  function episodeCount(item) {
+    return toArray(item?.seasons).reduce((sum, season) => sum + toArray(season?.episodes).length, 0);
+  }
+
+  function latestEpisode(item) {
+    let latest = null;
+    toArray(item?.seasons).forEach((season) => {
+      toArray(season?.episodes).forEach((episode) => {
+        const candidate = {
+          season: Math.max(1, Math.round(asNumber(season?.number, 1))),
+          episode: Math.max(1, Math.round(asNumber(episode?.number, 1))),
+          title: asString(episode?.title)
+        };
+        if (!latest || candidate.season > latest.season || (candidate.season === latest.season && candidate.episode > latest.episode)) latest = candidate;
+      });
+    });
+    return latest;
+  }
+
+  async function sendPushNotification(payload, options = {}) {
+    if (!isAdmin() || !state.firebase?.sendNotification) return null;
+    try {
+      const result = await state.firebase.sendNotification(payload);
+      if (!options.silent) toast(`تم إرسال الإشعار${result?.recipients ? ` إلى ${formatNumber(result.recipients)} جهاز` : ""}`);
+      return result;
+    } catch (error) {
+      console.warn("CINARO notification send failed", error);
+      if (!options.silent) toast(errorMessage(error), "error");
+      else showNotice("تم حفظ العملية، لكن تعذّر إرسال الإشعار التلقائي. تحقق من إعداد مفتاح الإرسال.", "warning");
+      return null;
+    }
+  }
+
+  async function notifyPublishedContent(item) {
+    if (!item?.published) return null;
+    return sendPushNotification({
+      audienceType: "all",
+      title: item.kind === "series" ? "مسلسل جديد على CINARO" : "فيلم جديد على CINARO",
+      message: `تمت إضافة «${item.title}». اضغط لعرض التفاصيل.`,
+      imageUrl: item.poster || "",
+      route: `details/${item.id}`,
+      contentId: item.id,
+      contentKind: item.kind
+    }, { silent: true });
+  }
+
+  async function notifyNewEpisode(item) {
+    if (!item?.published || item.kind !== "series") return null;
+    const latest = latestEpisode(item);
+    if (!latest) return null;
+    return sendPushNotification({
+      audienceType: "all",
+      title: `حلقة جديدة من ${item.title}`,
+      message: `الموسم ${latest.season} · الحلقة ${latest.episode}${latest.title ? ` — ${latest.title}` : ""} متوفرة الآن.`,
+      imageUrl: item.poster || "",
+      route: `watch/${item.id}/${latest.season}/${latest.episode}`,
+      contentId: item.id,
+      contentKind: "series",
+      season: latest.season,
+      episode: latest.episode
+    }, { silent: true });
+  }
+
+  async function notifyRequestUser(request, status, adminNote = "", contentId = "") {
+    if (!request?.userId || !status || !isAdmin()) return null;
+    const linkedId = asString(contentId || request.contentId);
+    const titles = {
+      reviewing: "طلبك قيد المراجعة",
+      added: "تمت إضافة طلبك",
+      rejected: "تحديث على طلب المحتوى"
+    };
+    const fallbackMessages = {
+      reviewing: `بدأنا مراجعة طلب «${request.title}».`,
+      added: `تمت إضافة «${request.title}» إلى CINARO.`,
+      rejected: `تم تحديث حالة طلب «${request.title}».`
+    };
+    return sendPushNotification({
+      audienceType: "user",
+      targetUserId: request.userId,
+      title: titles[status] || "تحديث طلب المحتوى",
+      message: asString(adminNote, fallbackMessages[status] || `تم تحديث طلب «${request.title}».`).slice(0, 600),
+      route: status === "added" && linkedId ? `details/${linkedId}` : "home",
+      contentId: linkedId,
+      contentKind: request.kind
+    }, { silent: true });
+  }
+
+  function renderNotifications() {
+    if (!isAdmin()) return;
+    const audience = $("notificationAudience");
+    const userSelect = $("notificationUser");
+    const contentSelect = $("notificationContent");
+    const savedUser = userSelect?.value || "";
+    const savedContent = contentSelect?.value || "";
+
+    if (userSelect) {
+      const users = [...state.users]
+        .filter((user) => user.status !== "blocked" && user.id)
+        .sort((a, b) => asString(a.displayName || a.email).localeCompare(asString(b.displayName || b.email), "ar"));
+      userSelect.innerHTML = '<option value="">اختر مستخدماً</option>' + users.map((user) =>
+        `<option value="${escapeHTML(user.id)}">${escapeHTML(user.displayName || user.email || user.id)}${user.email ? ` — ${escapeHTML(user.email)}` : ""}</option>`
+      ).join("");
+      if (users.some((user) => user.id === savedUser)) userSelect.value = savedUser;
+    }
+
+    if (contentSelect) {
+      const content = [...state.content].filter((item) => item.published === true).sort((a, b) => asString(a.title).localeCompare(asString(b.title), "ar"));
+      contentSelect.innerHTML = '<option value="">الرئيسية</option>' + content.map((item) =>
+        `<option value="${escapeHTML(item.id)}">${item.kind === "series" ? "مسلسل" : "فيلم"} — ${escapeHTML(item.title)}</option>`
+      ).join("");
+      if (content.some((item) => item.id === savedContent)) contentSelect.value = savedContent;
+    }
+
+    $("notificationUserField")?.classList.toggle("is-hidden", audience?.value !== "user");
+
+    const rows = [...state.notifications].sort((a, b) => asNumber(b.createdAt) - asNumber(a.createdAt));
+    $("notificationsTable").innerHTML = rows.length
+      ? `<div class="data-table notifications-data-table"><div class="data-head"><span>الإشعار</span><span>الجمهور</span><span>الحالة</span><span>الوجهة</span><span>الوقت</span></div>${rows.map((item) => {
+          const audienceLabel = item.audienceType === "user" ? (item.targetUserId || "مستخدم") : "الجميع";
+          const statusLabel = item.status === "failed" ? "فشل" : "تم الإرسال";
+          return `<div class="data-row">
+            <span class="notification-message-cell"><b>${escapeHTML(item.title)}</b><small>${escapeHTML(item.message)}</small></span>
+            <span class="notification-recipient">${escapeHTML(audienceLabel)}</span>
+            <span class="status-chip notification-status ${item.status === "failed" ? "failed" : "sent"}" title="${escapeHTML(item.errorMessage || "")}">${statusLabel}${item.recipients ? ` · ${formatNumber(item.recipients)}` : ""}</span>
+            <span class="notification-route">${escapeHTML(item.route || "home")}</span>
+            <span>${escapeHTML(formatDate(item.createdAt))}</span>
+          </div>`;
+        }).join("")}</div>`
+      : emptyTable("لا توجد إشعارات مرسلة بعد", "أرسل أول إشعار من النموذج أعلاه.");
+  }
+
+  async function submitNotification(event) {
+    event.preventDefault();
+    if (!isAdmin() || !state.firebase) return;
+    const form = $("notificationForm");
+    const audienceType = $("notificationAudience")?.value === "user" ? "user" : "all";
+    const targetUserId = audienceType === "user" ? asString($("notificationUser")?.value) : "";
+    const item = state.content.find((entry) => entry.id === asString($("notificationContent")?.value));
+    const title = asString($("notificationTitle")?.value).slice(0, 120);
+    const message = asString($("notificationBody")?.value).slice(0, 600);
+    const imageUrl = validMediaUrl($("notificationImage")?.value) || item?.poster || "";
+
+    if (!title || !message) return setMessage("notificationMessage", "العنوان ونص الإشعار مطلوبان.", "error");
+    if (audienceType === "user" && !targetUserId) return setMessage("notificationMessage", "اختر المستخدم المستهدف.", "error");
+
+    setBusy(form, true);
+    setMessage("notificationMessage", "جاري إرسال الإشعار…", "pending");
+    try {
+      const result = await state.firebase.sendNotification({
+        audienceType,
+        targetUserId,
+        title,
+        message,
+        imageUrl,
+        route: item ? `details/${item.id}` : "home",
+        contentId: item?.id || "",
+        contentKind: item?.kind || ""
+      });
+      await state.firebase.logAudit("إرسال إشعار", item?.id || audienceType, `${title} · ${audienceType}`, state.authUser);
+      setMessage("notificationMessage", `تم الإرسال بنجاح${result?.recipients ? ` إلى ${formatNumber(result.recipients)} جهاز` : ""}.`, "success");
+      $("notificationTitle").value = "";
+      $("notificationBody").value = "";
+      $("notificationImage").value = "";
+      toast("تم إرسال الإشعار");
+    } catch (error) {
+      setMessage("notificationMessage", errorMessage(error), "error");
+    } finally {
+      setBusy(form, false);
+    }
   }
 
   function emptyTable(message, action) {
@@ -417,6 +591,7 @@
     if (next === "content") renderContent();
     if (next === "reports") renderReports();
     if (next === "requests") renderRequests();
+    if (next === "notifications") renderNotifications();
     if (next === "users") renderUsers();
     if (next === "supervisors") renderSupervisors();
     if (next === "sections") renderSections();
@@ -584,6 +759,7 @@
 
   async function saveContentRequest(id) {
     if (!isAdmin() || !state.firebase) return;
+    const request = state.requests.find((item) => item.id === id);
     const statusControl = Array.from(document.querySelectorAll("[data-request-select]")).find((element) => element.dataset.requestSelect === id);
     const noteControl = Array.from(document.querySelectorAll("[data-request-note]")).find((element) => element.dataset.requestNote === id);
     const status = ["new", "reviewing", "added", "rejected"].includes(statusControl?.value) ? statusControl.value : "new";
@@ -596,6 +772,9 @@
         handledBy: state.authUser.uid
       });
       await state.firebase.logAudit("تحديث طلب محتوى", id, `${status} · ${adminNote || "بدون ملاحظة"}`, state.authUser);
+      if (request && (request.status !== status || asString(request.adminNote) !== adminNote) && status !== "new") {
+        await notifyRequestUser(request, status, adminNote, request.contentId);
+      }
       toast("تم تحديث حالة الطلب");
     } catch (error) {
       toast(errorMessage(error), "error");
@@ -939,8 +1118,8 @@
   function fillSettings() {
     $("settingFeatured").value = toArray(state.config.featured).join(", ");
     $("settingAnnouncement").value = asString(state.config.announcement);
-    $("settingLatestVersion").value = asString(state.config.latestVersion, "2.6.3");
-    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.6.3");
+    $("settingLatestVersion").value = asString(state.config.latestVersion, "2.7.0");
+    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.7.0");
     $("settingUpdateUrl").value = asString(state.config.updateUrl, "https://github.com/3c5-o/CINARO/releases");
     $("settingUpdateNotes").value = asString(state.config.updateNotes);
     if ($("settingUpdateReleasedAt")) $("settingUpdateReleasedAt").value = toLocalDateTimeInput(state.config.updateReleasedAt);
@@ -1224,6 +1403,9 @@
     setMessage("contentFormMessage", "جاري حفظ المحتوى…", "pending");
     try {
       const existing = state.content.find((item) => item.id === state.editingContentId);
+      const wasPublished = existing?.published === true;
+      const previousEpisodeTotal = episodeCount(existing);
+      const pendingRequest = state.pendingRequestId ? state.requests.find((item) => item.id === state.pendingRequestId) : null;
       if (existing && (!hasPermission("editContent") || !canManageContent(existing))) throw new Error("لا تملك صلاحية تعديل هذا المحتوى.");
       if (!existing && !hasPermission("createContent")) throw new Error("لا تملك صلاحية إضافة محتوى.");
       const id = asString($("contentId").value).toLowerCase();
@@ -1321,13 +1503,19 @@
       if (state.editingContentId && state.editingContentId !== id) await state.firebase.deleteDocument("content", state.editingContentId);
       await state.firebase.logAudit(state.editingContentId ? "تعديل محتوى" : "إضافة محتوى", id, `${payload.title} · ${payload.kind}`, state.authUser);
       if (state.pendingRequestId && isAdmin()) {
+        const requestNote = `تمت إضافة «${payload.title}» إلى CINARO.`;
         await state.firebase.saveDocument("contentRequests", state.pendingRequestId, {
           status: "added",
-          adminNote: `تمت إضافة «${payload.title}» إلى CINARO.`,
+          adminNote: requestNote,
           contentId: id,
           handledBy: state.authUser.uid
         });
         await state.firebase.logAudit("تنفيذ طلب محتوى", state.pendingRequestId, id, state.authUser);
+        if (pendingRequest) await notifyRequestUser(pendingRequest, "added", requestNote, id);
+      }
+      if (isAdmin() && payload.published) {
+        if (!wasPublished) await notifyPublishedContent(payload);
+        else if (payload.kind === "series" && episodeCount(payload) > previousEpisodeTotal) await notifyNewEpisode(payload);
       }
       toast(state.pendingRequestId ? "تم حفظ المحتوى وتحديث الطلب تلقائياً" : "تم حفظ المحتوى الحقيقي بنجاح");
       resetContentForm();
@@ -1348,8 +1536,10 @@
       return;
     }
     try {
-      await state.firebase.saveDocument("content", id, { published: item.published !== true, updatedBy: state.authUser.uid });
+      const publish = item.published !== true;
+      await state.firebase.saveDocument("content", id, { published: publish, updatedBy: state.authUser.uid });
       await state.firebase.logAudit(item.published ? "إلغاء نشر" : "نشر محتوى", id, item.title, state.authUser);
+      if (isAdmin() && publish) await notifyPublishedContent({ ...item, published: true });
       toast(item.published ? "تم إلغاء النشر" : "تم نشر المحتوى للمستخدمين");
     } catch (error) { toast(errorMessage(error), "error"); }
   }
@@ -1511,8 +1701,8 @@
     const form = $("settingsForm");
     setBusy(form, true);
     try {
-      const latestVersion = asString($("settingLatestVersion").value, "2.6.3").slice(0, 20);
-      const versionChanged = latestVersion !== asString(state.config.latestVersion, "2.6.3");
+      const latestVersion = asString($("settingLatestVersion").value, "2.7.0").slice(0, 20);
+      const versionChanged = latestVersion !== asString(state.config.latestVersion, "2.7.0");
       const releaseAt = versionChanged
         ? new Date().toISOString()
         : localDateTimeToIso($("settingUpdateReleasedAt")?.value) || state.config.updateReleasedAt || new Date().toISOString();
@@ -1523,7 +1713,7 @@
         featured: parseCsv($("settingFeatured").value),
         announcement: asString($("settingAnnouncement").value).slice(0, 500),
         latestVersion,
-        minimumVersion: asString($("settingMinVersion").value, "2.6.3").slice(0, 20),
+        minimumVersion: asString($("settingMinVersion").value, "2.7.0").slice(0, 20),
         updateNotes: asString($("settingUpdateNotes").value).slice(0, 1000),
         updateUrl: validMediaUrl($("settingUpdateUrl").value) || "https://github.com/3c5-o/CINARO/releases",
         maintenance: $("settingMaintenance").checked,
@@ -1556,7 +1746,7 @@
     if (!isAdmin()) return;
     const payload = {
       schema: "cinaro-backup-v1",
-      appVersion: "2.6.3",
+      appVersion: "2.7.0",
       exportedAt: new Date().toISOString(),
       content: state.content.map((item) => ({ ...item })),
       sections: state.sections.map((item) => ({ ...item })),
@@ -1809,6 +1999,7 @@
       if (state.view === "content") renderContent();
       if (state.view === "reports") renderReports();
       if (state.view === "requests") renderRequests();
+      if (state.view === "notifications") renderNotifications();
       if (state.view === "users") renderUsers();
       if (state.view === "supervisors") renderSupervisors();
       if (state.view === "sections") renderSections();
@@ -1854,12 +2045,14 @@
       listen("supervisorAssignments", "supervisors", "تعيينات المشرفين");
       listen("reports", "reports", "البلاغات");
       listen("contentRequests", "requests", "طلبات المحتوى");
+      listen("notificationLogs", "notifications", "سجل الإشعارات");
       listen("auditLogs", "logs", "سجل العمليات");
     } else {
       state.users = [];
       state.supervisors = [];
       state.reports = [];
       state.requests = [];
+      state.notifications = [];
       state.logs = [];
     }
     state.unsubscribers.push(client.listenDoc("appConfig", "public", (config) => {
@@ -1995,6 +2188,12 @@
     $("supervisorForm")?.addEventListener("submit", saveSupervisor);
     $("sectionForm")?.addEventListener("submit", saveSection);
     $("settingsForm")?.addEventListener("submit", saveSettings);
+    $("notificationForm")?.addEventListener("submit", submitNotification);
+    $("notificationAudience")?.addEventListener("change", () => renderNotifications());
+    $("notificationContent")?.addEventListener("change", () => {
+      const item = state.content.find((entry) => entry.id === asString($("notificationContent")?.value));
+      if (item && !$("notificationImage")?.value) $("notificationImage").value = item.poster || "";
+    });
     $("exportBackupButton")?.addEventListener("click", exportBackup);
     $("exportAuditButton")?.addEventListener("click", exportAuditCsv);
     $("importBackupButton")?.addEventListener("click", () => $("backupFileInput")?.click());
@@ -2074,6 +2273,6 @@
   renderDashboard();
   if (window.CINARO_ADMIN_SUPABASE) connectSupabase(window.CINARO_ADMIN_SUPABASE);
   if (!window.CinaroNative && "serviceWorker" in navigator && location.protocol === "https:") {
-    navigator.serviceWorker.register("sw.js?v=2.6.3", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
+    navigator.serviceWorker.register("sw.js?v=2.7.0", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
   }
 })();
