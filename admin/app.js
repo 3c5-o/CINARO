@@ -255,7 +255,7 @@
       title: `حلقة جديدة من ${item.title}`,
       message: `الموسم ${latest.season} · الحلقة ${latest.episode}${latest.title ? ` — ${latest.title}` : ""} متوفرة الآن.`,
       imageUrl: item.poster || "",
-      route: `watch/${item.id}/${latest.season}/${latest.episode}`,
+      route: `watch/series/${item.id}/${latest.season}/${latest.episode}`,
       contentId: item.id,
       contentKind: "series",
       season: latest.season,
