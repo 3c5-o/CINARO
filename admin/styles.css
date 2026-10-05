@@ -1778,3 +1778,51 @@ textarea:focus {
   cursor: not-allowed;
   transform: none;
 }
+
+.media-api-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+}
+.media-api-bulk-actions .admin-button {
+  flex: 1 1 12rem;
+}
+.media-api-sync-progress {
+  display: grid;
+  gap: .55rem;
+  padding: .8rem;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: rgba(255,255,255,.025);
+}
+.media-api-progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255,255,255,.08);
+}
+.media-api-progress-track span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--red);
+  transition: width .2s ease;
+}
+.media-api-progress-label {
+  display: flex;
+  justify-content: space-between;
+  gap: .75rem;
+  color: var(--dim);
+  font-size: .68rem;
+}
+.media-api-progress-label strong {
+  color: var(--text);
+  font-size: .72rem;
+}
+@media (max-width: 600px) {
+  .media-api-progress-label {
+    display: grid;
+    gap: .2rem;
+  }
+}
