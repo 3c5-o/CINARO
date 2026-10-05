@@ -103,7 +103,7 @@ tasks.named("preBuild").configure {
 
 dependencies {
     implementation "com.onesignal:OneSignal:5.10.2"
-    implementation "androidx.media3:media3-exoplayer:1.11.1"
-    implementation "androidx.media3:media3-exoplayer-hls:1.11.1"
-    implementation "androidx.media3:media3-ui:1.11.1"
+    implementation "androidx.media3:media3-exoplayer:1.5.1"
+    implementation "androidx.media3:media3-exoplayer-hls:1.5.1"
+    implementation "androidx.media3:media3-ui:1.5.1"
 }
