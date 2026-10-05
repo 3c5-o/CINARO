@@ -1785,7 +1785,8 @@
     switchingSource: false,
     viewRecorded: false,
     hls: null,
-    hlsRecoveryAttempts: 0
+    hlsRecoveryAttempts: 0,
+    mpegts: null
   };
 
   function playerMediaFromRoute(route) {
@@ -1945,13 +1946,61 @@
     player.hlsRecoveryAttempts = 0;
   }
 
+  function destroyMpegTs() {
+    if (!player.mpegts) return;
+    try { player.mpegts.pause(); } catch (_) {}
+    try { player.mpegts.unload(); } catch (_) {}
+    try { player.mpegts.detachMediaElement(); } catch (_) {}
+    try { player.mpegts.destroy(); } catch (_) {}
+    player.mpegts = null;
+  }
+
+  function sourceExtension(sourceUrl) {
+    try {
+      const path = new URL(sourceUrl, location.href).pathname.toLowerCase();
+      const match = path.match(/\.([a-z0-9]+)$/);
+      return match ? match[1] : "";
+    } catch (_) {
+      return String(sourceUrl || "").toLowerCase().match(/\.([a-z0-9]+)(?:$|[?#])/)?.[1] || "";
+    }
+  }
+
   function isHlsSource(source, sourceUrl) {
     const type = String(source?.type || "").toLowerCase();
-    if (type.includes("mpegurl") || type.includes("hls")) return true;
+    return type.includes("mpegurl") || type.includes("hls") || sourceExtension(sourceUrl) === "m3u8";
+  }
+
+  function isTsSource(source, sourceUrl) {
+    const type = String(source?.type || "").toLowerCase();
+    return type.includes("mp2t") || type.includes("mpegts") || sourceExtension(sourceUrl) === "ts";
+  }
+
+  function isMatroskaSource(source, sourceUrl) {
+    const type = String(source?.type || "").toLowerCase();
+    return type.includes("matroska") || sourceExtension(sourceUrl) === "mkv";
+  }
+
+  function nativePlayerAvailable() {
     try {
-      return new URL(sourceUrl, location.href).pathname.toLowerCase().endsWith(".m3u8");
+      return Boolean(window.CinaroNative?.nativePlayerAvailable?.());
     } catch (_) {
-      return /\.m3u8(?:$|[?#])/i.test(sourceUrl);
+      return false;
+    }
+  }
+
+  function openNativePlayer(sourceUrl) {
+    if (!nativePlayerAvailable()) return false;
+    try {
+      const title = player.media?.episode
+        ? (player.media.title + " — " + player.media.episode.title)
+        : (player.media?.title || "CINARO");
+      window.CinaroNative.openNativePlayer(String(sourceUrl), String(title));
+      player.loading.hidden = true;
+      player.error.hidden = true;
+      return true;
+    } catch (error) {
+      console.warn("CINARO native player open failed", error);
+      return false;
     }
   }
 
@@ -1981,9 +2030,55 @@
     player.loading.hidden = false;
     player.video.pause();
     destroyHls();
+    destroyMpegTs();
     player.video.removeAttribute("src");
     player.video.load();
     player.quality.value = String(index);
+
+    if (isMatroskaSource(source, sourceUrl)) {
+      if (openNativePlayer(sourceUrl)) {
+        player.switchingSource = false;
+        return;
+      }
+      player.failedSources.add(index);
+      showPlayerError("صيغة MKV تحتاج تطبيق CINARO Android للتشغيل بالمشغل الأصلي.");
+      return;
+    }
+
+    if (isTsSource(source, sourceUrl)) {
+      const MpegTsRuntime = window.mpegts;
+      if (MpegTsRuntime?.isSupported?.()) {
+        try {
+          const runtime = MpegTsRuntime.createPlayer({
+            type: "mpegts",
+            isLive: false,
+            url: sourceUrl
+          }, {
+            enableWorker: true,
+            lazyLoad: true,
+            autoCleanupSourceBuffer: true
+          });
+          player.mpegts = runtime;
+          runtime.attachMediaElement(player.video);
+          runtime.load();
+          if (shouldPlay) {
+            const promise = player.video.play();
+            promise?.catch?.(() => {});
+          }
+          return;
+        } catch (error) {
+          console.warn("CINARO MPEG-TS player failed", error);
+          destroyMpegTs();
+        }
+      }
+      if (openNativePlayer(sourceUrl)) {
+        player.switchingSource = false;
+        return;
+      }
+      player.failedSources.add(index);
+      handlePlayerError();
+      return;
+    }
 
     if (isHlsSource(source, sourceUrl)) {
       const HlsRuntime = window.Hls;
@@ -2038,6 +2133,7 @@
   function releasePlayerMedia() {
     player.video.pause();
     destroyHls();
+    destroyMpegTs();
     player.requestedPlay = false;
     player.restorePlaying = false;
     player.switchingSource = false;
