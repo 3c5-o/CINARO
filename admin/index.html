@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.webmanifest?v=2.8.0">
   <link rel="icon" type="image/png" href="assets/icons/favicon-32.png">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=2.8.0-api1">
+  <link rel="stylesheet" href="styles.css?v=2.8.0-api2">
 </head>
 <body class="admin-booting">
   <div id="loginView" class="admin-login-view">
@@ -138,6 +138,14 @@
               </div>
               <p class="field-help">يجلب الفيلم مع معلومات TMDb ورابط التشغيل، ثم يضعه داخل محرر CINARO للمراجعة قبل الحفظ.</p>
               <p id="mediaApiImportMessage" class="form-message tmdb-message" role="status"></p>
+              <div class="media-api-bulk-actions">
+                <button id="mediaApiImportAllButton" class="admin-button primary" type="button"><svg><use href="#i-download"></use></svg> إضافة جميع الأفلام</button>
+                <button id="mediaApiCancelSyncButton" class="admin-button danger" type="button" hidden><svg><use href="#i-x"></use></svg> إيقاف العملية</button>
+              </div>
+              <div id="mediaApiSyncProgress" class="media-api-sync-progress" hidden>
+                <div class="media-api-progress-track"><span id="mediaApiProgressFill"></span></div>
+                <div class="media-api-progress-label"><strong id="mediaApiProgressText">0%</strong><span id="mediaApiProgressStats">بانتظار البدء</span></div>
+              </div>
               <div id="mediaApiSearchResults" class="tmdb-results"></div>
             </div>
           </div>
@@ -302,8 +310,8 @@
     <symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
   </svg>
 
-  <script src="supabase.js?v=2.8.0-api1" type="module"></script>
+  <script src="supabase.js?v=2.8.0-api2" type="module"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="app.js?v=2.8.0-api1" defer></script>
+  <script src="app.js?v=2.8.0-api2" defer></script>
 </body>
 </html>
