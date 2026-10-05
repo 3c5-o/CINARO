@@ -1486,6 +1486,7 @@
     $("settingMaintenance").checked = state.config.maintenance === true;
     $("settingForceUpdate").checked = state.config.forceUpdate !== false;
     fillTmdbSettings();
+    fillMediaApiSettings();
   }
 
   function newEpisode(number = 1) {
@@ -1617,7 +1618,12 @@
     state.pendingRequestTitle = "";
     $("contentForm")?.reset();
     $("contentTmdbId").value = "";
+    $("contentProvider").value = "";
+    $("contentProviderId").value = "";
     $("tmdbSearchInput").value = "";
+    if ($("mediaApiSearchInput")) $("mediaApiSearchInput").value = "";
+    if ($("mediaApiSearchResults")) $("mediaApiSearchResults").innerHTML = "";
+    state.mediaApi.results = [];
     $("tmdbSearchResults").innerHTML = "";
     state.tmdb.results = [];
     setImportMode("manual");
@@ -1655,13 +1661,18 @@
       $("contentSections").value = assignedSectionIds()[0] || "";
       setImportMode("manual");
     } else {
-      setImportMode(importMode === "tmdb" ? "tmdb" : "manual");
+      setImportMode(["tmdb", "media-api"].includes(importMode) ? importMode : "manual");
     }
     setView("editor");
-    if (importMode === "tmdb" && isAdmin()) {
+    if (["tmdb", "media-api"].includes(importMode) && isAdmin()) {
       window.setTimeout(() => {
-        $("tmdbSearchInput")?.focus();
-        if (state.pendingRequestTitle) searchTmdb();
+        if (importMode === "tmdb") {
+          $("tmdbSearchInput")?.focus();
+          if (state.pendingRequestTitle) searchTmdb();
+        } else {
+          $("mediaApiSearchInput")?.focus();
+          if (state.pendingRequestTitle) searchMediaApi();
+        }
       }, 80);
     }
   }
@@ -1693,6 +1704,8 @@
     state.editingContentId = item.id;
     $("contentId").value = item.id;
     $("contentTmdbId").value = item.tmdbId ? String(item.tmdbId) : "";
+    $("contentProvider").value = asString(item.provider);
+    $("contentProviderId").value = asString(item.providerId);
     $("contentKind").value = item.kind;
     $("contentTitle").value = item.title || "";
     $("contentEnglishTitle").value = item.englishTitle || "";
@@ -1764,6 +1777,16 @@
       if (!isAdmin() && existing && id !== existing.id) throw new Error("لا يستطيع المشرف تغيير معرّف المحتوى.");
       const kind = $("contentKind").value === "series" ? "series" : "movie";
       const requestedTmdbId = Math.max(0, Math.round(asNumber($("contentTmdbId").value, asNumber(existing?.tmdbId, 0))));
+      const requestedProvider = asString($("contentProvider")?.value, asString(existing?.provider)).slice(0, 40);
+      const requestedProviderId = asString($("contentProviderId")?.value, asString(existing?.providerId)).slice(0, 150);
+      if (requestedProvider && requestedProviderId) {
+        const duplicateProvider = state.content.find((item) =>
+          asString(item.provider) === requestedProvider &&
+          asString(item.providerId) === requestedProviderId &&
+          item.id !== (existing?.id || id)
+        );
+        if (duplicateProvider) throw new Error(`هذا الفيلم مضاف مسبقاً من نفس المزود: ${duplicateProvider.title} (${duplicateProvider.id}).`);
+      }
       if (requestedTmdbId) {
         const duplicate = state.content.find((item) => asNumber(item.tmdbId) === requestedTmdbId && item.kind === kind && item.id !== (existing?.id || id));
         if (duplicate) throw new Error(`يوجد محتوى آخر مرتبط بنفس TMDb ID: ${duplicate.title} (${duplicate.id}).`);
@@ -1844,6 +1867,10 @@
         tmdbId: requestedTmdbId,
         tmdbType: requestedTmdbId ? kind : asString(existing?.tmdbType),
         tmdbImportedAt: Math.max(0, Math.round(asNumber($("contentTmdbId").value, 0))) ? Date.now() : asNumber(existing?.tmdbImportedAt, 0),
+        provider: requestedProvider,
+        providerId: requestedProviderId,
+        providerImportedAt: requestedProvider && requestedProviderId ? Date.now() : asNumber(existing?.providerImportedAt, 0),
+        providerBaseUrl: requestedProvider === "media-catalog" ? mediaCatalogSettings().baseUrl : asString(existing?.providerBaseUrl),
         addedAt: existing?.addedAt || today(),
         updatedBy: state.authUser.uid
       };
@@ -2304,7 +2331,9 @@
     else if (action === "preview-url") openMediaPreview(button.dataset.url, "معاينة مصدر البلاغ");
     else if (action === "preview-movie") openMediaPreview($("movieSourceUrl").value, "معاينة الفيلم");
     else if (action === "new-tmdb") openNewContent(button.dataset.kind, "tmdb");
+    else if (action === "new-media-api") openNewContent("movie", "media-api");
     else if (action === "tmdb-select") importTmdbItem(button.dataset.tmdbId, button.dataset.tmdbKind);
+    else if (action === "media-api-select") importMediaApiMovie(button.dataset.providerId);
     else if (action === "add-episode") {
       const seasonIndex = asNumber(button.dataset.seasonIndex, -1);
       const season = state.seasonDraft[seasonIndex];
@@ -2492,10 +2521,23 @@
         $("tmdbSearchResults").innerHTML = "";
         state.tmdb.results = [];
         setTmdbMessage("نوع البحث تغيّر. نفّذ البحث من جديد.");
+      } else if (state.tmdb.importMode === "media-api" && $("contentKind").value !== "movie") {
+        $("contentKind").value = "movie";
+        toggleKindFields();
+        setMediaApiMessage("Media Catalog مخصص للأفلام في هذه المرحلة. قسم الأنمي سيضاف بعد نجاح التجربة.", "error");
       }
     });
     $$("[data-import-mode]").forEach((button) => button.addEventListener("click", () => setImportMode(button.dataset.importMode)));
     $("tmdbSearchButton")?.addEventListener("click", searchTmdb);
+    $("mediaApiSearchButton")?.addEventListener("click", searchMediaApi);
+    $("mediaApiSearchInput")?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        searchMediaApi();
+      }
+    });
+    $("mediaApiSettingsForm")?.addEventListener("submit", saveMediaApiSettings);
+    $("mediaApiTestButton")?.addEventListener("click", testMediaApiConnection);
     $("tmdbSearchInput")?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
