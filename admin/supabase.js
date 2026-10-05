@@ -270,6 +270,36 @@ async function saveContent(id, patch) {
   throwIf(result.error);
 }
 
+async function saveContentBatch(items) {
+  const input = Array.isArray(items) ? items.slice(0, 100) : [];
+  if (!input.length) return { count: 0 };
+  const now = new Date().toISOString();
+  const rows = input.map((patch) => {
+    const safeId = clean(patch?.id, "", 150);
+    if (!safeId) throw new Error("cinaro/invalid-document-id");
+    const kind = patch?.kind === "series" ? "series" : "movie";
+    const title = clean(patch?.title, "", 180);
+    if (!title) throw new Error("نوع المحتوى وعنوانه مطلوبان.");
+    const payload = { ...(patch || {}), id: safeId, kind, title };
+    return {
+      id: safeId,
+      kind,
+      title,
+      published: payload.published === true,
+      featured: payload.featured === true,
+      management_section_id: clean(payload.managementSectionId, "", 80) || null,
+      views: Math.max(0, Math.round(numberValue(payload.views, 0))),
+      added_at: payload.addedAt || now.slice(0, 10),
+      sort_order: Math.round(numberValue(payload.order, 0)),
+      payload,
+      updated_at: now
+    };
+  });
+  const result = await supabase.from("content").upsert(rows, { onConflict: "id" });
+  throwIf(result.error);
+  return { count: rows.length };
+}
+
 async function saveDocument(name, id, payload) {
   const safeId = clean(id, "", 150);
   const patch = payload && typeof payload === "object" ? payload : {};
@@ -509,6 +539,7 @@ const client = {
   },
 
   saveDocument,
+  saveContentBatch,
   deleteDocument,
 
   async sendNotification(payload) {
