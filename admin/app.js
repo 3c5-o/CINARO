@@ -1194,6 +1194,236 @@
     }
   }
 
+
+  async function mediaApiRequest(pathname, query = {}, options = {}) {
+    const settings = mediaCatalogSettings();
+    if (!settings.enabled && options.ignoreEnabled !== true) {
+      throw new Error("Media Catalog متوقف من إعدادات CINARO.");
+    }
+    const baseUrl = normalizeMediaApiRoot(options.baseUrl || settings.baseUrl);
+    if (!baseUrl) throw new Error("رابط Media Catalog API غير صالح. يجب أن يبدأ بـ HTTPS.");
+    const url = new URL(baseUrl + pathname);
+    Object.entries(query || {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
+    });
+    const response = await fetch(url, {
+      headers: { Accept: "application/json" },
+      cache: "no-store"
+    });
+    if (response.status === 429) throw new Error("Media Catalog استقبل طلبات كثيرة حالياً. حاول بعد قليل.");
+    if (!response.ok) throw new Error(`تعذّر الاتصال بـMedia Catalog (HTTP ${response.status}).`);
+    const payload = await response.json();
+    if (!payload?.ok) throw new Error(payload?.message || payload?.error || "استجابة Media Catalog غير صالحة.");
+    return payload;
+  }
+
+  function renderMediaApiResults(rows) {
+    state.mediaApi.results = toArray(rows);
+    const root = $("mediaApiSearchResults");
+    if (!root) return;
+    if (!state.mediaApi.results.length) {
+      root.innerHTML = '<div class="tmdb-empty">لا توجد أفلام مطابقة. جرّب اسماً آخر.</div>';
+      return;
+    }
+    root.innerHTML = state.mediaApi.results.slice(0, 20).map((item) => {
+      const poster = validMediaUrl(item?.poster) || "../web/assets/images/poster-placeholder.webp";
+      const format = asString(item?.playback?.format, "unknown").toUpperCase();
+      const genres = toArray(item?.genres).length ? toArray(item.genres).join("، ") : asString(item?.genre, "غير مصنف");
+      const imported = state.content.some((entry) =>
+        asString(entry?.provider) === "media-catalog" &&
+        asString(entry?.providerId) === asString(item?.id)
+      );
+      return `<button class="tmdb-result-card${imported ? " is-imported" : ""}" type="button"
+        data-action="media-api-select" data-provider-id="${escapeHTML(item.id)}" ${imported ? "disabled" : ""}>
+        <img src="${escapeHTML(poster)}" alt="">
+        <span>
+          <b>${escapeHTML(item.title || "بدون عنوان")}</b>
+          <small>${escapeHTML(genres)}</small>
+          <em>${imported ? "مضاف مسبقاً" : `${escapeHTML(format)} · Media Catalog`}</em>
+        </span>
+      </button>`;
+    }).join("");
+  }
+
+  async function searchMediaApi() {
+    if (!isAdmin() || state.mediaApi.busy) return;
+    const query = asString($("mediaApiSearchInput")?.value);
+    if (query.length < 2) {
+      setMediaApiMessage("اكتب حرفين على الأقل للبحث.", "error");
+      return;
+    }
+    state.mediaApi.busy = true;
+    $("mediaApiSearchButton").disabled = true;
+    setMediaApiMessage("جاري البحث في Media Catalog…", "pending");
+    try {
+      const payload = await mediaApiRequest("/movies", { q: query, page: 1, limit: 20 });
+      const rows = toArray(payload?.data);
+      renderMediaApiResults(rows);
+      setMediaApiMessage(
+        rows.length ? `تم العثور على ${rows.length} نتيجة. اختر الفيلم المطلوب.` : "لم يتم العثور على نتائج.",
+        rows.length ? "success" : ""
+      );
+    } catch (error) {
+      renderMediaApiResults([]);
+      setMediaApiMessage(errorMessage(error), "error");
+    } finally {
+      state.mediaApi.busy = false;
+      $("mediaApiSearchButton").disabled = false;
+    }
+  }
+
+  function mediaContentId(providerId) {
+    const normalized = asString(providerId)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 110);
+    return `media-${normalized || Date.now()}`;
+  }
+
+  async function importMediaApiMovie(providerId) {
+    if (!isAdmin() || state.mediaApi.busy) return;
+    const id = asString(providerId);
+    if (!id) return;
+
+    const duplicate = state.content.find((item) =>
+      asString(item?.provider) === "media-catalog" &&
+      asString(item?.providerId) === id &&
+      item.id !== state.editingContentId
+    );
+    if (duplicate) {
+      setMediaApiMessage(`هذا الفيلم مضاف مسبقاً باسم «${duplicate.title}» (${duplicate.id}).`, "error");
+      toast("تم منع إضافة نسخة مكررة من Media Catalog", "error");
+      return;
+    }
+
+    state.mediaApi.busy = true;
+    setMediaApiMessage("جاري جلب تفاصيل الفيلم ورابط التشغيل…", "pending");
+    try {
+      const payload = await mediaApiRequest("/movies/" + encodeURIComponent(id));
+      const item = payload?.data || {};
+      const meta = item?.metadata || {};
+      const playback = item?.playback || {};
+      const sourceUrl = validMediaUrl(playback.url || item.video || "");
+
+      if (!sourceUrl) throw new Error("الفيلم لا يحتوي رابط تشغيل HTTPS صالحاً.");
+      if (playback.recognized_media === false || playback.issue) {
+        throw new Error("رابط تشغيل هذا الفيلم غير صالح للاستيراد: " + asString(playback.issue, "unknown_source_issue"));
+      }
+
+      $("contentKind").value = "movie";
+      $("contentProvider").value = "media-catalog";
+      $("contentProviderId").value = id;
+      $("contentId").value = state.editingContentId || mediaContentId(id);
+      $("contentTmdbId").value = meta.tmdb_id ? String(meta.tmdb_id) : "";
+
+      $("contentTitle").value = asString(meta.title, asString(item.title, "فيلم بدون عنوان"));
+      $("contentEnglishTitle").value = asString(meta.original_title, asString(item.title));
+      $("contentYear").value = Math.max(1888, Math.min(2200, Math.round(asNumber(meta.year, new Date().getFullYear()))));
+      $("contentRating").value = Math.max(0, Math.min(10, asNumber(meta.vote_average, 0))).toFixed(1);
+      $("contentDuration").value = Math.max(0, Math.round(asNumber(meta.runtime, 0)));
+
+      const genres = toArray(meta.genres).length
+        ? toArray(meta.genres)
+        : (toArray(item.genres).length ? toArray(item.genres) : [item.genre]);
+      $("contentGenres").value = genres.map(asString).filter(Boolean).join(", ");
+      $("contentDescription").value = asString(
+        meta.overview,
+        `فيلم ${asString(meta.title, item.title)} متوفر عبر Media Catalog.`
+      ).slice(0, 3000);
+
+      const poster = validMediaUrl(item.poster || meta.image || "");
+      const backdrop = validMediaUrl(meta.backdrop || "") || poster;
+      if (!poster) throw new Error("الفيلم لا يحتوي بوستر HTTPS صالحاً.");
+      $("contentPoster").value = poster;
+      $("contentBackdrop").value = backdrop;
+      $("posterPreview").src = poster;
+      $("backdropPreview").src = backdrop || poster;
+
+      $("movieSourceUrl").value = sourceUrl;
+      $("movieBackupUrl").value = "";
+      $("movieSubtitleUrl").value = "";
+      $("contentPublished").checked = false;
+
+      toggleKindFields();
+      setMediaApiMessage(
+        `تم استيراد الفيلم من Media Catalog. الصيغة: ${asString(playback.format, "unknown").toUpperCase()}. راجع البيانات ثم اضغط حفظ.`,
+        "success"
+      );
+      setMessage("contentFormMessage", "تم تجهيز الفيلم للحفظ داخل CINARO.", "success");
+      $("contentTitle")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (error) {
+      setMediaApiMessage(errorMessage(error), "error");
+    } finally {
+      state.mediaApi.busy = false;
+    }
+  }
+
+  async function testMediaApiConnection() {
+    const inputUrl = normalizeMediaApiRoot($("mediaApiBaseUrl")?.value);
+    if (!inputUrl) {
+      setMessage("mediaApiSettingsMessage", "رابط الـAPI غير صالح. يجب أن يبدأ بـ HTTPS.", "error");
+      return;
+    }
+    const button = $("mediaApiTestButton");
+    if (button) button.disabled = true;
+    setMessage("mediaApiSettingsMessage", "جاري اختبار Media Catalog…", "pending");
+    try {
+      const payload = await mediaApiRequest("/health", {}, { baseUrl: inputUrl, ignoreEnabled: true });
+      const counts = payload?.counts || {};
+      setMessage(
+        "mediaApiSettingsMessage",
+        `الاتصال ناجح. الأفلام: ${asNumber(counts.movies, 0)} · الأنمي: ${asNumber(counts.anime_titles, 0)}.`,
+        "success"
+      );
+    } catch (error) {
+      setMessage("mediaApiSettingsMessage", errorMessage(error), "error");
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
+  async function saveMediaApiSettings(event) {
+    event.preventDefault();
+    if (!state.firebase || !isAdmin()) return;
+    const form = $("mediaApiSettingsForm");
+    setBusy(form, true);
+    try {
+      const baseUrl = normalizeMediaApiRoot($("mediaApiBaseUrl")?.value);
+      if (!baseUrl) throw new Error("رابط Media Catalog API غير صالح. يجب أن يبدأ بـ HTTPS.");
+      const config = {
+        baseUrl,
+        enabled: $("mediaApiEnabled")?.checked === true,
+        syncEnabled: $("mediaApiSyncEnabled")?.checked === true,
+        updatedAt: new Date().toISOString(),
+        updatedBy: state.authUser.uid
+      };
+      await state.firebase.saveDocument("appConfig", "public", {
+        settings: { mediaCatalog: config },
+        updatedBy: state.authUser.uid
+      });
+      await state.firebase.logAudit(
+        "تعديل Media Catalog API",
+        "appConfig/public",
+        `provider=${config.enabled ? "on" : "off"} · sync=${config.syncEnabled ? "on" : "off"} · ${baseUrl}`,
+        state.authUser
+      );
+      state.config = {
+        ...state.config,
+        settings: {
+          ...(state.config.settings || {}),
+          mediaCatalog: config
+        }
+      };
+      fillMediaApiSettings();
+      toast("تم حفظ إعدادات Media Catalog");
+    } catch (error) {
+      setMessage("mediaApiSettingsMessage", errorMessage(error), "error");
+    } finally {
+      setBusy(form, false);
+    }
+  }
+
   async function testTmdbToken() {
     const candidate = asString($("tmdbTokenInput")?.value);
     if (!candidate) {
