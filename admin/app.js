@@ -5,6 +5,7 @@
   const TMDB_STORAGE_KEY = "cinaro:admin:tmdb-token:v1";
   const TMDB_API_ROOT = "https://api.themoviedb.org/3";
   const MEDIA_CATALOG_DEFAULT_API_ROOT = "https://media-catalog-navy.vercel.app/api/v1";
+  const ANIME_API_DEFAULT_URL = "https://media-catalog-navy.vercel.app/api/v1/anime";
   const state = {
     firebase: null,
     authUser: null,
@@ -31,8 +32,9 @@
     unsubscribers: [],
     dataListenersStarted: false,
     previewHls: null,
-    tmdb: { importMode: "manual", results: [], configuration: null, busy: false },
+    tmdb: { importMode: "manual", results: [], configuration: null, busy: false, syncRunning: false, syncCancelled: false },
     mediaApi: { results: [], busy: false, syncRunning: false, syncCancelled: false },
+    animeApi: { results: [], busy: false, syncRunning: false, syncCancelled: false },
     filters: { contentSearch: "", contentKind: "all", contentStatus: "all", userSearch: "", userStatus: "all", reportStatus: "active", requestStatus: "pending" }
   };
 
@@ -914,6 +916,43 @@
     };
   }
 
+  function normalizeAnimeApiUrl(value) {
+    try {
+      const url = new URL(asString(value, ANIME_API_DEFAULT_URL));
+      if (url.protocol !== "https:") return "";
+      return url.href.replace(/\/+$/, "");
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function animeApiSettings() {
+    const saved = state.config?.settings?.animeCatalog || {};
+    return {
+      baseUrl: normalizeAnimeApiUrl(saved.baseUrl) || ANIME_API_DEFAULT_URL,
+      enabled: saved.enabled !== false,
+      syncEnabled: saved.syncEnabled === true
+    };
+  }
+
+  function fillAnimeApiSettings() {
+    const settings = animeApiSettings();
+    if ($("animeApiBaseUrl")) $("animeApiBaseUrl").value = settings.baseUrl;
+    if ($("animeApiEnabled")) $("animeApiEnabled").checked = settings.enabled;
+    if ($("animeApiSyncEnabled")) $("animeApiSyncEnabled").checked = settings.syncEnabled;
+    if ($("animeApiSettingsMessage")) {
+      setMessage("animeApiSettingsMessage",
+        settings.enabled
+          ? (settings.syncEnabled ? "Anime API والمزامنة الشاملة مفعّلان." : "Anime API مفعل، والمزامنة الشاملة متوقفة.")
+          : "Anime API متوقف من الإعدادات.",
+        settings.enabled ? "success" : "");
+    }
+  }
+
+  function setAnimeApiMessage(message = "", type = "") {
+    setMessage("animeApiImportMessage", message, type);
+  }
+
   function fillMediaApiSettings() {
     const settings = mediaCatalogSettings();
     if ($("mediaApiBaseUrl")) $("mediaApiBaseUrl").value = settings.baseUrl;
@@ -933,24 +972,34 @@
   }
 
   function setImportMode(mode) {
-    const allowed = isAdmin() ? ["manual", "tmdb", "media-api"] : ["manual"];
+    const allowed = isAdmin() ? ["manual", "tmdb", "media-api", "anime-api"] : ["manual"];
     let next = allowed.includes(mode) ? mode : "manual";
     if (next === "media-api" && !mediaCatalogSettings().enabled) next = "manual";
+    if (next === "anime-api" && !animeApiSettings().enabled) next = "manual";
 
     state.tmdb.importMode = next;
     $$("[data-import-mode]").forEach((button) => button.classList.toggle("active", button.dataset.importMode === next));
     $("tmdbImportPanel")?.classList.toggle("is-hidden", next !== "tmdb");
     $("mediaApiImportPanel")?.classList.toggle("is-hidden", next !== "media-api");
+    $("animeApiImportPanel")?.classList.toggle("is-hidden", next !== "anime-api");
 
     if (mode === "media-api" && next !== "media-api") {
       setMediaApiMessage("Media Catalog متوقف من الإعدادات. فعّله أولاً.", "error");
       toast("فعّل Media Catalog من الإعدادات أولاً", "error");
+    } else if (mode === "anime-api" && next !== "anime-api") {
+      setAnimeApiMessage("Anime API متوقف من الإعدادات. فعّله أولاً.", "error");
+      toast("فعّل Anime API من الإعدادات أولاً", "error");
     } else if (next === "media-api") {
       $("contentKind").value = "movie";
       toggleKindFields();
-      setMediaApiMessage("ابحث عن الفيلم ثم اختره. سيتم جلب المعلومات ورابط التشغيل من الـAPI.");
+      setMediaApiMessage("ابحث عن الفيلم ثم اختره، أو استخدم الإضافة الشاملة.");
+    } else if (next === "anime-api") {
+      $("contentKind").value = "anime";
+      toggleKindFields();
+      setAnimeApiMessage("ابحث عن الأنمي ثم اختره لاستيراد المواسم والحلقات.");
     } else {
       setMediaApiMessage("");
+      setAnimeApiMessage("");
     }
 
     if (next === "tmdb" && !readTmdbToken()) {
@@ -1733,6 +1782,7 @@
     $("settingForceUpdate").checked = state.config.forceUpdate !== false;
     fillTmdbSettings();
     fillMediaApiSettings();
+    fillAnimeApiSettings();
   }
 
   function newEpisode(number = 1) {
@@ -1828,6 +1878,7 @@
   }
 
   function canonicalSectionId(kind) {
+    if (kind === "anime") return "anime";
     return kind === "series" ? "series" : "movies";
   }
 
@@ -1835,29 +1886,28 @@
     const ids = [...new Set(toArray(selectedIds).map((id) => asString(id)).filter(Boolean))];
     if (!isAdmin()) return ids.slice(0, 30);
     const canonical = canonicalSectionId(kind);
-    const opposite = kind === "series" ? "movies" : "series";
+    const opposite = kind === "series" ? "movies" : kind === "movie" ? "series" : "";
     const canonicalExists = state.sections.some((section) => section.id === canonical && section.active !== false);
-    const cleaned = ids.filter((id) => id !== opposite && id !== canonical);
+    const cleaned = ids.filter((id) => (!opposite || id !== opposite) && id !== canonical);
     return canonicalExists ? [canonical, ...cleaned].slice(0, 30) : ids.slice(0, 30);
   }
 
   function toggleKindFields() {
-    const kind = $("contentKind").value === "series" ? "series" : "movie";
-    const series = kind === "series";
-    $("movieMediaFields")?.classList.toggle("is-hidden", series);
-    $("seriesMediaFields")?.classList.toggle("is-hidden", !series);
-    if (series && !state.seasonDraft.length) {
+    const selectedType = $("contentKind").value;
+    const seriesLike = selectedType === "series" || selectedType === "anime";
+    $("movieMediaFields")?.classList.toggle("is-hidden", seriesLike);
+    $("seriesMediaFields")?.classList.toggle("is-hidden", !seriesLike);
+    if (seriesLike && !state.seasonDraft.length) {
       state.seasonDraft = [newSeason(1)];
       renderSeasonBuilder();
     }
     if (isAdmin() && !state.editingContentId) {
       const current = parseCsv($("contentSections").value);
-      const next = normalizeSectionSelection(kind, current);
+      const next = normalizeSectionSelection(selectedType, current);
       $("contentSections").value = next.join(", ");
       renderSectionPickers();
     }
   }
-
   function resetContentForm() {
     state.editingContentId = "";
     state.pendingRequestId = "";
@@ -1870,6 +1920,9 @@
     if ($("mediaApiSearchInput")) $("mediaApiSearchInput").value = "";
     if ($("mediaApiSearchResults")) $("mediaApiSearchResults").innerHTML = "";
     state.mediaApi.results = [];
+    if ($("animeApiSearchInput")) $("animeApiSearchInput").value = "";
+    if ($("animeApiSearchResults")) $("animeApiSearchResults").innerHTML = "";
+    state.animeApi.results = [];
     $("tmdbSearchResults").innerHTML = "";
     state.tmdb.results = [];
     setImportMode("manual");
@@ -1893,7 +1946,7 @@
       return;
     }
     resetContentForm();
-    $("contentKind").value = kind === "series" ? "series" : "movie";
+    $("contentKind").value = kind === "anime" ? "anime" : (kind === "series" ? "series" : "movie");
     toggleKindFields();
     state.pendingRequestId = asString(options.requestId);
     state.pendingRequestTitle = asString(options.title);
@@ -1907,17 +1960,20 @@
       $("contentSections").value = assignedSectionIds()[0] || "";
       setImportMode("manual");
     } else {
-      setImportMode(["tmdb", "media-api"].includes(importMode) ? importMode : "manual");
+      setImportMode(["tmdb", "media-api", "anime-api"].includes(importMode) ? importMode : "manual");
     }
     setView("editor");
-    if (["tmdb", "media-api"].includes(importMode) && isAdmin()) {
+    if (["tmdb", "media-api", "anime-api"].includes(importMode) && isAdmin()) {
       window.setTimeout(() => {
         if (importMode === "tmdb") {
           $("tmdbSearchInput")?.focus();
           if (state.pendingRequestTitle) searchTmdb();
-        } else {
+        } else if (importMode === "media-api") {
           $("mediaApiSearchInput")?.focus();
           if (state.pendingRequestTitle) searchMediaApi();
+        } else {
+          $("animeApiSearchInput")?.focus();
+          if (state.pendingRequestTitle) searchAnimeApi();
         }
       }, 80);
     }
@@ -1952,7 +2008,7 @@
     $("contentTmdbId").value = item.tmdbId ? String(item.tmdbId) : "";
     $("contentProvider").value = asString(item.provider);
     $("contentProviderId").value = asString(item.providerId);
-    $("contentKind").value = item.kind;
+    $("contentKind").value = item.contentType === "anime" ? "anime" : item.kind;
     $("contentTitle").value = item.title || "";
     $("contentEnglishTitle").value = item.englishTitle || "";
     $("contentYear").value = item.year || new Date().getFullYear();
