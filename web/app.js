@@ -1097,7 +1097,7 @@
     const topRated = sortItems(DATA.items, "rating").slice(0, 10);
     const featuredSeries = sortItems(series, "popular").slice(0, 10);
     const featuredAnime = sortItems(anime, "popular").slice(0, 10);
-    const customSections = state.sections.map((section) => ({
+    const customSections = state.sections.filter((section) => section.id !== "anime").map((section) => ({
       ...section,
       items: sortItems(DATA.items.filter((item) => item.sectionIds?.includes(section.id)), "latest").slice(0, 12)
     })).filter((section) => section.items.length);
@@ -2059,6 +2059,14 @@
             autoCleanupSourceBuffer: true
           });
           player.mpegts = runtime;
+          runtime.on?.(MpegTsRuntime.Events.ERROR, () => {
+            if (player.mpegts !== runtime) return;
+            destroyMpegTs();
+            if (!openNativePlayer(sourceUrl)) {
+              player.failedSources.add(index);
+              handlePlayerError();
+            }
+          });
           runtime.attachMediaElement(player.video);
           runtime.load();
           if (shouldPlay) {
@@ -2109,7 +2117,7 @@
           }
 
           destroyHls();
-          handlePlayerError();
+          if (!openNativePlayer(sourceUrl)) handlePlayerError();
         });
         hls.attachMedia(player.video);
         return;
