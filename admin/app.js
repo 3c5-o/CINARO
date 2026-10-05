@@ -719,7 +719,8 @@
     const rows = state.content.filter((item) => {
       if (!canManageContent(item)) return false;
       const matchesSearch = !search || [item.id, item.title, item.englishTitle].some((value) => asString(value).toLocaleLowerCase("ar").includes(search));
-      const matchesKind = state.filters.contentKind === "all" || item.kind === state.filters.contentKind;
+      const visualKind = item.contentType === "anime" ? "anime" : item.kind;
+      const matchesKind = state.filters.contentKind === "all" || visualKind === state.filters.contentKind;
       const matchesStatus = state.filters.contentStatus === "all" || (state.filters.contentStatus === "published" ? item.published === true : item.published !== true);
       return matchesSearch && matchesKind && matchesStatus;
     }).sort((a, b) => asNumber(b.order) - asNumber(a.order) || asNumber(b.updatedAt) - asNumber(a.updatedAt));
@@ -732,7 +733,7 @@
       const publishButton = hasPermission("publishContent") ? `<button class="table-action" type="button" data-action="toggle-published" data-id="${escapeHTML(item.id)}" title="${item.published ? "إلغاء النشر" : "نشر"}"><svg><use href="#i-${item.published ? "x" : "check"}"></use></svg></button>` : "";
       const deleteButton = hasPermission("deleteContent") ? `<button class="table-action danger" type="button" data-action="delete-content" data-id="${escapeHTML(item.id)}" title="حذف"><svg><use href="#i-trash"></use></svg></button>` : "";
       const tmdbRefreshButton = isAdmin() && asNumber(item.tmdbId) > 0 ? `<button class="table-action" type="button" data-action="refresh-tmdb" data-id="${escapeHTML(item.id)}" title="تحديث بيانات TMDb"><svg><use href="#i-search"></use></svg></button>` : "";
-      return `<div class="data-row"><div class="title-cell"><span class="table-cover" style="background-image:url('${escapeHTML(item.poster || "../web/assets/images/poster-placeholder.webp")}')"></span><span><b>${escapeHTML(item.title)}</b><small>${escapeHTML(item.id)} · ${escapeHTML(String(item.year || "—"))}</small></span></div><span class="kind-chip">${item.kind === "series" ? "مسلسل" : "فيلم"}</span><span class="tag-list">${toArray(item.sectionIds).length ? item.sectionIds.slice(0, 3).map((id) => `<em>${escapeHTML(sectionName(id))}</em>`).join("") : "<em>عام</em>"}</span><span>${contentStatus(item)}</span><span class="row-actions">${editButton}${tmdbRefreshButton}${publishButton}${deleteButton || (!editButton && !publishButton && !tmdbRefreshButton ? '<small class="protected-label">عرض فقط</small>' : "")}</span></div>`;
+      return `<div class="data-row"><div class="title-cell"><span class="table-cover" style="background-image:url('${escapeHTML(item.poster || "../web/assets/images/poster-placeholder.webp")}')"></span><span><b>${escapeHTML(item.title)}</b><small>${escapeHTML(item.id)} · ${escapeHTML(String(item.year || "—"))}</small></span></div><span class="kind-chip ${item.contentType === "anime" ? "anime" : ""}">${item.contentType === "anime" ? "أنمي" : item.kind === "series" ? "مسلسل" : "فيلم"}</span><span class="tag-list">${toArray(item.sectionIds).length ? item.sectionIds.slice(0, 3).map((id) => `<em>${escapeHTML(sectionName(id))}</em>`).join("") : "<em>عام</em>"}</span><span>${contentStatus(item)}</span><span class="row-actions">${editButton}${tmdbRefreshButton}${publishButton}${deleteButton || (!editButton && !publishButton && !tmdbRefreshButton ? '<small class="protected-label">عرض فقط</small>' : "")}</span></div>`;
     }).join("")}</div>`;
   }
 
@@ -2077,7 +2078,9 @@
       const id = asString($("contentId").value).toLowerCase();
       if (!/^[a-z0-9-]+$/.test(id)) throw new Error("المعرّف يجب أن يحتوي أحرفاً إنجليزية صغيرة وأرقاماً وشرطة فقط.");
       if (!isAdmin() && existing && id !== existing.id) throw new Error("لا يستطيع المشرف تغيير معرّف المحتوى.");
-      const kind = $("contentKind").value === "series" ? "series" : "movie";
+      const selectedContentType = $("contentKind").value;
+      const contentType = selectedContentType === "anime" ? "anime" : selectedContentType;
+      const kind = selectedContentType === "movie" ? "movie" : "series";
       const requestedTmdbId = Math.max(0, Math.round(asNumber($("contentTmdbId").value, asNumber(existing?.tmdbId, 0))));
       const requestedProvider = asString($("contentProvider")?.value, asString(existing?.provider)).slice(0, 40);
       const requestedProviderId = asString($("contentProviderId")?.value, asString(existing?.providerId)).slice(0, 150);
@@ -2135,7 +2138,7 @@
         throw new Error("بوابة CINARO Storage غير مربوطة بعد. يمكن حفظ المحتوى كمسودة، لكن لا يمكن نشر مصدر Telegram قبل تشغيل البوابة.");
       }
       let sectionIds = parseCsv($("contentSections").value);
-      if (isAdmin()) sectionIds = normalizeSectionSelection(kind, sectionIds);
+      if (isAdmin()) sectionIds = normalizeSectionSelection(contentType, sectionIds);
       if (!isAdmin()) {
         const allowed = assignedSectionIds();
         if (!sectionIds.length || sectionIds.some((sectionId) => !allowed.includes(sectionId))) {
@@ -2145,6 +2148,7 @@
       const payload = {
         id,
         kind,
+        contentType,
         title: asString($("contentTitle").value).slice(0, 180),
         englishTitle: asString($("contentEnglishTitle").value).slice(0, 180),
         year: Math.max(1888, Math.min(2200, Math.round(asNumber($("contentYear").value, new Date().getFullYear())))),
@@ -2154,7 +2158,7 @@
         genres: parseCsv($("contentGenres").value),
         sectionIds,
         managementSectionId: isAdmin()
-          ? (sectionIds.includes(canonicalSectionId(kind)) ? canonicalSectionId(kind) : (sectionIds[0] || ""))
+          ? (sectionIds.includes(canonicalSectionId(contentType)) ? canonicalSectionId(contentType) : (sectionIds[0] || ""))
           : (sectionIds.includes(existing?.managementSectionId) ? existing.managementSectionId : (sectionIds[0] || "")),
         description: asString($("contentDescription").value).slice(0, 3000),
         poster,
@@ -2167,7 +2171,7 @@
         featured: $("contentFeatured").checked,
         published: willPublish,
         tmdbId: requestedTmdbId,
-        tmdbType: requestedTmdbId ? kind : asString(existing?.tmdbType),
+        tmdbType: requestedTmdbId ? (contentType === "anime" ? "tv" : kind) : asString(existing?.tmdbType),
         tmdbImportedAt: Math.max(0, Math.round(asNumber($("contentTmdbId").value, 0))) ? Date.now() : asNumber(existing?.tmdbImportedAt, 0),
         provider: requestedProvider,
         providerId: requestedProviderId,
@@ -2634,8 +2638,11 @@
     else if (action === "preview-movie") openMediaPreview($("movieSourceUrl").value, "معاينة الفيلم");
     else if (action === "new-tmdb") openNewContent(button.dataset.kind, "tmdb");
     else if (action === "new-media-api") openNewContent("movie", "media-api");
+    else if (action === "new-anime-manual") openNewContent("anime", "manual");
+    else if (action === "new-anime-api") openNewContent("anime", "anime-api");
     else if (action === "tmdb-select") importTmdbItem(button.dataset.tmdbId, button.dataset.tmdbKind);
     else if (action === "media-api-select") importMediaApiMovie(button.dataset.providerId);
+    else if (action === "anime-api-select") importAnimeApiTitle(button.dataset.providerId);
     else if (action === "add-episode") {
       const seasonIndex = asNumber(button.dataset.seasonIndex, -1);
       const season = state.seasonDraft[seasonIndex];
@@ -2826,7 +2833,11 @@
       } else if (state.tmdb.importMode === "media-api" && $("contentKind").value !== "movie") {
         $("contentKind").value = "movie";
         toggleKindFields();
-        setMediaApiMessage("Media Catalog مخصص للأفلام في هذه المرحلة. قسم الأنمي سيضاف بعد نجاح التجربة.", "error");
+        setMediaApiMessage("Media Catalog للأفلام. استخدم Anime API للأنمي.", "error");
+      } else if (state.tmdb.importMode === "anime-api" && $("contentKind").value !== "anime") {
+        $("contentKind").value = "anime";
+        toggleKindFields();
+        setAnimeApiMessage("Anime API مخصص لقسم الأنمي.", "error");
       }
     });
     $$("[data-import-mode]").forEach((button) => button.addEventListener("click", () => setImportMode(button.dataset.importMode)));
