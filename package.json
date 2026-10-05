@@ -1,8 +1,8 @@
 {
   "name": "cinaro",
-  "version": "2.8.0",
+  "version": "2.9.0",
   "private": true,
-  "description": "CINARO Arabic movies and series progressive web app",
+  "description": "CINARO Arabic movies, series and anime progressive web app",
   "type": "module",
   "scripts": {
     "dev": "node scripts/serve.mjs",
