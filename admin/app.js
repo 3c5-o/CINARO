@@ -4,6 +4,7 @@
   const ADMIN_EMAIL = "ffkyyr@gmail.com";
   const TMDB_STORAGE_KEY = "cinaro:admin:tmdb-token:v1";
   const TMDB_API_ROOT = "https://api.themoviedb.org/3";
+  const MEDIA_CATALOG_DEFAULT_API_ROOT = "https://media-catalog-navy.vercel.app/api/v1";
   const state = {
     firebase: null,
     authUser: null,
@@ -31,6 +32,7 @@
     dataListenersStarted: false,
     previewHls: null,
     tmdb: { importMode: "manual", results: [], configuration: null, busy: false },
+    mediaApi: { results: [], busy: false },
     filters: { contentSearch: "", contentKind: "all", contentStatus: "all", userSearch: "", userStatus: "all", reportStatus: "active", requestStatus: "pending" }
   };
 
@@ -889,11 +891,64 @@
     setMessage("tmdbSettingsMessage", token ? "التوكن محفوظ محلياً داخل تطبيق الإدارة." : "لم تتم إضافة TMDb Token بعد.", token ? "success" : "");
   }
 
+  function normalizeMediaApiRoot(value) {
+    try {
+      const url = new URL(asString(value, MEDIA_CATALOG_DEFAULT_API_ROOT));
+      if (url.protocol !== "https:") return "";
+      return url.href.replace(/\/+$/, "");
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function mediaCatalogSettings() {
+    const saved = state.config?.settings?.mediaCatalog || {};
+    return {
+      baseUrl: normalizeMediaApiRoot(saved.baseUrl) || MEDIA_CATALOG_DEFAULT_API_ROOT,
+      enabled: saved.enabled !== false,
+      syncEnabled: saved.syncEnabled === true
+    };
+  }
+
+  function fillMediaApiSettings() {
+    const settings = mediaCatalogSettings();
+    if ($("mediaApiBaseUrl")) $("mediaApiBaseUrl").value = settings.baseUrl;
+    if ($("mediaApiEnabled")) $("mediaApiEnabled").checked = settings.enabled;
+    if ($("mediaApiSyncEnabled")) $("mediaApiSyncEnabled").checked = settings.syncEnabled;
+    if ($("mediaApiSettingsMessage")) {
+      setMessage("mediaApiSettingsMessage",
+        settings.enabled
+          ? (settings.syncEnabled ? "المزود والمزامنة مفعّلان." : "المزود مفعل، والمزامنة الشاملة متوقفة.")
+          : "مزود Media Catalog متوقف من الإعدادات.",
+        settings.enabled ? "success" : "");
+    }
+  }
+
+  function setMediaApiMessage(message = "", type = "") {
+    setMessage("mediaApiImportMessage", message, type);
+  }
+
   function setImportMode(mode) {
-    const next = mode === "tmdb" && isAdmin() ? "tmdb" : "manual";
+    const allowed = isAdmin() ? ["manual", "tmdb", "media-api"] : ["manual"];
+    let next = allowed.includes(mode) ? mode : "manual";
+    if (next === "media-api" && !mediaCatalogSettings().enabled) next = "manual";
+
     state.tmdb.importMode = next;
     $$("[data-import-mode]").forEach((button) => button.classList.toggle("active", button.dataset.importMode === next));
     $("tmdbImportPanel")?.classList.toggle("is-hidden", next !== "tmdb");
+    $("mediaApiImportPanel")?.classList.toggle("is-hidden", next !== "media-api");
+
+    if (mode === "media-api" && next !== "media-api") {
+      setMediaApiMessage("Media Catalog متوقف من الإعدادات. فعّله أولاً.", "error");
+      toast("فعّل Media Catalog من الإعدادات أولاً", "error");
+    } else if (next === "media-api") {
+      $("contentKind").value = "movie";
+      toggleKindFields();
+      setMediaApiMessage("ابحث عن الفيلم ثم اختره. سيتم جلب المعلومات ورابط التشغيل من الـAPI.");
+    } else {
+      setMediaApiMessage("");
+    }
+
     if (next === "tmdb" && !readTmdbToken()) {
       setTmdbMessage("أضف TMDb Read Access Token من إعدادات التطبيق أولاً.", "error");
     } else if (next === "tmdb") {
@@ -902,7 +957,6 @@
       setTmdbMessage("");
     }
   }
-
   async function tmdbRequest(pathname, query = {}) {
     const token = readTmdbToken();
     if (!token) throw new Error("أضف TMDb Read Access Token من إعدادات التطبيق أولاً.");
