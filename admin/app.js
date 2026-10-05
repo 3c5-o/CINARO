@@ -2125,6 +2125,201 @@
     }
   }
 
+  function normalizeTmdbMatchTitle(value) {
+    return asString(value)
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\b(19|20)\d{2}\b/g, " ")
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function tmdbTitleSimilarity(first, second) {
+    const aTitle = normalizeTmdbMatchTitle(first);
+    const bTitle = normalizeTmdbMatchTitle(second);
+    if (!aTitle || !bTitle) return 0;
+    if (aTitle === bTitle) return 1;
+    if (aTitle.includes(bTitle) || bTitle.includes(aTitle)) return 0.88;
+    const left = new Set(aTitle.split(" ").filter(Boolean));
+    const right = new Set(bTitle.split(" ").filter(Boolean));
+    let common = 0;
+    left.forEach((token) => { if (right.has(token)) common += 1; });
+    return (2 * common) / Math.max(1, left.size + right.size);
+  }
+
+  function chooseTmdbMovieMatch(item, rows) {
+    const yearHint = Math.max(0, Math.round(asNumber(item?.year, 0)));
+    let best = null;
+    toArray(rows).slice(0, 12).forEach((candidate) => {
+      const similarity = Math.max(
+        tmdbTitleSimilarity(item?.title, candidate?.title),
+        tmdbTitleSimilarity(item?.title, candidate?.original_title),
+        tmdbTitleSimilarity(item?.englishTitle, candidate?.title),
+        tmdbTitleSimilarity(item?.englishTitle, candidate?.original_title)
+      );
+      const resultYear = Number(String(candidate?.release_date || "").slice(0, 4)) || 0;
+      let score = similarity * 100;
+      if (yearHint && resultYear) {
+        if (yearHint === resultYear) score += 18;
+        else if (Math.abs(yearHint - resultYear) > 1) score -= 12;
+      }
+      if (!best || score > best.score) best = { candidate, score, similarity };
+    });
+    return best && best.similarity >= 0.55 ? best.candidate : null;
+  }
+
+  async function tmdbMovieIdForItem(item) {
+    const existingId = Math.max(0, Math.round(asNumber(item?.tmdbId, 0)));
+    if (existingId) return existingId;
+    const query = asString(item?.englishTitle, asString(item?.title));
+    if (!query) return 0;
+    const result = await tmdbRequest("/search/movie", {
+      query,
+      language: "en-US",
+      include_adult: "false",
+      page: 1,
+      ...(item?.year ? { year: Math.round(asNumber(item.year)) } : {})
+    });
+    const match = chooseTmdbMovieMatch(item, result?.results);
+    return Math.max(0, Math.round(asNumber(match?.id, 0)));
+  }
+
+  async function buildTmdbMoviePatch(item) {
+    const tmdbId = await tmdbMovieIdForItem(item);
+    if (!tmdbId) return null;
+
+    const detailsAr = await tmdbRequest("/movie/" + tmdbId, {
+      language: "ar-IQ",
+      append_to_response: "release_dates"
+    });
+    let detailsEn = null;
+    if (!asString(detailsAr?.overview) || !asString(detailsAr?.title)) {
+      detailsEn = await tmdbRequest("/movie/" + tmdbId, { language: "en-US" });
+    }
+
+    const title = asString(detailsAr?.title, asString(detailsEn?.title, item?.title));
+    const englishTitle = asString(detailsEn?.title, asString(detailsAr?.original_title, item?.englishTitle));
+    const overview = asString(detailsAr?.overview, asString(detailsEn?.overview, item?.description));
+    const poster = tmdbImage(detailsAr?.poster_path || detailsEn?.poster_path, "w500") || item?.poster;
+    const backdrop = tmdbImage(detailsAr?.backdrop_path || detailsEn?.backdrop_path, "w1280") || item?.backdrop || poster;
+    const genres = toArray(detailsAr?.genres).map((genre) => asString(genre?.name)).filter(Boolean);
+    const releaseDate = asString(detailsAr?.release_date, detailsEn?.release_date);
+
+    return {
+      title: title.slice(0, 180),
+      englishTitle: englishTitle.slice(0, 180),
+      year: tmdbDateYear(releaseDate),
+      rating: Math.max(0, Math.min(10, asNumber(detailsAr?.vote_average, item?.rating))),
+      duration: Math.max(0, Math.round(asNumber(detailsAr?.runtime, item?.duration))),
+      genres: genres.length ? genres.slice(0, 12) : toArray(item?.genres),
+      ageRating: tmdbCertification(detailsAr, "movie"),
+      description: overview.slice(0, 3000),
+      poster: validMediaUrl(poster) || item?.poster,
+      backdrop: validMediaUrl(backdrop) || validMediaUrl(poster) || item?.backdrop,
+      tmdbId,
+      tmdbType: "movie",
+      tmdbImportedAt: Date.now(),
+      tmdbSyncedAt: Date.now(),
+      updatedBy: state.authUser.uid
+    };
+  }
+
+  function setTmdbMovieSyncUi(progress = null) {
+    const running = state.tmdb.syncRunning === true;
+    ["tmdbSyncMoviesButton", "tmdbSyncMoviesSettingsButton"].forEach((id) => {
+      const button = $(id);
+      if (!button) return;
+      button.disabled = false;
+      button.textContent = running ? "إيقاف مزامنة TMDb" : "مزامنة معلومات TMDb";
+    });
+    if ($("tmdbMovieSyncProgress")) $("tmdbMovieSyncProgress").hidden = !running && !progress;
+    if (!progress) return;
+    const total = Math.max(0, asNumber(progress.total));
+    const processed = Math.max(0, asNumber(progress.processed));
+    const percent = total ? Math.min(100, Math.round(processed / total * 100)) : 0;
+    if ($("tmdbMovieSyncFill")) $("tmdbMovieSyncFill").style.width = percent + "%";
+    if ($("tmdbMovieSyncText")) $("tmdbMovieSyncText").textContent = percent + "%";
+    if ($("tmdbMovieSyncStats")) $("tmdbMovieSyncStats").textContent =
+      "تم تحديث " + formatNumber(progress.updated) + " · بدون تطابق " + formatNumber(progress.unmatched) +
+      " · فشل " + formatNumber(progress.failed);
+  }
+
+  async function syncAllMoviesFromTmdb() {
+    if (!isAdmin() || !state.firebase) return;
+    if (state.tmdb.syncRunning) {
+      state.tmdb.syncCancelled = true;
+      setMediaApiMessage("سيتم إيقاف مزامنة TMDb بعد الفيلم الحالي…", "pending");
+      return;
+    }
+    if (!readTmdbToken()) {
+      setMediaApiMessage("أضف TMDb Read Access Token من الإعدادات أولاً.", "error");
+      setView("settings");
+      return;
+    }
+
+    const moviesToSync = state.content.filter((item) => item.kind === "movie");
+    if (!moviesToSync.length) {
+      setMediaApiMessage("لا توجد أفلام لمزامنتها.", "error");
+      return;
+    }
+    if (!window.confirm("سيتم تحديث معلومات " + formatNumber(moviesToSync.length) + " فيلم من TMDb مع إبقاء روابط التشغيل كما هي. متابعة؟")) return;
+
+    state.tmdb.syncRunning = true;
+    state.tmdb.syncCancelled = false;
+    const stats = { total: moviesToSync.length, processed: 0, updated: 0, unmatched: 0, failed: 0 };
+    setTmdbMovieSyncUi(stats);
+    setMediaApiMessage("بدأت مزامنة معلومات TMDb…", "pending");
+
+    try {
+      await ensureTmdbConfiguration();
+      for (const item of moviesToSync) {
+        if (state.tmdb.syncCancelled) break;
+        try {
+          const patch = await buildTmdbMoviePatch(item);
+          if (!patch) {
+            stats.unmatched += 1;
+          } else {
+            await state.firebase.saveDocument("content", item.id, patch);
+            stats.updated += 1;
+          }
+        } catch (error) {
+          console.warn("CINARO TMDb bulk sync failed", item.id, error);
+          stats.failed += 1;
+          if (/طلبات كثيرة|429/i.test(errorMessage(error))) {
+            setMediaApiMessage("TMDb حدّ الطلبات مؤقتاً. سيتم التوقف للحفاظ على الاستقرار ويمكنك متابعة المزامنة لاحقاً.", "error");
+            state.tmdb.syncCancelled = true;
+          }
+        }
+        stats.processed += 1;
+        setTmdbMovieSyncUi(stats);
+        if (!state.tmdb.syncCancelled) {
+          setMediaApiMessage("TMDb: " + formatNumber(stats.processed) + " / " + formatNumber(stats.total) + " · تم تحديث " + formatNumber(stats.updated), "pending");
+          await new Promise((resolve) => window.setTimeout(resolve, 280));
+        }
+      }
+
+      await state.firebase.logAudit(
+        state.tmdb.syncCancelled ? "إيقاف مزامنة TMDb" : "مزامنة معلومات TMDb",
+        "content/movies",
+        "updated=" + stats.updated + " unmatched=" + stats.unmatched + " failed=" + stats.failed,
+        state.authUser
+      );
+      setMediaApiMessage(
+        state.tmdb.syncCancelled
+          ? "توقفت المزامنة بعد تحديث " + formatNumber(stats.updated) + " فيلم. يمكن تشغيلها مرة ثانية وتكمل تحديث الموجود."
+          : "اكتملت مزامنة TMDb: " + formatNumber(stats.updated) + " فيلم بمعلومات حقيقية · " + formatNumber(stats.unmatched) + " بدون تطابق · " + formatNumber(stats.failed) + " فشل.",
+        stats.failed ? "error" : "success"
+      );
+    } finally {
+      state.tmdb.syncRunning = false;
+      state.tmdb.syncCancelled = false;
+      setTmdbMovieSyncUi(stats);
+    }
+  }
+
+
   async function testTmdbToken() {
     const candidate = asString($("tmdbTokenInput")?.value);
     if (!candidate) {
