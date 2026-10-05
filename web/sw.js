@@ -1,6 +1,6 @@
 "use strict";
 
-const VERSION = "cinaro-v2.8.0";
+const VERSION = "cinaro-v2.9.0";
 const SHELL_CACHE = `${VERSION}-shell`;
 const IMAGE_CACHE = `${VERSION}-images`;
 
@@ -49,7 +49,7 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
-  const isVideo = request.destination === "video" || /\.(?:mp4|m3u8|webm)(?:$|\?)/i.test(url.pathname);
+  const isVideo = request.destination === "video" || /\.(?:mp4|m4v|m3u8|webm|ogg|ogv|mkv|ts)(?:$|\?)/i.test(url.pathname);
   if (isVideo) return;
 
   if (request.mode === "navigate") {
