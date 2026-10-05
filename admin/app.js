@@ -2377,8 +2377,8 @@
   function fillSettings() {
     $("settingFeatured").value = toArray(state.config.featured).join(", ");
     $("settingAnnouncement").value = asString(state.config.announcement);
-    $("settingLatestVersion").value = asString(state.config.latestVersion, "2.8.0");
-    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.8.0");
+    $("settingLatestVersion").value = asString(state.config.latestVersion, "2.9.0");
+    $("settingMinVersion").value = asString(state.config.minimumVersion, "2.9.0");
     $("settingUpdateUrl").value = asString(state.config.updateUrl, "https://github.com/3c5-o/CINARO/releases");
     $("settingUpdateNotes").value = asString(state.config.updateNotes);
     if ($("settingUpdateReleasedAt")) $("settingUpdateReleasedAt").value = toLocalDateTimeInput(state.config.updateReleasedAt);
@@ -2993,8 +2993,8 @@
     const form = $("settingsForm");
     setBusy(form, true);
     try {
-      const latestVersion = asString($("settingLatestVersion").value, "2.8.0").slice(0, 20);
-      const versionChanged = latestVersion !== asString(state.config.latestVersion, "2.8.0");
+      const latestVersion = asString($("settingLatestVersion").value, "2.9.0").slice(0, 20);
+      const versionChanged = latestVersion !== asString(state.config.latestVersion, "2.9.0");
       const releaseAt = versionChanged
         ? new Date().toISOString()
         : localDateTimeToIso($("settingUpdateReleasedAt")?.value) || state.config.updateReleasedAt || new Date().toISOString();
@@ -3005,7 +3005,7 @@
         featured: parseCsv($("settingFeatured").value),
         announcement: asString($("settingAnnouncement").value).slice(0, 500),
         latestVersion,
-        minimumVersion: asString($("settingMinVersion").value, "2.8.0").slice(0, 20),
+        minimumVersion: asString($("settingMinVersion").value, "2.9.0").slice(0, 20),
         updateNotes: asString($("settingUpdateNotes").value).slice(0, 1000),
         updateUrl: validMediaUrl($("settingUpdateUrl").value) || "https://github.com/3c5-o/CINARO/releases",
         maintenance: $("settingMaintenance").checked,
@@ -3038,7 +3038,7 @@
     if (!isAdmin()) return;
     const payload = {
       schema: "cinaro-backup-v1",
-      appVersion: "2.8.0",
+      appVersion: "2.9.0",
       exportedAt: new Date().toISOString(),
       content: state.content.map((item) => ({ ...item })),
       sections: state.sections.map((item) => ({ ...item })),
