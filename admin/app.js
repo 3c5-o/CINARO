@@ -1655,6 +1655,411 @@
     setMediaApiMessage("سيتم إيقاف العملية بعد انتهاء الدفعة الحالية…", "pending");
   }
 
+  function providerSourceType(format) {
+    const value = asString(format).toLowerCase();
+    if (value === "m3u8") return "application/vnd.apple.mpegurl";
+    if (value === "ts") return "video/mp2t";
+    if (value === "mkv") return "video/x-matroska";
+    if (value === "webm") return "video/webm";
+    if (value === "ogg" || value === "ogv") return "video/ogg";
+    return "video/mp4";
+  }
+
+  async function animeApiRequest(query = {}, providerId = "", options = {}) {
+    const settings = animeApiSettings();
+    if (!settings.enabled && options.ignoreEnabled !== true) {
+      throw new Error("Anime API متوقف من إعدادات CINARO.");
+    }
+    const baseUrl = normalizeAnimeApiUrl(options.baseUrl || settings.baseUrl);
+    if (!baseUrl) throw new Error("رابط Anime API غير صالح.");
+    const target = providerId ? baseUrl + "/" + encodeURIComponent(providerId) : baseUrl;
+    const url = new URL(target);
+    Object.entries(query || {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
+    });
+    const response = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+    if (response.status === 429) throw new Error("Anime API استقبل طلبات كثيرة. أعد المحاولة بعد قليل.");
+    if (!response.ok) throw new Error("تعذّر الاتصال بـAnime API (HTTP " + response.status + ").");
+    const payload = await response.json();
+    if (!payload?.ok) throw new Error(payload?.message || payload?.error || "استجابة Anime API غير صالحة.");
+    return payload;
+  }
+
+  function renderAnimeApiResults(rows) {
+    state.animeApi.results = toArray(rows);
+    const root = $("animeApiSearchResults");
+    if (!root) return;
+    if (!state.animeApi.results.length) {
+      root.innerHTML = '<div class="tmdb-empty">لا توجد نتائج أنمي مطابقة.</div>';
+      return;
+    }
+    root.innerHTML = state.animeApi.results.slice(0, 20).map((item) => {
+      const poster = validMediaUrl(item?.poster) || "../web/assets/images/poster-placeholder.webp";
+      const imported = state.content.some((entry) =>
+        asString(entry?.provider) === "media-catalog-anime" &&
+        asString(entry?.providerId) === asString(item?.id)
+      );
+      const seasons = Math.max(0, asNumber(item?.season_count, item?.seasonCount));
+      const episodes = Math.max(0, asNumber(item?.episode_count, item?.episodeCount));
+      return '<button class="tmdb-result-card' + (imported ? ' is-imported' : '') + '" type="button"' +
+        ' data-action="anime-api-select" data-provider-id="' + escapeHTML(item.id) + '"' + (imported ? ' disabled' : '') + '>' +
+        '<img src="' + escapeHTML(poster) + '" alt="">' +
+        '<span><b>' + escapeHTML(item.title || "بدون عنوان") + '</b>' +
+        '<small>' + escapeHTML(asString(item.genre, "أنمي")) + '</small>' +
+        '<em>' + (imported ? "مضاف مسبقاً" : (formatNumber(seasons) + " موسم · " + formatNumber(episodes) + " حلقة")) + '</em></span></button>';
+    }).join("");
+  }
+
+  async function searchAnimeApi() {
+    if (!isAdmin() || state.animeApi.busy) return;
+    const query = asString($("animeApiSearchInput")?.value);
+    if (query.length < 2) {
+      setAnimeApiMessage("اكتب حرفين على الأقل للبحث.", "error");
+      return;
+    }
+    state.animeApi.busy = true;
+    if ($("animeApiSearchButton")) $("animeApiSearchButton").disabled = true;
+    setAnimeApiMessage("جاري البحث في Anime API…", "pending");
+    try {
+      const payload = await animeApiRequest({ q: query, page: 1, limit: 20 });
+      const rows = toArray(payload?.data);
+      renderAnimeApiResults(rows);
+      setAnimeApiMessage(rows.length ? "اختر الأنمي لاستيراد المواسم والحلقات." : "لم يتم العثور على نتائج.", rows.length ? "success" : "");
+    } catch (error) {
+      renderAnimeApiResults([]);
+      setAnimeApiMessage(errorMessage(error), "error");
+    } finally {
+      state.animeApi.busy = false;
+      if ($("animeApiSearchButton")) $("animeApiSearchButton").disabled = false;
+    }
+  }
+
+  function animeContentId(providerId) {
+    const normalized = asString(providerId)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 105);
+    return "anime-" + (normalized || Date.now());
+  }
+
+  function animeDurationMinutes(value) {
+    const textValue = asString(value);
+    const hours = Number((textValue.match(/(\d+)\s*hr/i) || [])[1] || 0);
+    const mins = Number((textValue.match(/(\d+)\s*min/i) || [])[1] || 0);
+    return Math.max(0, hours * 60 + mins);
+  }
+
+  function animeEpisodeToDraft(episode, fallbackPoster = "") {
+    const playback = episode?.playback || {};
+    const url = validMediaUrl(playback.url || episode?.video || episode?.url || "");
+    const format = asString(playback.format).toLowerCase();
+    const source = url ? {
+      label: format ? format.toUpperCase() : "Anime API",
+      url,
+      type: providerSourceType(format)
+    } : null;
+    return {
+      id: asString(episode?.id, "e" + Math.max(1, asNumber(episode?.episode, episode?.number))),
+      number: Math.max(1, Math.round(asNumber(episode?.episode, episode?.number || 1))),
+      title: asString(episode?.title, asString(episode?.episode_name, "حلقة")),
+      duration: Math.max(0, Math.round(asNumber(episode?.duration, 0))),
+      thumbnail: validMediaUrl(episode?.poster || fallbackPoster),
+      url,
+      backupUrl: "",
+      subtitleUrl: "",
+      primarySource: source,
+      backupSource: null,
+      extraSources: [],
+      primarySubtitle: null,
+      extraSubtitles: []
+    };
+  }
+
+  function animeDetailToEditor(item) {
+    const meta = item?.metadata || {};
+    const poster = validMediaUrl(item?.poster || meta?.image || "") || "../web/assets/images/poster-placeholder.webp";
+    const genres = toArray(meta?.genres).length ? toArray(meta.genres) : (toArray(item?.genres).length ? toArray(item.genres) : [item?.genre]);
+    const seasons = toArray(item?.seasons).map((season, seasonIndex) => ({
+      number: Math.max(1, Math.round(asNumber(season?.season, seasonIndex + 1))),
+      title: asString(season?.title, "الموسم " + (seasonIndex + 1)),
+      episodes: toArray(season?.episodes).map((episode) => animeEpisodeToDraft(episode, poster))
+    })).filter((season) => season.episodes.length);
+
+    $("contentKind").value = "anime";
+    $("contentProvider").value = "media-catalog-anime";
+    $("contentProviderId").value = asString(item?.id);
+    $("contentId").value = state.editingContentId || animeContentId(item?.id);
+    $("contentTmdbId").value = "";
+    $("contentTitle").value = asString(meta?.title, asString(item?.title, "أنمي"));
+    $("contentEnglishTitle").value = asString(meta?.title_english, asString(item?.title));
+    $("contentYear").value = Math.max(1888, Math.min(2200, Math.round(asNumber(meta?.year, new Date().getFullYear()))));
+    $("contentRating").value = Math.max(0, Math.min(10, asNumber(meta?.score, 0))).toFixed(1);
+    $("contentDuration").value = animeDurationMinutes(meta?.duration);
+    $("contentAgeRating").value = asString(meta?.rating, "عام").slice(0, 20);
+    $("contentGenres").value = genres.map(asString).filter(Boolean).join(", ");
+    $("contentDescription").value = asString(meta?.synopsis, "أنمي " + asString(item?.title) + " متوفر على CINARO.").slice(0, 3000);
+    $("contentPoster").value = poster;
+    $("contentBackdrop").value = validMediaUrl(meta?.image) || poster;
+    $("posterPreview").src = poster;
+    $("backdropPreview").src = validMediaUrl(meta?.image) || poster;
+    state.seasonDraft = seasons.length ? seasons : [newSeason(1)];
+    $("contentPublished").checked = false;
+    toggleKindFields();
+    renderSeasonBuilder();
+  }
+
+  async function ensureAnimeSection() {
+    if (!state.firebase || !isAdmin()) return;
+    if (state.sections.some((section) => section.id === "anime")) return;
+    try {
+      await state.firebase.saveDocument("sections", "anime", {
+        name: "الأنمي",
+        description: "أنمي، مواسم وحلقات",
+        active: true,
+        order: 80
+      });
+    } catch (error) {
+      console.warn("CINARO anime section bootstrap failed", error);
+    }
+  }
+
+  async function importAnimeApiTitle(providerId) {
+    if (!isAdmin() || state.animeApi.busy) return;
+    const id = asString(providerId);
+    if (!id) return;
+    const duplicate = state.content.find((item) =>
+      asString(item?.provider) === "media-catalog-anime" &&
+      asString(item?.providerId) === id &&
+      item.id !== state.editingContentId
+    );
+    if (duplicate) {
+      setAnimeApiMessage("هذا الأنمي مضاف مسبقاً باسم «" + duplicate.title + "».", "error");
+      return;
+    }
+    state.animeApi.busy = true;
+    setAnimeApiMessage("جاري تحميل المواسم والحلقات ومعلومات الأنمي…", "pending");
+    try {
+      await ensureAnimeSection();
+      const payload = await animeApiRequest({}, id);
+      animeDetailToEditor(payload?.data || {});
+      $("contentSections").value = "anime";
+      renderSectionPickers();
+      setAnimeApiMessage("تم تجهيز الأنمي كاملاً. راجع البيانات ثم فعّل النشر واحفظ.", "success");
+      $("contentTitle")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (error) {
+      setAnimeApiMessage(errorMessage(error), "error");
+    } finally {
+      state.animeApi.busy = false;
+    }
+  }
+
+  function animeDetailToPayload(item) {
+    const meta = item?.metadata || {};
+    const providerId = asString(item?.id);
+    const title = asString(meta?.title, asString(item?.title));
+    const poster = validMediaUrl(item?.poster || meta?.image || "") || "assets/images/poster-placeholder.webp";
+    const genres = (toArray(meta?.genres).length ? toArray(meta.genres) : (toArray(item?.genres).length ? toArray(item.genres) : [item?.genre]))
+      .map(asString).filter(Boolean).slice(0, 12);
+    const seasons = toArray(item?.seasons).map((season, seasonIndex) => ({
+      number: Math.max(1, Math.round(asNumber(season?.season, seasonIndex + 1))),
+      title: asString(season?.title, "الموسم " + (seasonIndex + 1)),
+      episodes: toArray(season?.episodes).map((episode, episodeIndex) => {
+        const playback = episode?.playback || {};
+        const url = validMediaUrl(playback.url || episode?.video || episode?.url || "");
+        const format = asString(playback.format).toLowerCase();
+        return {
+          id: asString(episode?.id, "e" + (episodeIndex + 1)),
+          number: Math.max(1, Math.round(asNumber(episode?.episode, episodeIndex + 1))),
+          title: asString(episode?.title, asString(episode?.episode_name, "الحلقة " + (episodeIndex + 1))),
+          duration: 0,
+          thumbnail: validMediaUrl(episode?.poster || poster),
+          sources: url ? [{ label: format ? format.toUpperCase() : "Anime API", url, type: providerSourceType(format) }] : [],
+          subtitles: []
+        };
+      }).filter((episode) => episode.sources.length)
+    })).filter((season) => season.episodes.length);
+    if (!providerId || !title || !seasons.length) return null;
+    return {
+      id: animeContentId(providerId),
+      kind: "series",
+      contentType: "anime",
+      title: title.slice(0, 180),
+      englishTitle: asString(meta?.title_english, title).slice(0, 180),
+      year: Math.max(1888, Math.min(2200, Math.round(asNumber(meta?.year, new Date().getFullYear())))),
+      rating: Math.max(0, Math.min(10, asNumber(meta?.score, 0))),
+      ageRating: asString(meta?.rating, "عام").slice(0, 20),
+      duration: animeDurationMinutes(meta?.duration),
+      genres: genres.length ? genres : ["أنمي"],
+      sectionIds: ["anime"],
+      managementSectionId: "anime",
+      description: asString(meta?.synopsis, "أنمي " + title + " متوفر على CINARO.").slice(0, 3000),
+      poster,
+      backdrop: validMediaUrl(meta?.image) || poster,
+      sources: [],
+      subtitles: [],
+      seasons,
+      views: 0,
+      order: 0,
+      featured: false,
+      published: true,
+      provider: "media-catalog-anime",
+      providerId,
+      providerImportedAt: Date.now(),
+      providerBaseUrl: animeApiSettings().baseUrl,
+      addedAt: today(),
+      updatedBy: state.authUser.uid
+    };
+  }
+
+  function setAnimeApiSyncUi(progress = null) {
+    const running = state.animeApi.syncRunning === true;
+    if ($("animeApiImportAllButton")) $("animeApiImportAllButton").disabled = running;
+    if ($("animeApiCancelSyncButton")) $("animeApiCancelSyncButton").hidden = !running;
+    if ($("animeApiSyncProgress")) $("animeApiSyncProgress").hidden = !running && !progress;
+    if (!progress) return;
+    const total = Math.max(0, asNumber(progress.total));
+    const processed = Math.max(0, asNumber(progress.processed));
+    const percent = total ? Math.min(100, Math.round(processed / total * 100)) : 0;
+    if ($("animeApiProgressFill")) $("animeApiProgressFill").style.width = percent + "%";
+    if ($("animeApiProgressText")) $("animeApiProgressText").textContent = percent + "%";
+    if ($("animeApiProgressStats")) $("animeApiProgressStats").textContent =
+      "أضيف " + formatNumber(progress.added) + " · موجود " + formatNumber(progress.duplicates) +
+      " · متخطى " + formatNumber(progress.skipped) + " · فشل " + formatNumber(progress.failed);
+  }
+
+  async function importAllAnimeApi() {
+    if (!isAdmin() || state.animeApi.syncRunning) return;
+    const settings = animeApiSettings();
+    if (!settings.enabled || !settings.syncEnabled) {
+      setAnimeApiMessage("فعّل Anime API والمزامنة الشاملة من الإعدادات أولاً.", "error");
+      return;
+    }
+    if (!window.confirm("سيتم إضافة جميع عناوين الأنمي الجديدة مع المواسم والحلقات ونشرها مباشرة. متابعة؟")) return;
+
+    await ensureAnimeSection();
+    state.animeApi.syncRunning = true;
+    state.animeApi.syncCancelled = false;
+    const stats = { total: 0, processed: 0, added: 0, duplicates: 0, skipped: 0, failed: 0 };
+    setAnimeApiSyncUi(stats);
+
+    const known = new Set(state.content
+      .filter((item) => asString(item?.provider) === "media-catalog-anime")
+      .map((item) => asString(item?.providerId)).filter(Boolean));
+
+    try {
+      let page = 1;
+      let pages = 1;
+      while (page <= pages && !state.animeApi.syncCancelled) {
+        const list = await animeApiRequest({ page, limit: 100 });
+        const rows = toArray(list?.data);
+        const pagination = list?.pagination || {};
+        stats.total = Math.max(stats.total, asNumber(pagination.total, rows.length));
+        pages = Math.max(1, asNumber(pagination.pages, Math.ceil(stats.total / 100) || 1));
+
+        for (const summary of rows) {
+          if (state.animeApi.syncCancelled) break;
+          const providerId = asString(summary?.id);
+          if (!providerId || known.has(providerId)) {
+            stats.duplicates += 1;
+            stats.processed += 1;
+            setAnimeApiSyncUi(stats);
+            continue;
+          }
+          try {
+            const detail = await animeApiRequest({ enrich: 1 }, providerId);
+            const payload = animeDetailToPayload(detail?.data || {});
+            if (!payload) {
+              stats.skipped += 1;
+            } else {
+              await state.firebase.saveDocument("content", payload.id, payload);
+              known.add(providerId);
+              stats.added += 1;
+            }
+          } catch (error) {
+            console.warn("CINARO anime import failed", providerId, error);
+            stats.failed += 1;
+          }
+          stats.processed += 1;
+          setAnimeApiSyncUi(stats);
+          setAnimeApiMessage("جاري إضافة الأنمي " + formatNumber(stats.processed) + " من " + formatNumber(stats.total) + "…", "pending");
+          await new Promise((resolve) => window.setTimeout(resolve, 650));
+        }
+        page += 1;
+      }
+      await state.firebase.logAudit(
+        state.animeApi.syncCancelled ? "إيقاف مزامنة الأنمي" : "إضافة جميع الأنميات",
+        "media-catalog/anime",
+        "added=" + stats.added + " duplicates=" + stats.duplicates + " skipped=" + stats.skipped + " failed=" + stats.failed,
+        state.authUser
+      );
+      setAnimeApiMessage(
+        state.animeApi.syncCancelled
+          ? "تم إيقاف العملية بعد إضافة " + formatNumber(stats.added) + " أنمي."
+          : "اكتملت إضافة الأنمي: " + formatNumber(stats.added) + " جديد · " + formatNumber(stats.duplicates) + " موجود · " + formatNumber(stats.failed) + " فشل.",
+        stats.failed ? "error" : "success"
+      );
+    } catch (error) {
+      setAnimeApiMessage(errorMessage(error), "error");
+    } finally {
+      state.animeApi.syncRunning = false;
+      state.animeApi.syncCancelled = false;
+      setAnimeApiSyncUi(stats);
+    }
+  }
+
+  function cancelAnimeApiSync() {
+    if (!state.animeApi.syncRunning) return;
+    state.animeApi.syncCancelled = true;
+    setAnimeApiMessage("سيتم الإيقاف بعد الحلقة/العنوان الحالي…", "pending");
+  }
+
+  async function testAnimeApiConnection() {
+    const inputUrl = normalizeAnimeApiUrl($("animeApiBaseUrl")?.value);
+    if (!inputUrl) return setMessage("animeApiSettingsMessage", "رابط Anime API غير صالح.", "error");
+    setMessage("animeApiSettingsMessage", "جاري اختبار Anime API…", "pending");
+    try {
+      const response = await fetch(inputUrl + "?page=1&limit=1", { headers: { Accept: "application/json" }, cache: "no-store" });
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      const payload = await response.json();
+      if (!payload?.ok) throw new Error("استجابة غير صالحة");
+      setMessage("animeApiSettingsMessage", "الاتصال ناجح. الكتالوج يحتوي " + formatNumber(payload?.pagination?.total || 0) + " عنوان أنمي.", "success");
+    } catch (error) {
+      setMessage("animeApiSettingsMessage", "تعذّر الاتصال: " + errorMessage(error), "error");
+    }
+  }
+
+  async function saveAnimeApiSettings(event) {
+    event.preventDefault();
+    if (!state.firebase || !isAdmin()) return;
+    const form = $("animeApiSettingsForm");
+    setBusy(form, true);
+    try {
+      const baseUrl = normalizeAnimeApiUrl($("animeApiBaseUrl")?.value);
+      if (!baseUrl) throw new Error("رابط Anime API غير صالح.");
+      const config = {
+        baseUrl,
+        enabled: $("animeApiEnabled")?.checked === true,
+        syncEnabled: $("animeApiSyncEnabled")?.checked === true,
+        updatedAt: new Date().toISOString(),
+        updatedBy: state.authUser.uid
+      };
+      await state.firebase.saveDocument("appConfig", "public", {
+        settings: { animeCatalog: config },
+        updatedBy: state.authUser.uid
+      });
+      state.config = { ...state.config, settings: { ...(state.config.settings || {}), animeCatalog: config } };
+      await state.firebase.logAudit("تعديل Anime API", "appConfig/public", "enabled=" + config.enabled + " sync=" + config.syncEnabled, state.authUser);
+      fillAnimeApiSettings();
+      toast("تم حفظ إعدادات Anime API");
+    } catch (error) {
+      setMessage("animeApiSettingsMessage", errorMessage(error), "error");
+    } finally {
+      setBusy(form, false);
+    }
+  }
+
+
   async function testMediaApiConnection() {
     const inputUrl = normalizeMediaApiRoot($("mediaApiBaseUrl")?.value);
     if (!inputUrl) {
