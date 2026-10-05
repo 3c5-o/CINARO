@@ -32,7 +32,7 @@
     dataListenersStarted: false,
     previewHls: null,
     tmdb: { importMode: "manual", results: [], configuration: null, busy: false },
-    mediaApi: { results: [], busy: false },
+    mediaApi: { results: [], busy: false, syncRunning: false, syncCancelled: false },
     filters: { contentSearch: "", contentKind: "all", contentStatus: "all", userSearch: "", userStatus: "all", reportStatus: "active", requestStatus: "pending" }
   };
 
@@ -463,10 +463,14 @@
     try {
       const pathname = new URL(input).pathname.toLowerCase();
       if (pathname.endsWith(".m3u8")) return "application/vnd.apple.mpegurl";
-      if (pathname.endsWith(".mp4")) return "video/mp4";
+      if (pathname.endsWith(".mp4") || pathname.endsWith(".m4v")) return "video/mp4";
+      if (pathname.endsWith(".webm")) return "video/webm";
+      if (pathname.endsWith(".ts")) return "video/mp2t";
     } catch (_) {}
     if (/\.m3u8(?:$|[?#])/i.test(input)) return "application/vnd.apple.mpegurl";
-    if (/\.mp4(?:$|[?#])/i.test(input)) return "video/mp4";
+    if (/\.(?:mp4|m4v)(?:$|[?#])/i.test(input)) return "video/mp4";
+    if (/\.webm(?:$|[?#])/i.test(input)) return "video/webm";
+    if (/\.ts(?:$|[?#])/i.test(input)) return "video/mp2t";
     return asString(fallback, "video/mp4").slice(0, 80);
   }
 
@@ -1357,6 +1361,248 @@
     } finally {
       state.mediaApi.busy = false;
     }
+  }
+
+
+  function setMediaApiSyncUi(progress = null) {
+    const running = state.mediaApi.syncRunning === true;
+    const importButton = $("mediaApiImportAllButton");
+    const cancelButton = $("mediaApiCancelSyncButton");
+    const progressRoot = $("mediaApiSyncProgress");
+    if (importButton) {
+      importButton.disabled = running;
+      importButton.textContent = running ? "جاري إضافة الأفلام…" : "إضافة جميع الأفلام";
+    }
+    if (cancelButton) cancelButton.hidden = !running;
+    if (progressRoot) progressRoot.hidden = !running && !progress;
+
+    if (!progress) return;
+    const total = Math.max(0, asNumber(progress.total, 0));
+    const processed = Math.max(0, asNumber(progress.processed, 0));
+    const percent = total ? Math.min(100, Math.round((processed / total) * 100)) : 0;
+    if ($("mediaApiProgressFill")) $("mediaApiProgressFill").style.width = percent + "%";
+    if ($("mediaApiProgressText")) $("mediaApiProgressText").textContent = percent + "%";
+    if ($("mediaApiProgressStats")) {
+      $("mediaApiProgressStats").textContent =
+        `تمت إضافة ${formatNumber(progress.added)} · موجود مسبقاً ${formatNumber(progress.duplicates)} · متخطى ${formatNumber(progress.skipped)} · فشل ${formatNumber(progress.failed)}`;
+    }
+  }
+
+  function mediaApiBulkMoviePayload(item) {
+    const providerId = asString(item?.id);
+    const title = asString(item?.title);
+    const playback = item?.playback || {};
+    const sourceUrl = validMediaUrl(playback.url || item?.video || "");
+    const format = asString(playback.format).toLowerCase();
+    const supportedFormats = new Set(["mp4", "m4v", "webm", "ogg", "ogv", "m3u8", "ts"]);
+
+    if (!providerId || !title || !sourceUrl) return null;
+    if (playback.issue || playback.recognized_media === false) return null;
+    if (format && !supportedFormats.has(format)) return null;
+
+    const poster = validMediaUrl(item?.poster) || "assets/images/poster-placeholder.webp";
+    const genres = (toArray(item?.genres).length ? toArray(item.genres) : [item?.genre])
+      .map(asString).filter(Boolean).slice(0, 12);
+    const yearMatch = title.match(/\b((?:19|20)\d{2})\b/);
+    const sourceType =
+      format === "m3u8" ? "application/vnd.apple.mpegurl" :
+      format === "ts" ? "video/mp2t" :
+      format === "webm" ? "video/webm" :
+      format === "ogg" || format === "ogv" ? "video/ogg" :
+      "video/mp4";
+    const sectionIds = normalizeSectionSelection("movie", ["movies"]);
+    const now = Date.now();
+
+    return {
+      id: mediaContentId(providerId),
+      kind: "movie",
+      title: title.slice(0, 180),
+      englishTitle: title.slice(0, 180),
+      ...(yearMatch ? { year: Number(yearMatch[1]) } : {}),
+      rating: 0,
+      ageRating: "عام",
+      duration: 0,
+      genres: genres.length ? genres : ["عام"],
+      sectionIds,
+      managementSectionId: sectionIds.includes("movies") ? "movies" : (sectionIds[0] || "movies"),
+      description: `فيلم «${title}» تمت إضافته من Media Catalog. يمكن تحديث معلوماته التفصيلية لاحقاً من TMDb.`.slice(0, 3000),
+      poster,
+      backdrop: poster,
+      sources: [{
+        label: "Media Catalog",
+        url: sourceUrl,
+        type: sourceType
+      }],
+      subtitles: [],
+      seasons: [],
+      views: 0,
+      order: 0,
+      featured: false,
+      published: true,
+      tmdbId: 0,
+      tmdbType: "",
+      tmdbImportedAt: 0,
+      provider: "media-catalog",
+      providerId,
+      providerImportedAt: now,
+      providerBaseUrl: mediaCatalogSettings().baseUrl,
+      providerPlayback: {
+        format: format || "",
+        browserSupport: asString(playback.browser_support),
+        strategy: asString(playback.strategy)
+      },
+      addedAt: today(),
+      updatedBy: state.authUser.uid
+    };
+  }
+
+  async function persistMediaMovieBatch(batch) {
+    if (!batch.length) return 0;
+    if (typeof state.firebase?.saveContentBatch === "function") {
+      const result = await state.firebase.saveContentBatch(batch);
+      return asNumber(result?.count, batch.length);
+    }
+    let saved = 0;
+    for (const item of batch) {
+      await state.firebase.saveDocument("content", item.id, item);
+      saved += 1;
+    }
+    return saved;
+  }
+
+  async function importAllMediaApiMovies() {
+    if (!isAdmin() || state.mediaApi.syncRunning) return;
+    const settings = mediaCatalogSettings();
+    if (!settings.enabled) {
+      setMediaApiMessage("فعّل Media Catalog من الإعدادات أولاً.", "error");
+      return;
+    }
+    if (!settings.syncEnabled) {
+      setMediaApiMessage("فعّل «المزامنة عبر API» من الإعدادات ثم احفظ الإعدادات.", "error");
+      toast("المزامنة عبر API متوقفة", "error");
+      return;
+    }
+    if (!state.firebase) {
+      setMediaApiMessage("قاعدة بيانات CINARO غير متصلة حالياً.", "error");
+      return;
+    }
+
+    const confirmed = window.confirm("سيتم إضافة جميع الأفلام الجديدة من Media Catalog ونشرها مباشرة داخل CINARO. الأفلام الموجودة مسبقاً لن تتكرر. متابعة؟");
+    if (!confirmed) return;
+
+    state.mediaApi.syncRunning = true;
+    state.mediaApi.syncCancelled = false;
+    const stats = { total: 0, processed: 0, added: 0, duplicates: 0, skipped: 0, failed: 0 };
+    setMediaApiSyncUi(stats);
+    setMediaApiMessage("جاري قراءة كتالوج الأفلام…", "pending");
+
+    const knownProviderIds = new Set(
+      state.content
+        .filter((item) => asString(item?.provider) === "media-catalog")
+        .map((item) => asString(item?.providerId))
+        .filter(Boolean)
+    );
+    const knownContentIds = new Set(state.content.map((item) => asString(item?.id)).filter(Boolean));
+
+    try {
+      let page = 1;
+      let pages = 1;
+
+      while (page <= pages && !state.mediaApi.syncCancelled) {
+        const response = await mediaApiRequest("/movies", { page, limit: 100 });
+        const rows = toArray(response?.data);
+        const pagination = response?.pagination || {};
+        stats.total = Math.max(stats.total, asNumber(pagination.total, rows.length));
+        pages = Math.max(1, asNumber(pagination.pages, Math.ceil(stats.total / 100) || 1));
+
+        const pending = [];
+        for (const item of rows) {
+          if (state.mediaApi.syncCancelled) break;
+          const providerId = asString(item?.id);
+          const generatedId = mediaContentId(providerId);
+
+          if (!providerId || knownProviderIds.has(providerId) || knownContentIds.has(generatedId)) {
+            stats.duplicates += 1;
+            stats.processed += 1;
+            continue;
+          }
+
+          const payload = mediaApiBulkMoviePayload(item);
+          if (!payload) {
+            stats.skipped += 1;
+            stats.processed += 1;
+            continue;
+          }
+
+          pending.push(payload);
+          knownProviderIds.add(providerId);
+          knownContentIds.add(payload.id);
+        }
+
+        for (let offset = 0; offset < pending.length && !state.mediaApi.syncCancelled; offset += 50) {
+          const batch = pending.slice(offset, offset + 50);
+          try {
+            const saved = await persistMediaMovieBatch(batch);
+            stats.added += saved;
+            stats.processed += batch.length;
+          } catch (batchError) {
+            console.warn("CINARO catalog batch failed, retrying individually", batchError);
+            for (const item of batch) {
+              if (state.mediaApi.syncCancelled) break;
+              try {
+                await state.firebase.saveDocument("content", item.id, item);
+                stats.added += 1;
+              } catch (itemError) {
+                console.warn("CINARO catalog movie import failed", item.id, itemError);
+                stats.failed += 1;
+              }
+              stats.processed += 1;
+            }
+          }
+          setMediaApiSyncUi(stats);
+          await new Promise((resolve) => window.setTimeout(resolve, 60));
+        }
+
+        if (!pending.length) setMediaApiSyncUi(stats);
+        setMediaApiMessage(
+          `صفحة ${page} من ${pages} · تمت إضافة ${formatNumber(stats.added)} فيلم حتى الآن…`,
+          "pending"
+        );
+        page += 1;
+        await new Promise((resolve) => window.setTimeout(resolve, 120));
+      }
+
+      const stopped = state.mediaApi.syncCancelled;
+      await state.firebase.logAudit(
+        stopped ? "إيقاف استيراد أفلام Media Catalog" : "استيراد جميع أفلام Media Catalog",
+        "media-catalog/movies",
+        `added=${stats.added} duplicates=${stats.duplicates} skipped=${stats.skipped} failed=${stats.failed}`,
+        state.authUser
+      );
+
+      setMediaApiSyncUi(stats);
+      setMediaApiMessage(
+        stopped
+          ? `تم إيقاف العملية. أضيف ${formatNumber(stats.added)} فيلم قبل الإيقاف.`
+          : `اكتملت الإضافة: ${formatNumber(stats.added)} جديد · ${formatNumber(stats.duplicates)} موجود مسبقاً · ${formatNumber(stats.skipped)} متخطى · ${formatNumber(stats.failed)} فشل.`,
+        stopped ? "" : (stats.failed ? "error" : "success")
+      );
+      toast(stopped ? "تم إيقاف استيراد الأفلام" : "اكتمل استيراد جميع الأفلام", stats.failed ? "error" : "");
+    } catch (error) {
+      console.error("CINARO full movie import failed", error);
+      setMediaApiMessage(errorMessage(error), "error");
+      toast("تعذر إكمال استيراد جميع الأفلام", "error");
+    } finally {
+      state.mediaApi.syncRunning = false;
+      state.mediaApi.syncCancelled = false;
+      setMediaApiSyncUi(stats);
+    }
+  }
+
+  function cancelMediaApiSync() {
+    if (!state.mediaApi.syncRunning) return;
+    state.mediaApi.syncCancelled = true;
+    setMediaApiMessage("سيتم إيقاف العملية بعد انتهاء الدفعة الحالية…", "pending");
   }
 
   async function testMediaApiConnection() {
@@ -2538,6 +2784,8 @@
     });
     $("mediaApiSettingsForm")?.addEventListener("submit", saveMediaApiSettings);
     $("mediaApiTestButton")?.addEventListener("click", testMediaApiConnection);
+    $("mediaApiImportAllButton")?.addEventListener("click", importAllMediaApiMovies);
+    $("mediaApiCancelSyncButton")?.addEventListener("click", cancelMediaApiSync);
     $("tmdbSearchInput")?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
