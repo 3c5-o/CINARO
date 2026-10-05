@@ -18,6 +18,13 @@
         android:networkSecurityConfig="@xml/network_security_config">
 
         <activity
+            android:name=".NativePlayerActivity"
+            android:exported="false"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+            android:screenOrientation="sensorLandscape"
+            android:supportsPictureInPicture="true" />
+
+        <activity
             android:name=".MainActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
             android:exported="true"
