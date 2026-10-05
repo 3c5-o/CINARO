@@ -2958,7 +2958,7 @@ main {
     bottom: 0;
     height: calc(var(--bottom-height) + env(safe-area-inset-bottom));
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     padding: .25rem max(.3rem, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(.3rem, env(safe-area-inset-left));
     border-top: 1px solid var(--line);
     background: rgba(10, 12, 17, .92);
@@ -5085,7 +5085,7 @@ main#appMain {
 }
 
 .bottom-nav {
-  grid-template-columns: repeat(5, minmax(0,1fr));
+  grid-template-columns: repeat(6, minmax(0,1fr));
 }
 
 .nav-search-orb {
@@ -5964,3 +5964,79 @@ main#appMain {
   }
 }
 
+
+/* ===== CINARO 2.9 — Anime universe ===== */
+.anime-catalog-shell {
+  position: relative;
+}
+.anime-catalog-shell::before {
+  content:"";
+  position:fixed;
+  z-index:-1;
+  inset:0;
+  pointer-events:none;
+  background:
+    radial-gradient(circle at 82% 18%, rgba(124,82,255,.12), transparent 25rem),
+    radial-gradient(circle at 10% 68%, rgba(43,199,255,.07), transparent 24rem);
+}
+.anime-catalog-hero {
+  border-color:rgba(143,102,255,.18);
+  background:
+    radial-gradient(circle at 90% 10%,rgba(124,82,255,.18),transparent 28%),
+    linear-gradient(145deg,rgba(25,21,42,.96),rgba(10,12,19,.96));
+}
+.anime-catalog-hero .catalog-hero-icon {
+  border-color:rgba(143,102,255,.24);
+  background:linear-gradient(145deg,rgba(124,82,255,.2),rgba(61,42,120,.18));
+  color:#d5c7ff;
+}
+.anime-catalog-hero > div > span,
+.anime-home-section .section-heading > div > span {
+  color:#aa8cff;
+}
+.anime-badge {
+  border-color:rgba(143,102,255,.3)!important;
+  background:rgba(124,82,255,.22)!important;
+  color:#eee8ff!important;
+}
+.anime-dock {
+  border-color:rgba(124,82,255,.16)!important;
+  background:linear-gradient(145deg,rgba(124,82,255,.08),rgba(255,255,255,.02))!important;
+}
+.anime-dock .dock-icon {
+  background:linear-gradient(145deg,#7c52ff,#47269c)!important;
+  color:white!important;
+}
+.anime-home-section {
+  position:relative;
+  padding:1rem 0 .25rem;
+}
+.anime-home-section::before {
+  content:"";
+  position:absolute;
+  z-index:-1;
+  inset:-1rem -4vw;
+  border:1px solid rgba(124,82,255,.08);
+  border-radius:28px;
+  background:linear-gradient(145deg,rgba(124,82,255,.045),rgba(255,255,255,.005));
+}
+.anime-rail .media-card .poster-shell {
+  box-shadow:0 16px 45px rgba(59,32,130,.15);
+}
+@media (max-width:760px){
+  .bottom-nav button {
+    gap:.12rem;
+    font-size:.49rem;
+  }
+  .bottom-nav button svg {
+    width:1.14rem;
+    height:1.14rem;
+  }
+  .bottom-nav button::before {
+    width:1.15rem;
+  }
+  .anime-home-section::before {
+    inset:-.7rem -.55rem;
+    border-radius:20px;
+  }
+}
