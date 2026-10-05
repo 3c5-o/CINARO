@@ -2,7 +2,7 @@
   "use strict";
 
   let DATA = window.CINARO_DATA;
-  const WEB_APP_VERSION = "2.8.0";
+  const WEB_APP_VERSION = "2.9.0";
   const URL_APP_VERSION = new URLSearchParams(location.search).get("v")?.match(/^\d+\.\d+\.\d+$/)?.[0] || "";
   const NATIVE_APP_VERSION = navigator.userAgent.match(/CINARO\/(\d+\.\d+\.\d+)/i)?.[1] || "";
   const APP_VERSION = URL_APP_VERSION || NATIVE_APP_VERSION || WEB_APP_VERSION;
@@ -18,7 +18,8 @@
   const byId = (id) => document.getElementById(id);
   let itemMap = new Map(DATA.items.map((item) => [item.id, item]));
   let movies = DATA.items.filter((item) => item.kind === "movie");
-  let series = DATA.items.filter((item) => item.kind === "series");
+  let anime = DATA.items.filter((item) => item.kind === "series" && item.contentType === "anime");
+  let series = DATA.items.filter((item) => item.kind === "series" && item.contentType !== "anime");
 
   const STORAGE = {
     favorites: "cinaro:favorites:v1",
@@ -70,7 +71,8 @@
     heroTimer: null,
     catalog: {
       movie: { genre: "الكل", sort: "latest", visible: 60 },
-      series: { genre: "الكل", sort: "latest", visible: 60 }
+      series: { genre: "الكل", sort: "latest", visible: 60 },
+      anime: { genre: "الكل", sort: "latest", visible: 60 }
     },
     searchQuery: "",
     searchType: "all",
@@ -113,6 +115,7 @@
     bottomNav: byId("bottomNav"),
     home: byId("homeView"),
     movies: byId("moviesView"),
+    anime: byId("animeView"),
     series: byId("seriesView"),
     library: byId("libraryView"),
     search: byId("searchView"),
@@ -668,7 +671,8 @@
     };
     itemMap = new Map(DATA.items.map((item) => [item.id, item]));
     movies = DATA.items.filter((item) => item.kind === "movie");
-    series = DATA.items.filter((item) => item.kind === "series");
+    anime = DATA.items.filter((item) => item.kind === "series" && item.contentType === "anime");
+    series = DATA.items.filter((item) => item.kind === "series" && item.contentType !== "anime");
     state.heroIndex = 0;
     if (!DATA.items.length) {
       setSupabaseStatus("connected", state.remoteConfig.maintenance ? "وضع الصيانة مفعل من الإدارة" : "الخدمة جاهزة — لم يُنشر محتوى بعد");
@@ -942,13 +946,14 @@
 
   function mediaCard(item) {
     const favorite = favorites.has(item.id);
-    const genre = Array.isArray(item.genres) && item.genres.length ? item.genres[0] : (item.kind === "movie" ? "فيلم" : "مسلسل");
+    const visualType = item.contentType === "anime" ? "أنمي" : (item.contentType === "anime" ? "أنمي" : (item.kind === "movie" ? "فيلم" : "مسلسل"));
+    const genre = Array.isArray(item.genres) && item.genres.length ? item.genres[0] : visualType;
     return `
       <article class="media-card" tabindex="0" role="link" data-route="details/${escapeAttribute(item.id)}" aria-label="تفاصيل ${escapeAttribute(item.title)}">
         <div class="poster-shell">
           ${imageMarkup(item.poster, `غلاف ${item.title}`)}
           <div class="card-topline">
-            <span class="kind-badge">${item.kind === "movie" ? "فيلم" : "مسلسل"}</span>
+            <span class="kind-badge ${item.contentType === "anime" ? "anime-badge" : ""}">${visualType}</span>
             <span class="card-rating-pill">${icon("star")} ${escapeHTML(item.rating)}</span>
           </div>
           <button class="favorite-button ${favorite ? "active" : ""}" type="button" data-action="toggle-favorite" data-item-id="${escapeAttribute(item.id)}" aria-label="${favorite ? "إزالة من قائمتي" : "إضافة إلى قائمتي"}">
@@ -1048,7 +1053,7 @@
           <div class="hero-copy">
             <div class="hero-kickers">
               <span class="eyebrow">CINARO PREMIERE</span>
-              <span class="hero-genre">${escapeHTML(genreLine || (item.kind === "movie" ? "فيلم" : "مسلسل"))}</span>
+              <span class="hero-genre">${escapeHTML(genreLine || (item.contentType === "anime" ? "أنمي" : (item.kind === "movie" ? "فيلم" : "مسلسل")))}</span>
             </div>
             <h1>${escapeHTML(item.title)}</h1>
             <p class="english-title">${escapeHTML(item.englishTitle || "")}</p>
@@ -1062,7 +1067,7 @@
           </div>
           <button class="hero-poster-card" type="button" data-route="details/${escapeAttribute(item.id)}" aria-label="فتح تفاصيل ${escapeAttribute(item.title)}">
             ${imageMarkup(item.poster, `غلاف ${item.title}`, "hero-poster", "eager")}
-            <span><b>${escapeHTML(item.title)}</b><small>${item.kind === "movie" ? "فيلم" : "مسلسل"} • ${escapeHTML(item.year)}</small></span>
+            <span><b>${escapeHTML(item.title)}</b><small>${item.contentType === "anime" ? "أنمي" : (item.kind === "movie" ? "فيلم" : "مسلسل")} • ${escapeHTML(item.year)}</small></span>
           </button>
         </div>
         <div class="hero-footer content-shell">
@@ -1091,6 +1096,7 @@
     const latest = sortItems(DATA.items, "latest").slice(0, 12);
     const topRated = sortItems(DATA.items, "rating").slice(0, 10);
     const featuredSeries = sortItems(series, "popular").slice(0, 10);
+    const featuredAnime = sortItems(anime, "popular").slice(0, 10);
     const customSections = state.sections.map((section) => ({
       ...section,
       items: sortItems(DATA.items.filter((item) => item.sectionIds?.includes(section.id)), "latest").slice(0, 12)
@@ -1100,6 +1106,7 @@
       <div id="homeHero"></div>
       <div class="content-shell discovery-dock" aria-label="اختصارات CINARO">
         <button type="button" data-route="movies"><span class="dock-icon">${icon("film")}</span><span><b>الأفلام</b><small>${movies.length} عنوان</small></span>${icon("chevron-left")}</button>
+        <button type="button" data-route="anime" class="anime-dock"><span class="dock-icon">${icon("tv")}</span><span><b>الأنمي</b><small>${anime.length} عنوان</small></span>${icon("chevron-left")}</button>
         <button type="button" data-route="series"><span class="dock-icon">${icon("tv")}</span><span><b>المسلسلات</b><small>${series.length} مسلسل</small></span>${icon("chevron-left")}</button>
         <button type="button" data-route="search"><span class="dock-icon">${icon("search")}</span><span><b>اكتشف بسرعة</b><small>بحث مباشر</small></span>${icon("chevron-left")}</button>
         <button type="button" data-route="library"><span class="dock-icon">${icon("heart")}</span><span><b>مساحتك</b><small>المفضلة والمتابعة</small></span>${icon("chevron-left")}</button>
@@ -1122,6 +1129,10 @@
           ${sectionHeading("تقييمات مرتفعة", "اختيارات مميزة", "movies")}
           <div class="media-rail">${topRated.map(mediaCard).join("")}</div>
         </section>
+        ${featuredAnime.length ? `<section class="content-section anime-home-section">
+          ${sectionHeading("عالم الأنمي داخل CINARO", "أنمي مختار", "anime")}
+          <div class="media-rail anime-rail">${featuredAnime.map(mediaCard).join("")}</div>
+        </section>` : ""}
         <section class="content-section">
           ${sectionHeading("مواسم وحلقات تستحق الوقت", "مسلسلات مختارة", "series")}
           <div class="media-rail">${featuredSeries.map(mediaCard).join("")}</div>
@@ -1147,23 +1158,28 @@
   }
 
   function catalogTemplate(kind) {
-    const source = kind === "movie" ? movies : series;
+    const source = kind === "movie" ? movies : kind === "anime" ? anime : series;
     const config = state.catalog[kind];
     const genres = ["الكل", ...new Set(source.flatMap((item) => item.genres))];
     const filtered = source.filter((item) => config.genre === "الكل" || item.genres.includes(config.genre));
     const sorted = sortItems(filtered, config.sort);
     const visibleCount = Number.isFinite(Number(config.visible)) ? Number(config.visible) : 60;
     const visible = sorted.slice(0, Math.max(30, visibleCount));
-    const title = kind === "movie" ? "الأفلام" : "المسلسلات";
-    const kicker = kind === "movie" ? "CINEMA COLLECTION" : "SERIES COLLECTION";
-    const description = kind === "movie" ? "كل أفلام CINARO في مكان واحد، بترتيب أسرع وفلاتر أوضح." : "المسلسلات والمواسم والحلقات مرتبة لتوصل للي تريده بأقل خطوات.";
+    const title = kind === "movie" ? "الأفلام" : kind === "anime" ? "الأنمي" : "المسلسلات";
+    const kicker = kind === "movie" ? "CINEMA COLLECTION" : kind === "anime" ? "ANIME UNIVERSE" : "SERIES COLLECTION";
+    const description = kind === "movie"
+      ? "كل أفلام CINARO في مكان واحد، بترتيب أسرع وفلاتر أوضح."
+      : kind === "anime"
+        ? "أنمي مرتب حسب العناوين والمواسم والحلقات، مع انتقال سريع للمشاهدة."
+        : "المسلسلات والمواسم والحلقات مرتبة لتوصل للي تريده بأقل خطوات.";
+    const countLabel = kind === "movie" ? "فيلم" : kind === "anime" ? "أنمي" : "مسلسل";
 
     return `
-      <div class="content-shell page-shell catalog-shell">
-        <div class="catalog-hero">
+      <div class="content-shell page-shell catalog-shell ${kind === "anime" ? "anime-catalog-shell" : ""}">
+        <div class="catalog-hero ${kind === "anime" ? "anime-catalog-hero" : ""}">
           <div class="catalog-hero-icon">${icon(kind === "movie" ? "film" : "tv")}</div>
           <div><span>${kicker}</span><h1>${title}</h1><p>${description}</p></div>
-          <div class="catalog-count"><b>${source.length}</b><small>${kind === "movie" ? "فيلم" : "مسلسل"}</small></div>
+          <div class="catalog-count"><b>${source.length}</b><small>${countLabel}</small></div>
         </div>
         <div class="filter-panel premium-filter">
           <div class="chip-row" aria-label="التصنيفات">
@@ -1176,22 +1192,22 @@
             <option value="oldest" ${config.sort === "oldest" ? "selected" : ""}>الأقدم</option>
           </select>
         </div>
-        <div class="catalog-result-line"><span>النتائج</span><b>${sorted.length} ${kind === "movie" ? "فيلم" : "مسلسل"}</b></div>
+        <div class="catalog-result-line"><span>النتائج</span><b>${sorted.length} ${countLabel}</b></div>
         <div class="media-grid">${mediaGrid(visible, `لا يوجد ${title} ضمن هذا التصنيف.`)}</div>
         ${visible.length < sorted.length ? `<div class="load-more-wrap"><button class="button secondary" type="button" data-action="catalog-more" data-kind="${kind}">عرض المزيد (${sorted.length - visible.length})</button></div>` : ""}
       </div>`;
   }
 
   function renderCatalog(kind) {
-    const target = kind === "movie" ? elements.movies : elements.series;
+    const target = kind === "movie" ? elements.movies : kind === "anime" ? elements.anime : elements.series;
     target.innerHTML = catalogTemplate(kind);
   }
-
   function searchResults() {
     const query = normalizeArabic(state.searchQuery);
     if (!query) return [];
     return DATA.items.filter((item) => {
-      const typeMatches = state.searchType === "all" || item.kind === state.searchType;
+      const visualType = item.contentType === "anime" ? "anime" : item.kind;
+      const typeMatches = state.searchType === "all" || visualType === state.searchType;
       const haystack = normalizeArabic([item.title, item.englishTitle, item.year, ...item.genres, item.description].join(" "));
       return typeMatches && haystack.includes(query);
     });
@@ -1207,7 +1223,7 @@
     clearButton?.toggleAttribute("hidden", !state.searchQuery);
     if (!state.searchQuery.trim()) {
       countNode.textContent = "";
-      resultsNode.innerHTML = emptyState("search", "ابحث داخل CINARO", "اكتب اسم فيلم أو مسلسل أو تصنيف للوصول إليه مباشرة.", "", "");
+      resultsNode.innerHTML = emptyState("search", "ابحث داخل CINARO", "اكتب اسم فيلم أو مسلسل أو أنمي أو تصنيف للوصول إليه مباشرة.", "", "");
       return;
     }
     countNode.textContent = `${results.length} نتيجة`;
@@ -1228,13 +1244,14 @@
         <div class="search-header">
           <label class="search-box">
             ${icon("search")}
-            <input id="searchInput" type="search" inputmode="search" autocomplete="off" spellcheck="false" value="${escapeAttribute(state.searchQuery)}" placeholder="ابحث عن فيلم، مسلسل، أكشن..." aria-label="عبارة البحث">
+            <input id="searchInput" type="search" inputmode="search" autocomplete="off" spellcheck="false" value="${escapeAttribute(state.searchQuery)}" placeholder="ابحث عن فيلم، مسلسل، أنمي..." aria-label="عبارة البحث">
             <button id="clearSearchButton" class="clear-search" type="button" data-action="clear-search" aria-label="مسح البحث" ${state.searchQuery ? "" : "hidden"}>${icon("x")}</button>
           </label>
           <div class="chip-row search-filters" aria-label="نوع نتيجة البحث">
             <button class="chip ${state.searchType === "all" ? "active" : ""}" type="button" data-action="search-type" data-type="all">الكل</button>
             <button class="chip ${state.searchType === "movie" ? "active" : ""}" type="button" data-action="search-type" data-type="movie">أفلام</button>
             <button class="chip ${state.searchType === "series" ? "active" : ""}" type="button" data-action="search-type" data-type="series">مسلسلات</button>
+            <button class="chip ${state.searchType === "anime" ? "active" : ""}" type="button" data-action="search-type" data-type="anime">أنمي</button>
           </div>
         </div>
         <div id="searchCount" class="result-count"></div>
@@ -1456,7 +1473,7 @@
         <div class="content-shell details-body">
           ${imageMarkup(item.poster, `غلاف ${item.title}`, "details-poster", "eager")}
           <div class="details-copy">
-            <span class="eyebrow">${item.kind === "movie" ? "فيلم" : `${item.seasons.length} موسم`}</span>
+            <span class="eyebrow">${item.contentType === "anime" ? `أنمي · ${item.seasons.length} موسم` : item.kind === "movie" ? "فيلم" : `${item.seasons.length} موسم`}</span>
             <h1>${escapeHTML(item.title)}</h1>
             <p class="english-title">${escapeHTML(item.englishTitle || "")}</p>
             ${metaRow(item)}
@@ -1498,15 +1515,15 @@
     let active = route.name;
     if (route.name === "details") {
       const item = itemMap.get(route.parts[1]);
-      active = item?.kind === "series" ? "series" : "movies";
+      active = item?.contentType === "anime" ? "anime" : item?.kind === "series" ? "series" : "movies";
     }
-    document.querySelectorAll('[data-route="home"], [data-route="movies"], [data-route="series"], [data-route="search"], [data-route="library"]')
+    document.querySelectorAll('[data-route="home"], [data-route="movies"], [data-route="anime"], [data-route="series"], [data-route="search"], [data-route="library"]')
       .forEach((button) => button.classList.toggle("active", button.dataset.route === active));
   }
 
   function renderRoute() {
     const route = parseRoute();
-    const validViews = new Set(["home", "movies", "series", "library", "search", "details", "watch"]);
+    const validViews = new Set(["home", "movies", "anime", "series", "library", "search", "details", "watch"]);
     if (!validViews.has(route.name)) {
       navigate("home", true);
       return;
@@ -1540,6 +1557,9 @@
       } else if (route.name === "movies") {
         renderCatalog("movie");
         setDocumentTitle("الأفلام");
+      } else if (route.name === "anime") {
+        renderCatalog("anime");
+        setDocumentTitle("الأنمي");
       } else if (route.name === "series") {
         renderCatalog("series");
         setDocumentTitle("المسلسلات");
@@ -1556,6 +1576,7 @@
       console.error("CINARO view render failed", route.name, error);
       const target = route.name === "home" ? elements.home
         : route.name === "movies" ? elements.movies
+        : route.name === "anime" ? elements.anime
         : route.name === "series" ? elements.series
         : route.name === "library" ? elements.library
         : route.name === "search" ? elements.search
@@ -1576,6 +1597,7 @@
     try {
       if (route.name === "home") renderHome();
       else if (route.name === "movies") renderCatalog("movie");
+      else if (route.name === "anime") renderCatalog("anime");
       else if (route.name === "series") renderCatalog("series");
       else if (route.name === "library") renderLibrary();
       else if (route.name === "search") renderSearchResultsOnly();
