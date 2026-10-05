@@ -467,11 +467,15 @@
       if (pathname.endsWith(".m3u8")) return "application/vnd.apple.mpegurl";
       if (pathname.endsWith(".mp4") || pathname.endsWith(".m4v")) return "video/mp4";
       if (pathname.endsWith(".webm")) return "video/webm";
+      if (pathname.endsWith(".mkv")) return "video/x-matroska";
+      if (pathname.endsWith(".ogg") || pathname.endsWith(".ogv")) return "video/ogg";
       if (pathname.endsWith(".ts")) return "video/mp2t";
     } catch (_) {}
     if (/\.m3u8(?:$|[?#])/i.test(input)) return "application/vnd.apple.mpegurl";
     if (/\.(?:mp4|m4v)(?:$|[?#])/i.test(input)) return "video/mp4";
     if (/\.webm(?:$|[?#])/i.test(input)) return "video/webm";
+    if (/\.mkv(?:$|[?#])/i.test(input)) return "video/x-matroska";
+    if (/\.(?:ogg|ogv)(?:$|[?#])/i.test(input)) return "video/ogg";
     if (/\.ts(?:$|[?#])/i.test(input)) return "video/mp2t";
     return asString(fallback, "video/mp4").slice(0, 80);
   }
@@ -533,7 +537,7 @@
   }
 
   function collectDraftPlaybackUrls() {
-    const kind = $("contentKind")?.value === "series" ? "series" : "movie";
+    const kind = ["series", "anime"].includes($("contentKind")?.value) ? "series" : "movie";
     const sources = [];
     const collect = (value) => {
       const input = asString(value);
@@ -2737,7 +2741,9 @@
       if (willPublish && usesTelegramStorage && !telegramGatewayBase()) {
         throw new Error("بوابة CINARO Storage غير مربوطة بعد. يمكن حفظ المحتوى كمسودة، لكن لا يمكن نشر مصدر Telegram قبل تشغيل البوابة.");
       }
+      if (contentType === "anime" && isAdmin()) await ensureAnimeSection();
       let sectionIds = parseCsv($("contentSections").value);
+      if (contentType === "anime" && !sectionIds.includes("anime")) sectionIds.unshift("anime");
       if (isAdmin()) sectionIds = normalizeSectionSelection(contentType, sectionIds);
       if (!isAdmin()) {
         const allowed = assignedSectionIds();
@@ -2776,7 +2782,11 @@
         provider: requestedProvider,
         providerId: requestedProviderId,
         providerImportedAt: requestedProvider && requestedProviderId ? Date.now() : asNumber(existing?.providerImportedAt, 0),
-        providerBaseUrl: requestedProvider === "media-catalog" ? mediaCatalogSettings().baseUrl : asString(existing?.providerBaseUrl),
+        providerBaseUrl: requestedProvider === "media-catalog"
+          ? mediaCatalogSettings().baseUrl
+          : requestedProvider === "media-catalog-anime"
+            ? animeApiSettings().baseUrl
+            : asString(existing?.providerBaseUrl),
         addedAt: existing?.addedAt || today(),
         updatedBy: state.authUser.uid
       };
