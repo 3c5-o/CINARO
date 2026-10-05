@@ -126,6 +126,7 @@ const normalizeContentRow = (row) => {
   const item = {
     id,
     kind,
+    contentType: raw.contentType === "anime" ? "anime" : kind,
     title,
     englishTitle: textValue(raw.englishTitle, "", 180),
     year: Math.round(numberValue(raw.year, new Date().getFullYear(), 1888, 2200)),
