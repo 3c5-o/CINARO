@@ -1771,3 +1771,10 @@ textarea:focus {
   }
 }
 
+
+.tmdb-result-card.is-imported,
+.tmdb-result-card:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+  transform: none;
+}
