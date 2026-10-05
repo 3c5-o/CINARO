@@ -567,6 +567,17 @@
     if (!url) {
       return Promise.resolve({ input, ok: false, reason: "المصدر ليس رابط HTTPS ولا CINARO Storage ID صالحاً." });
     }
+    const mediaType = inferMediaType(url);
+    if (mediaType === "video/x-matroska") {
+      return Promise.resolve({
+        input, url,
+        ok: adminNativePlayerAvailable(),
+        reason: adminNativePlayerAvailable() ? "MKV مدعوم عبر Media3 داخل APK." : "MKV يحتاج تطبيق Android."
+      });
+    }
+    if (mediaType === "video/mp2t" && (window.mpegts?.isSupported?.() || adminNativePlayerAvailable())) {
+      return Promise.resolve({ input, url, ok: true, reason: "TS مدعوم عبر mpegts.js أو Media3." });
+    }
     return new Promise((resolve) => {
       const video = document.createElement("video");
       video.preload = "metadata";
