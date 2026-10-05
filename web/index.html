@@ -20,7 +20,7 @@
   <link rel="manifest" href="manifest.webmanifest?v=2.8.0">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=2.8.0">
+  <link rel="stylesheet" href="styles.css?v=2.9.0-anime">
 </head>
 <body class="booting">
   <noscript>
@@ -167,6 +167,7 @@
     <nav class="desktop-nav" aria-label="التنقل الرئيسي">
       <button type="button" data-route="home">الرئيسية</button>
       <button type="button" data-route="movies">الأفلام</button>
+      <button type="button" data-route="anime">الأنمي</button>
       <button type="button" data-route="series">المسلسلات</button>
       <button type="button" data-route="library">قائمتي</button>
     </nav>
@@ -184,6 +185,7 @@
   <main id="appMain" tabindex="-1">
     <section id="homeView" class="view" data-view="home" aria-label="الرئيسية"></section>
     <section id="moviesView" class="view" data-view="movies" aria-label="الأفلام"></section>
+    <section id="animeView" class="view anime-view" data-view="anime" aria-label="الأنمي"></section>
     <section id="seriesView" class="view" data-view="series" aria-label="المسلسلات"></section>
     <section id="libraryView" class="view" data-view="library" aria-label="قائمتي"></section>
     <section id="searchView" class="view" data-view="search" aria-label="البحث"></section>
@@ -196,6 +198,9 @@
     </button>
     <button type="button" data-route="movies">
       <svg aria-hidden="true"><use href="#i-film"></use></svg><span>الأفلام</span>
+    </button>
+    <button type="button" data-route="anime">
+      <svg aria-hidden="true"><use href="#i-tv"></use></svg><span>الأنمي</span>
     </button>
     <button type="button" data-route="search" class="nav-search">
       <span class="nav-search-orb"><svg aria-hidden="true"><use href="#i-search"></use></svg></span><span>البحث</span>
@@ -469,8 +474,9 @@
   </svg>
 
   <script src="data.js" defer></script>
-  <script src="supabase.js?v=2.8.0" type="module"></script>
+  <script src="supabase.js?v=2.9.0-anime" type="module"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="app.js?v=2.8.0" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.8.2/dist/mpegts.min.js" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="app.js?v=2.9.0-anime" defer></script>
 </body>
 </html>
