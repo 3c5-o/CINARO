@@ -152,7 +152,7 @@ assert(webSw.includes('"./supabase.js"'), "user PWA caches Supabase client");
 assert(adminSw.includes('cinaro-admin-v2.9.0'), "admin PWA cache bumped");
 assert(adminSw.includes('"./supabase.js"'), "admin PWA caches Supabase client");
 
-assert(buildGradle.includes("versionCode 20"), "Android versionCode is 20");
+assert(/\bversionCode\s+20\b/.test(buildGradle), "Android versionCode is 20");
 assert(buildGradle.includes('versionName "2.9.0"'), "Android user version is 2.9.0");
 assert(buildGradle.includes('versionName "2.9.0-admin"'), "Android admin version is 2.9.0-admin");
 assert(buildGradle.includes("?v=2.9.0#home"), "user APK URL carries native release version");
