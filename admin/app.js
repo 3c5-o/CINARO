@@ -32,6 +32,7 @@
     unsubscribers: [],
     dataListenersStarted: false,
     previewHls: null,
+    previewMpegTs: null,
     tmdb: { importMode: "manual", results: [], configuration: null, busy: false, syncRunning: false, syncCancelled: false },
     mediaApi: { results: [], busy: false, syncRunning: false, syncCancelled: false },
     animeApi: { results: [], busy: false, syncRunning: false, syncCancelled: false },
@@ -3137,6 +3138,30 @@
     state.previewHls = null;
   }
 
+  function destroyPreviewMpegTs() {
+    if (!state.previewMpegTs) return;
+    try { state.previewMpegTs.pause(); } catch (_) {}
+    try { state.previewMpegTs.unload(); } catch (_) {}
+    try { state.previewMpegTs.detachMediaElement(); } catch (_) {}
+    try { state.previewMpegTs.destroy(); } catch (_) {}
+    state.previewMpegTs = null;
+  }
+
+  function adminNativePlayerAvailable() {
+    try { return Boolean(window.CinaroNative?.nativePlayerAvailable?.()); }
+    catch (_) { return false; }
+  }
+
+  function openAdminNativePlayer(url, title) {
+    if (!adminNativePlayerAvailable()) return false;
+    try {
+      window.CinaroNative.openNativePlayer(String(url), String(title || "CINARO"));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   function openMediaPreview(sourceInput, title = "معاينة الفيديو") {
     const storageId = normalizeStorageId(sourceInput);
     const safeUrl = playbackInputUrl(sourceInput);
@@ -3146,18 +3171,55 @@
     }
     const dialog = $("mediaPreviewDialog");
     const video = $("mediaPreviewVideo");
+    const mediaType = inferMediaType(safeUrl);
     $("mediaPreviewTitle").textContent = title;
     $("mediaPreviewMessage").textContent = storageId
       ? `معاينة CINARO Storage: ${storageId}`
-      : "إذا لم يبدأ الفيديو، فتحقق أن الرابط مباشر ويسمح بالتشغيل من التطبيق.";
+      : "المشغل يختار المحرك المناسب حسب صيغة المصدر.";
     $("mediaPreviewMessage").className = "form-message";
     dialog.hidden = false;
     video.pause();
     destroyPreviewHls();
+    destroyPreviewMpegTs();
     video.removeAttribute("src");
     video.load();
 
-    if (inferMediaType(safeUrl) === "application/vnd.apple.mpegurl") {
+    if (mediaType === "video/x-matroska") {
+      if (openAdminNativePlayer(safeUrl, title)) {
+        $("mediaPreviewMessage").textContent = "تم فتح MKV بالمشغل الأصلي Media3.";
+        $("mediaPreviewMessage").className = "form-message success";
+        return;
+      }
+      $("mediaPreviewMessage").textContent = "MKV يحتاج تطبيق Android لاستخدام المشغل الأصلي Media3.";
+      $("mediaPreviewMessage").className = "form-message error";
+      return;
+    }
+
+    if (mediaType === "video/mp2t") {
+      const runtime = window.mpegts;
+      if (runtime?.isSupported?.()) {
+        try {
+          const player = runtime.createPlayer({ type: "mpegts", isLive: false, url: safeUrl }, {
+            enableWorker: true,
+            lazyLoad: true,
+            autoCleanupSourceBuffer: true
+          });
+          state.previewMpegTs = player;
+          player.attachMediaElement(video);
+          player.load();
+          video.play().catch(() => {});
+          return;
+        } catch (error) {
+          destroyPreviewMpegTs();
+        }
+      }
+      if (openAdminNativePlayer(safeUrl, title)) return;
+      $("mediaPreviewMessage").textContent = "تعذّر تشغيل TS على هذا الجهاز.";
+      $("mediaPreviewMessage").className = "form-message error";
+      return;
+    }
+
+    if (mediaType === "application/vnd.apple.mpegurl") {
       const HlsRuntime = window.Hls;
       if (HlsRuntime?.isSupported?.()) {
         const hls = new HlsRuntime({ enableWorker: true, backBufferLength: 60 });
@@ -3167,6 +3229,10 @@
         });
         hls.on(HlsRuntime.Events.ERROR, (_event, data) => {
           if (!data?.fatal || state.previewHls !== hls) return;
+          if (openAdminNativePlayer(safeUrl, title)) {
+            closeMediaPreview();
+            return;
+          }
           $("mediaPreviewMessage").textContent = "تعذّر تشغيل مصدر HLS. تحقق من CORS وصلاحية الرابط.";
           $("mediaPreviewMessage").className = "form-message error";
         });
@@ -3175,6 +3241,10 @@
         return;
       }
       if (!video.canPlayType("application/vnd.apple.mpegurl")) {
+        if (openAdminNativePlayer(safeUrl, title)) {
+          closeMediaPreview();
+          return;
+        }
         $("mediaPreviewMessage").textContent = "هذا الجهاز لا يدعم معاينة HLS.";
         $("mediaPreviewMessage").className = "form-message error";
         return;
@@ -3190,6 +3260,7 @@
     const video = $("mediaPreviewVideo");
     video.pause();
     destroyPreviewHls();
+    destroyPreviewMpegTs();
     video.removeAttribute("src");
     video.load();
     $("mediaPreviewDialog").hidden = true;
