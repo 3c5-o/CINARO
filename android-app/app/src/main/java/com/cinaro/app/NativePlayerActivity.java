@@ -18,9 +18,11 @@ import android.widget.Toast;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
+import androidx.media3.common.util.UnstableApi;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.ui.PlayerView;
 
+@UnstableApi
 public class NativePlayerActivity extends Activity {
     public static final String EXTRA_URL = "cinaro_player_url";
     public static final String EXTRA_TITLE = "cinaro_player_title";
