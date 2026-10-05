@@ -292,6 +292,31 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public boolean nativePlayerAvailable() {
+            return true;
+        }
+
+        @JavascriptInterface
+        public void openNativePlayer(String url, String title) {
+            String safeUrl = url == null ? "" : url.trim();
+            if (safeUrl.isEmpty()) return;
+            Uri uri;
+            try {
+                uri = Uri.parse(safeUrl);
+            } catch (Exception error) {
+                return;
+            }
+            if (!"https".equalsIgnoreCase(uri.getScheme())) return;
+            String safeTitle = title == null ? "CINARO" : title.trim();
+            runOnUiThread(() -> {
+                Intent intent = new Intent(MainActivity.this, NativePlayerActivity.class);
+                intent.putExtra(NativePlayerActivity.EXTRA_URL, safeUrl);
+                intent.putExtra(NativePlayerActivity.EXTRA_TITLE, safeTitle);
+                startActivity(intent);
+            });
+        }
+
+        @JavascriptInterface
         public boolean notificationsAvailable() {
             return BuildConfig.ENABLE_PUSH;
         }
@@ -344,7 +369,7 @@ public class MainActivity extends Activity {
 
     private String sanitizeNotificationRoute(String route) {
         String value = route == null ? "" : route.trim().replaceFirst("^#", "");
-        if (value.matches("^(home|movies|series|library|search)$")) return value;
+        if (value.matches("^(home|movies|anime|series|library|search)$")) return value;
         if (value.matches("^details/[a-z0-9-]{1,150}$")) return value;
         if (value.matches("^watch/movie/[a-z0-9-]{1,150}$")) return value;
         if (value.matches("^watch/series/[a-z0-9-]{1,150}/\\d{1,4}/\\d{1,5}$")) return value;
