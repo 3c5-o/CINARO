@@ -3453,6 +3453,19 @@
     $("mediaApiTestButton")?.addEventListener("click", testMediaApiConnection);
     $("mediaApiImportAllButton")?.addEventListener("click", importAllMediaApiMovies);
     $("mediaApiCancelSyncButton")?.addEventListener("click", cancelMediaApiSync);
+    $("tmdbSyncMoviesButton")?.addEventListener("click", syncAllMoviesFromTmdb);
+    $("tmdbSyncMoviesSettingsButton")?.addEventListener("click", syncAllMoviesFromTmdb);
+    $("animeApiSearchButton")?.addEventListener("click", searchAnimeApi);
+    $("animeApiSearchInput")?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        searchAnimeApi();
+      }
+    });
+    $("animeApiImportAllButton")?.addEventListener("click", importAllAnimeApi);
+    $("animeApiCancelSyncButton")?.addEventListener("click", cancelAnimeApiSync);
+    $("animeApiSettingsForm")?.addEventListener("submit", saveAnimeApiSettings);
+    $("animeApiTestButton")?.addEventListener("click", testAnimeApiConnection);
     $("tmdbSearchInput")?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
