@@ -1493,7 +1493,14 @@
   }
 
   function parseRoute() {
-    const value = decodeURIComponent((location.hash || "#home").slice(1));
+    const rawHash = (location.hash || "#home").slice(1);
+    let value = rawHash;
+    try {
+      value = decodeURIComponent(rawHash);
+    } catch (_) {
+      // Malformed percent-encoded links must not crash the entire application.
+      value = "home";
+    }
     const parts = value.split("/").filter(Boolean);
     const name = parts[0] || "home";
     return { name, parts, raw: value };
