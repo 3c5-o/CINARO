@@ -2400,7 +2400,7 @@
 
     player.failedSources.add(player.sourceIndex);
     const nextIndex = player.media.sources.findIndex((source, index) => (
-      !player.failedSources.has(index) && Boolean(safeMediaUrl(source?.url, ""))
+      !player.failedSources.has(index) && Boolean(sourcePlaybackUrl(source))
     ));
 
     if (nextIndex >= 0) {
