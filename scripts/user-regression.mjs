@@ -99,7 +99,8 @@ console.log("PASS user navigation handles valid and malformed deep links");
     mapConfig: (row) => row,
     mapSection: (row) => row,
     throwIf: (error) => { if (error) throw error; },
-    window: { setTimeout },
+    window: { setTimeout, addEventListener() {}, removeEventListener() {} },
+    document: { visibilityState: "visible", addEventListener() {}, removeEventListener() {} },
     clearTimeout,
     console
   };
