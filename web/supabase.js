@@ -422,6 +422,7 @@ const client = {
     let retryAttempt = 0;
     let loading = false;
     let reloadRequested = false;
+    let lastSuccessfulLoadAt = 0;
     const PAGE_SIZE = 500;
 
     const loadAllPublished = async () => {
@@ -462,6 +463,7 @@ const client = {
       const featured = configured.filter((id) => present.has(id));
 
       retryAttempt = 0;
+      lastSuccessfulLoadAt = Date.now();
       clearTimeout(retryTimer);
       callback({
         items,
@@ -510,9 +512,17 @@ const client = {
       supabase.channel("cinaro-public-sections").on("postgres_changes", { event: "*", schema: "public", table: "sections" }, schedule).subscribe()
     ];
 
+    const refreshAfterResume = () => {
+      if (document.visibilityState === "visible" && Date.now() - lastSuccessfulLoadAt > 30000) schedule();
+    };
+    window.addEventListener("online", schedule);
+    document.addEventListener("visibilitychange", refreshAfterResume);
+
     runLoad();
     return () => {
       stopped = true;
+      window.removeEventListener("online", schedule);
+      document.removeEventListener("visibilitychange", refreshAfterResume);
       clearTimeout(refreshTimer);
       clearTimeout(retryTimer);
       channels.forEach((channel) => supabase.removeChannel(channel).catch(() => {}));
