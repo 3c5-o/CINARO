@@ -264,6 +264,9 @@ const client = {
     });
     throwIf(error);
     if (!data?.user) throw new Error("auth/signup-failed");
+    // When email confirmation is enabled Supabase returns a user without a session.
+    // Do not treat that response as an authenticated account.
+    if (!data.session) return { pendingVerification: true, email };
     return publicUser(data.user);
   },
 
