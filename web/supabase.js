@@ -413,21 +413,41 @@ const client = {
     let refreshTimer = 0;
     let retryTimer = 0;
     let retryAttempt = 0;
+    let loading = false;
+    let reloadRequested = false;
+    const PAGE_SIZE = 500;
+
+    const loadAllPublished = async () => {
+      const rows = [];
+      for (let offset = 0; !stopped; offset += PAGE_SIZE) {
+        const { data, error } = await supabase.from("content")
+          .select("*")
+          .eq("published", true)
+          .order("sort_order", { ascending: false })
+          .order("added_at", { ascending: false })
+          .order("id", { ascending: true })
+          .range(offset, offset + PAGE_SIZE - 1);
+        throwIf(error);
+        const page = data || [];
+        rows.push(...page);
+        if (page.length < PAGE_SIZE) break;
+      }
+      return rows;
+    };
 
     const load = async () => {
-      const [contentResult, configResult, sectionsResult] = await Promise.all([
-        supabase.from("content").select("*").eq("published", true).order("sort_order", { ascending: false }).order("added_at", { ascending: false }),
+      const [contentRows, configResult, sectionsResult] = await Promise.all([
+        loadAllPublished(),
         supabase.from("app_config").select("*").eq("id", "public").maybeSingle(),
         supabase.from("sections").select("*").eq("active", true).order("sort_order", { ascending: false })
       ]);
 
-      // Published content and release controls are mandatory; sections are decorative.
-      throwIf(contentResult.error);
+      // Never replace a good catalog with a partial page or a failed config response.
       throwIf(configResult.error);
       if (sectionsResult.error) console.warn("CINARO sections refresh skipped", sectionsResult.error);
       if (stopped) return;
 
-      const items = (contentResult.data || []).map(normalizeContentRow).filter(Boolean);
+      const items = contentRows.map(normalizeContentRow).filter(Boolean);
       const configRow = configResult.data || {};
       const configured = Array.isArray(configRow.featured) ? configRow.featured.map(String).slice(0, 12) : [];
       const present = new Set(items.map((item) => item.id));
@@ -444,14 +464,32 @@ const client = {
       });
     };
 
-    const runLoad = () => load().catch((error) => {
+    const runLoad = async () => {
       if (stopped) return;
-      onError?.(error);
-      clearTimeout(retryTimer);
-      const delay = Math.min(30000, 1500 * (2 ** Math.min(retryAttempt, 4)));
-      retryAttempt += 1;
-      retryTimer = window.setTimeout(runLoad, delay);
-    });
+      if (loading) {
+        reloadRequested = true;
+        return;
+      }
+      loading = true;
+      try {
+        await load();
+      } catch (error) {
+        if (!stopped) {
+          onError?.(error);
+          clearTimeout(retryTimer);
+          const delay = Math.min(30000, 1500 * (2 ** Math.min(retryAttempt, 4)));
+          retryAttempt += 1;
+          retryTimer = window.setTimeout(runLoad, delay);
+        }
+      } finally {
+        loading = false;
+        if (!stopped && reloadRequested) {
+          reloadRequested = false;
+          clearTimeout(retryTimer);
+          schedule();
+        }
+      }
+    };
 
     const schedule = () => {
       clearTimeout(refreshTimer);
