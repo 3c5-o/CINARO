@@ -442,6 +442,7 @@ const client = {
         supabase.from("sections").select("*").eq("active", true).order("sort_order", { ascending: false })
       ]);
 
+      // Published content and release controls are mandatory; sections are decorative.
       // Never replace a good catalog with a partial page or a failed config response.
       throwIf(configResult.error);
       if (sectionsResult.error) console.warn("CINARO sections refresh skipped", sectionsResult.error);
