@@ -2,7 +2,7 @@
   "use strict";
 
   let DATA = window.CINARO_DATA;
-  const WEB_APP_VERSION = "2.9.0";
+  const WEB_APP_VERSION = "2.9.1";
   const URL_APP_VERSION = new URLSearchParams(location.search).get("v")?.match(/^\d+\.\d+\.\d+$/)?.[0] || "";
   const NATIVE_APP_VERSION = navigator.userAgent.match(/CINARO\/(\d+\.\d+\.\d+)/i)?.[1] || "";
   const APP_VERSION = URL_APP_VERSION || NATIVE_APP_VERSION || WEB_APP_VERSION;
@@ -793,9 +793,13 @@
           email: byId("registerEmail").value,
           password
         });
-        state.authUser = user;
-        updateAccountUI();
-        toast("تم إنشاء حساب CINARO");
+        if (user?.pendingVerification) {
+          setAuthMessage("تم استلام طلب إنشاء الحساب. تحقق من بريدك الإلكتروني وأكمل التأكيد، ثم سجّل الدخول.", "success");
+        } else {
+          state.authUser = user;
+          updateAccountUI();
+          toast("تم إنشاء حساب CINARO");
+        }
       } catch (error) {
         setAuthMessage(authErrorMessage(error), "error");
       } finally {
@@ -1493,7 +1497,14 @@
   }
 
   function parseRoute() {
-    const value = decodeURIComponent((location.hash || "#home").slice(1));
+    const rawHash = (location.hash || "#home").slice(1);
+    let value = rawHash;
+    try {
+      value = decodeURIComponent(rawHash);
+    } catch (_) {
+      // Malformed percent-encoded links must not crash the entire application.
+      value = "home";
+    }
     const parts = value.split("/").filter(Boolean);
     const name = parts[0] || "home";
     return { name, parts, raw: value };
@@ -2393,7 +2404,7 @@
 
     player.failedSources.add(player.sourceIndex);
     const nextIndex = player.media.sources.findIndex((source, index) => (
-      !player.failedSources.has(index) && Boolean(safeMediaUrl(source?.url, ""))
+      !player.failedSources.has(index) && Boolean(sourcePlaybackUrl(source))
     ));
 
     if (nextIndex >= 0) {

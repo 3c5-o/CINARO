@@ -4,7 +4,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const SUPABASE_URL = "https://zmkkoggsqvwvwkanlyux.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_yYSX8h3eAkbP3_Xg6ZNpoA_E1CwAvJJ";
-const APP_VERSION = "2.9.0";
+const APP_VERSION = "2.9.1";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
@@ -237,6 +237,10 @@ const client = {
       if (!active) return;
       if (error && !String(error.message || "").toLowerCase().includes("session")) console.warn("CINARO auth restore", error);
       callback(publicUser(data?.user || null));
+    }).catch((error) => {
+      // A failed session lookup must not leave the login screen in its loading state.
+      console.warn("CINARO auth restore failed", error);
+      if (active) callback(null);
     });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (active) callback(publicUser(session?.user || null));
@@ -260,6 +264,9 @@ const client = {
     });
     throwIf(error);
     if (!data?.user) throw new Error("auth/signup-failed");
+    // When email confirmation is enabled Supabase returns a user without a session.
+    // Do not treat that response as an authenticated account.
+    if (!data.session) return { pendingVerification: true, email };
     return publicUser(data.user);
   },
 
@@ -413,27 +420,50 @@ const client = {
     let refreshTimer = 0;
     let retryTimer = 0;
     let retryAttempt = 0;
+    let loading = false;
+    let reloadRequested = false;
+    let lastSuccessfulLoadAt = 0;
+    const PAGE_SIZE = 500;
+
+    const loadAllPublished = async () => {
+      const rows = [];
+      for (let offset = 0; !stopped; offset += PAGE_SIZE) {
+        const { data, error } = await supabase.from("content")
+          .select("*")
+          .eq("published", true)
+          .order("sort_order", { ascending: false })
+          .order("added_at", { ascending: false })
+          .order("id", { ascending: true })
+          .range(offset, offset + PAGE_SIZE - 1);
+        throwIf(error);
+        const page = data || [];
+        rows.push(...page);
+        if (page.length < PAGE_SIZE) break;
+      }
+      return rows;
+    };
 
     const load = async () => {
-      const [contentResult, configResult, sectionsResult] = await Promise.all([
-        supabase.from("content").select("*").eq("published", true).order("sort_order", { ascending: false }).order("added_at", { ascending: false }),
+      const [contentRows, configResult, sectionsResult] = await Promise.all([
+        loadAllPublished(),
         supabase.from("app_config").select("*").eq("id", "public").maybeSingle(),
         supabase.from("sections").select("*").eq("active", true).order("sort_order", { ascending: false })
       ]);
 
       // Published content and release controls are mandatory; sections are decorative.
-      throwIf(contentResult.error);
+      // Never replace a good catalog with a partial page or a failed config response.
       throwIf(configResult.error);
       if (sectionsResult.error) console.warn("CINARO sections refresh skipped", sectionsResult.error);
       if (stopped) return;
 
-      const items = (contentResult.data || []).map(normalizeContentRow).filter(Boolean);
+      const items = contentRows.map(normalizeContentRow).filter(Boolean);
       const configRow = configResult.data || {};
       const configured = Array.isArray(configRow.featured) ? configRow.featured.map(String).slice(0, 12) : [];
       const present = new Set(items.map((item) => item.id));
       const featured = configured.filter((id) => present.has(id));
 
       retryAttempt = 0;
+      lastSuccessfulLoadAt = Date.now();
       clearTimeout(retryTimer);
       callback({
         items,
@@ -444,14 +474,32 @@ const client = {
       });
     };
 
-    const runLoad = () => load().catch((error) => {
+    const runLoad = async () => {
       if (stopped) return;
-      onError?.(error);
-      clearTimeout(retryTimer);
-      const delay = Math.min(30000, 1500 * (2 ** Math.min(retryAttempt, 4)));
-      retryAttempt += 1;
-      retryTimer = window.setTimeout(runLoad, delay);
-    });
+      if (loading) {
+        reloadRequested = true;
+        return;
+      }
+      loading = true;
+      try {
+        await load();
+      } catch (error) {
+        if (!stopped) {
+          onError?.(error);
+          clearTimeout(retryTimer);
+          const delay = Math.min(30000, 1500 * (2 ** Math.min(retryAttempt, 4)));
+          retryAttempt += 1;
+          retryTimer = window.setTimeout(runLoad, delay);
+        }
+      } finally {
+        loading = false;
+        if (!stopped && reloadRequested) {
+          reloadRequested = false;
+          clearTimeout(retryTimer);
+          schedule();
+        }
+      }
+    };
 
     const schedule = () => {
       clearTimeout(refreshTimer);
@@ -464,9 +512,17 @@ const client = {
       supabase.channel("cinaro-public-sections").on("postgres_changes", { event: "*", schema: "public", table: "sections" }, schedule).subscribe()
     ];
 
+    const refreshAfterResume = () => {
+      if (document.visibilityState === "visible" && Date.now() - lastSuccessfulLoadAt > 30000) schedule();
+    };
+    window.addEventListener("online", schedule);
+    document.addEventListener("visibilitychange", refreshAfterResume);
+
     runLoad();
     return () => {
       stopped = true;
+      window.removeEventListener("online", schedule);
+      document.removeEventListener("visibilitychange", refreshAfterResume);
       clearTimeout(refreshTimer);
       clearTimeout(retryTimer);
       channels.forEach((channel) => supabase.removeChannel(channel).catch(() => {}));
