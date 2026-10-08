@@ -99,6 +99,12 @@ assert(webSupabase.includes('signInWithPassword'), "user login uses Supabase Aut
 assert(webSupabase.includes('signUp'), "user registration uses Supabase Auth");
 assert(webSupabase.includes('.eq("published", true)'), "user catalog only requests published content");
 assert(webSupabase.includes("retryAttempt"), "user catalog retries transient load failures");
+assert(webSupabase.includes('const PAGE_SIZE = 500'), "user catalog paginates long listings");
+assert(webSupabase.includes('.range(offset, offset + PAGE_SIZE - 1)'), "user catalog loads consecutive pages");
+assert(webSupabase.includes('let loading = false') && webSupabase.includes('reloadRequested = true'), "user catalog prevents overlapping refreshes");
+assert(webSupabase.includes('CINARO auth restore failed') && webSupabase.includes('.catch((error) => {'), "user auth restore handles rejected promises");
+assert(webApp.includes('decodeURIComponent(rawHash)') && webApp.includes('value = "home"'), "invalid route encodings fall back to home");
+
 assert(webSupabase.includes("Published content and release controls are mandatory"), "catalog keeps release controls mandatory");
 assert(webSupabase.includes("sections are decorative"), "catalog tolerates section-only failures");
 
