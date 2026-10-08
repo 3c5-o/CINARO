@@ -793,9 +793,13 @@
           email: byId("registerEmail").value,
           password
         });
-        state.authUser = user;
-        updateAccountUI();
-        toast("تم إنشاء حساب CINARO");
+        if (user?.pendingVerification) {
+          setAuthMessage("تم استلام طلب إنشاء الحساب. تحقق من بريدك الإلكتروني وأكمل التأكيد، ثم سجّل الدخول.", "success");
+        } else {
+          state.authUser = user;
+          updateAccountUI();
+          toast("تم إنشاء حساب CINARO");
+        }
       } catch (error) {
         setAuthMessage(authErrorMessage(error), "error");
       } finally {
