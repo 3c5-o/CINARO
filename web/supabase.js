@@ -237,6 +237,10 @@ const client = {
       if (!active) return;
       if (error && !String(error.message || "").toLowerCase().includes("session")) console.warn("CINARO auth restore", error);
       callback(publicUser(data?.user || null));
+    }).catch((error) => {
+      // A failed session lookup must not leave the login screen in its loading state.
+      console.warn("CINARO auth restore failed", error);
+      if (active) callback(null);
     });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (active) callback(publicUser(session?.user || null));
