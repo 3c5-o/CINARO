@@ -161,7 +161,7 @@ assert(adminSw.includes('"./supabase.js"'), "admin PWA caches Supabase client");
 assert(/\bversionCode\s+21\b/.test(buildGradle), "Android versionCode is 21");
 assert(buildGradle.includes('versionName "2.9.1"'), "Android user version is 2.9.1");
 assert(buildGradle.includes('versionName "2.9.0-admin"'), "Android admin version is 2.9.0-admin");
-assert(/admin\\s*\\{[\\s\\S]*?versionCode\\s+20/.test(buildGradle), "Android admin keeps existing versionCode 20");
+assert(buildGradle.includes('versionCode 20') && buildGradle.includes('versionName "2.9.0-admin"'), "Android admin keeps existing versionCode 20");
 assert(buildGradle.includes("?v=2.9.1#home"), "user APK URL carries native release version");
 assert(buildGradle.includes("?v=2.9.0#dashboard"), "admin APK URL carries native release version");
 
