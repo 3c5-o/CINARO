@@ -53,6 +53,24 @@ console.log("PASS user navigation handles valid and malformed deep links");
 }
 
 {
+  const registration = vm.runInNewContext("({ " + extract(backend, "async register(details) {") + " }).register", {
+    textValue: (value) => String(value ?? "").trim(),
+    throwIf: (error) => { if (error) throw error; },
+    supabase: { auth: { signUp: async () => ({
+      data: { user: { id: "registered-user" }, session: null },
+      error: null
+    }) } },
+    publicUser: (user) => ({ uid: user.id })
+  });
+  const result = await registration({
+    name: "Tester", email: "TEST@example.com", password: "securepassword"
+  });
+  assert.equal(result.pendingVerification, true);
+  assert.equal(result.email, "test@example.com");
+  console.log("PASS signup without a session requires email verification");
+}
+
+{
   const rows = Array.from({ length: 1120 }, (_, i) => ({ id: "movie-" + i, kind: "movie", title: "Film " + i }));
   const offsets = [];
   const supabase = {
