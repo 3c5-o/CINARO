@@ -2697,6 +2697,11 @@
     setView("editor");
   }
 
+  function computeProviderSourceMode(provider, selectedMode, sourcesChanged) {
+    const managed = provider === "media-catalog" || provider === "media-catalog-anime";
+    return managed && (selectedMode === "manual" || sourcesChanged === true) ? "manual" : "auto";
+  }
+
   async function saveContent(event) {
     event.preventDefault();
     if (!state.firebase || !state.authUser) return;
@@ -2753,9 +2758,7 @@
         sourceIdentity(sources) !== sourceIdentity(existing.sources));
       // Preserve a manual override for explicitly chosen links, including
       // previously imported items. The automatic mode can be restored in editor.
-      const providerSourceMode = requestedProvider === "media-catalog" || requestedProvider === "media-catalog-anime"
-        ? (providerModeChoice === "manual" || movieLinksChanged ? "manual" : "auto")
-        : "auto";
+      const providerSourceMode = computeProviderSourceMode(requestedProvider, providerModeChoice, movieLinksChanged);
 
       const existingMovieSubtitles = kind === "movie" ? toArray(existing?.subtitles) : [];
       const subtitleUrl = asString($("movieSubtitleUrl").value);
@@ -3087,7 +3090,7 @@
     if (!isAdmin()) return;
     const payload = {
       schema: "cinaro-backup-v1",
-      appVersion: "2.9.0",
+      appVersion: "2.9.1",
       exportedAt: new Date().toISOString(),
       content: state.content.map((item) => ({ ...item })),
       sections: state.sections.map((item) => ({ ...item })),
