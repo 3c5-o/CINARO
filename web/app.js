@@ -639,6 +639,15 @@
     window.location.href = url;
   }
 
+  function providerForciblyDisabled(item, cfg = state.remoteConfig) {
+    const policies = cfg?.settings || {};
+    if (item?.provider === "media-catalog")
+      return policies.mediaCatalog?.forceDisabled === true;
+    if (item?.provider === "media-catalog-anime")
+      return policies.animeCatalog?.forceDisabled === true;
+    return false;
+  }
+
   function replaceCatalog(payload) {
     state.remoteConfig = payload?.config && typeof payload.config === "object" ? payload.config : {};
     state.sections = Array.isArray(payload?.sections) ? payload.sections : [];
@@ -661,7 +670,10 @@
     updateServiceGate();
     updateUpdateControl();
     if (state.remoteConfig.maintenance) setSupabaseStatus("connected", "وضع الصيانة مفعل من الإدارة");
-    const incomingItems = Array.isArray(payload?.items) ? payload.items : [];
+    // A forced provider shutdown hides all imported titles immediately on
+    // clients receiving app_config, rather than only stopping new imports.
+    const incomingItems = (Array.isArray(payload?.items) ? payload.items : [])
+      .filter((item) => !providerForciblyDisabled(item));
     DATA = {
       ...DATA,
       items: incomingItems,
@@ -674,6 +686,12 @@
     anime = DATA.items.filter((item) => item.kind === "series" && item.contentType === "anime");
     series = DATA.items.filter((item) => item.kind === "series" && item.contentType !== "anime");
     state.heroIndex = 0;
+    // Stop an already-open player when its provider is disabled remotely.
+    if (state.route?.name === "watch" && !itemMap.has(state.route.parts[2])) {
+      navigate("home", true);
+      toast("تم إيقاف المزوّد قسرياً من لوحة الإدارة.", "error");
+      return;
+    }
     if (!DATA.items.length) {
       setSupabaseStatus("connected", state.remoteConfig.maintenance ? "وضع الصيانة مفعل من الإدارة" : "الخدمة جاهزة — لم يُنشر محتوى بعد");
       if (state.route?.name !== "watch") refreshCurrentView();
@@ -1549,6 +1567,12 @@
     });
 
     if (route.name === "watch") {
+      const requestedItem = itemMap.get(route.parts[2]);
+      if (!requestedItem || providerForciblyDisabled(requestedItem)) {
+        navigate("home", true);
+        toast("هذا المصدر متوقف بأمر الإدارة.", "error");
+        return;
+      }
       document.body.classList.add("player-open");
       try {
         openPlayerForRoute(route);
