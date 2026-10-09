@@ -2041,6 +2041,12 @@
     player.hlsRecoveryAttempts = 0;
   }
 
+  function destroyDash() {
+    if (!player.dash) return;
+    try { player.dash.reset(); } catch (_) {}
+    player.dash = null;
+  }
+
   function destroyMpegTs() {
     if (!player.mpegts) return;
     try { player.mpegts.pause(); } catch (_) {}
@@ -2063,6 +2069,11 @@
   function isHlsSource(source, sourceUrl) {
     const type = String(source?.type || "").toLowerCase();
     return type.includes("mpegurl") || type.includes("hls") || sourceExtension(sourceUrl) === "m3u8";
+  }
+
+  function isDashSource(source, sourceUrl) {
+    const type = String(source?.type || "").toLowerCase();
+    return type.includes("dash+xml") || type.includes("application/dash") || sourceExtension(sourceUrl) === "mpd";
   }
 
   function isTsSource(source, sourceUrl) {
@@ -2090,7 +2101,7 @@
         ? (player.media.title + " — " + player.media.episode.title)
         : (player.media?.title || "CINARO");
       if (window.CinaroNative?.openNativePlayerV2) {
-        const type = isHlsSource(source, sourceUrl) ? "hls" : "progressive";
+        const type = isHlsSource(source, sourceUrl) ? "hls" : isDashSource(source, sourceUrl) ? "dash" : isTsSource(source, sourceUrl) ? "ts" : isMatroskaSource(source, sourceUrl) ? "mkv" : "progressive";
         if (window.CinaroNative.openNativePlayerV2(String(sourceUrl), String(title), type) !== true) return false;
       } else {
         window.CinaroNative.openNativePlayer(String(sourceUrl), String(title));
@@ -2150,6 +2161,7 @@
     player.video.pause();
     destroyHls();
     destroyMpegTs();
+    destroyDash();
     player.video.removeAttribute("src");
     player.video.load();
     player.quality.value = String(index);
@@ -2166,6 +2178,30 @@
     }
 
     startPlaybackWatchdog();
+
+    if (isDashSource(source, sourceUrl)) {
+      const dashRuntime = window.dashjs?.MediaPlayer;
+      if (!dashRuntime) {
+        showPlayerError("بث MPEG-DASH يحتاج مشغل يدعمه. جرّب تطبيق CINARO Android.");
+        return;
+      }
+      try {
+        const dash = dashRuntime().create();
+        player.dash = dash;
+        dash.on(window.dashjs.MediaPlayer.events.ERROR, () => {
+          if (player.dash !== dash) return;
+          destroyDash();
+          handlePlayerError();
+        });
+        dash.initialize(player.video, sourceUrl, Boolean(shouldPlay));
+        return;
+      } catch (error) {
+        console.warn("CINARO DASH player initialization failed", error);
+        destroyDash();
+        handlePlayerError();
+        return;
+      }
+    }
 
     if (isMatroskaSource(source, sourceUrl)) {
       if (openNativePlayer(sourceUrl)) {
@@ -2279,6 +2315,7 @@
     player.video.pause();
     destroyHls();
     destroyMpegTs();
+    destroyDash();
     player.requestedPlay = false;
     player.restorePlaying = false;
     player.switchingSource = false;
