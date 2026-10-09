@@ -4,7 +4,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const SUPABASE_URL = "https://zmkkoggsqvwvwkanlyux.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_yYSX8h3eAkbP3_Xg6ZNpoA_E1CwAvJJ";
-const APP_VERSION = "2.9.2";
+const APP_VERSION = "2.9.3";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
@@ -92,6 +92,7 @@ const normalizeSeason = (season, index, poster) => {
   const episodes = (Array.isArray(season?.episodes) ? season.episodes : [])
     .map((episode, episodeIndex) => ({
       number: Math.max(1, Math.round(numberValue(episode?.number, episodeIndex + 1, 1, 10000))),
+      providerEpisodeId: textValue(episode?.providerEpisodeId || episode?.id, "", 100),
       title: textValue(episode?.title, "الحلقة " + (episodeIndex + 1), 180),
       description: textValue(episode?.description, "", 1200),
       duration: Math.max(0, Math.round(numberValue(episode?.duration, 0, 0, 10000))),
@@ -127,6 +128,9 @@ const normalizeContentRow = (row) => {
     id,
     kind,
     contentType: raw.contentType === "anime" ? "anime" : kind,
+    provider: textValue(raw.provider, "", 50),
+    providerId: textValue(raw.providerId, "", 150),
+    providerBaseUrl: mediaUrl(raw.providerBaseUrl, ""),
     title,
     englishTitle: textValue(raw.englishTitle, "", 180),
     year: Math.round(numberValue(raw.year, new Date().getFullYear(), 1888, 2200)),
