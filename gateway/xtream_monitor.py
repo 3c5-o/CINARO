@@ -221,21 +221,47 @@ def _int_or_none(value):
 
 
 async def require_owner(token, client, supabase_url, service_key, owner_email):
-    if not token or not supabase_url or not service_key:
+    """Verify the live session and its owner membership in the same Supabase project.
+
+    The email in gateway configuration is not an authorization source.
+    Never grant owner access based solely on an email or a locally decoded JWT.
+    """
+    if not token:
         raise HTTPException(401, "authentication_required")
+    if not supabase_url or not service_key:
+        raise HTTPException(503, "gateway_supabase_not_configured")
+    base = supabase_url.rstrip("/")
+    headers = {"apikey": service_key, "Authorization": "Bearer " + token}
     try:
-        response = await client.get(
-            supabase_url.rstrip("/") + "/auth/v1/user",
-            headers={"apikey": service_key, "Authorization": "Bearer " + token},
+        identity = await client.get(
+            base + "/auth/v1/user", headers=headers,
             timeout=8, follow_redirects=False
         )
-        if response.status_code != 200:
+        if identity.status_code in (401, 403):
+            # A valid token from the new project is rejected by an old gateway
+            # project just like an expired token. Do not mislabel either as
+            # "not the primary owner".
+            raise HTTPException(401, "auth_project_or_session_invalid")
+        if identity.status_code != 200:
+            raise HTTPException(503, "authentication_unavailable")
+        user = identity.json()
+        if not isinstance(user, dict) or not user.get("id") or not user.get("email_confirmed_at"):
             raise HTTPException(403, "admin_access_denied")
-        body = response.json()
-        if not isinstance(body, dict) or str(body.get("email") or "").casefold() != owner_email.casefold():
+
+        membership = await client.get(
+            base + "/rest/v1/admin_memberships",
+            params={"select": "role,active", "user_id": "eq." + str(user["id"]), "limit": "1"},
+            headers=headers, timeout=8, follow_redirects=False
+        )
+        if membership.status_code != 200:
+            raise HTTPException(503, "owner_membership_unavailable")
+        rows = membership.json()
+        if not isinstance(rows, list) or not any(
+            isinstance(row, dict) and row.get("role") == "owner" and row.get("active") is True
+            for row in rows
+        ):
             raise HTTPException(403, "admin_access_denied")
-        if not body.get("email_confirmed_at"):
-            raise HTTPException(403, "admin_access_denied")
+        return user
     except HTTPException:
         raise
     except Exception:

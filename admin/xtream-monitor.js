@@ -78,7 +78,7 @@ function resetAccountForm(){
   msg("");
 }
 async function callApi(endpoint,method="GET",payload){
-  if(!credentials.token || !/^https:\/\//.test(credentials.gateway))throw Error("يجب الدخول كمدير أساسي لتعديل الحسابات.");
+  if(!credentials.token || !/^https:\/\//.test(credentials.gateway))throw Error("جلسة الإدارة غير متاحة أو بوابة Xtream غير مهيأة. سجّل دخولك مجدداً.");
   const response=await fetch(credentials.gateway.replace(/\/+$/,"")+"/admin/xtream/"+endpoint,{
     method,cache:"no-store",
     headers:{Authorization:"Bearer "+credentials.token,Accept:"application/json",...(payload?{"Content-Type":"application/json"}:{})},
@@ -88,13 +88,13 @@ async function callApi(endpoint,method="GET",payload){
     let code="";
     try{const body=await response.json();code=String(body.detail||"");}catch{}
     const messages={
-      db_accounts_unavailable:"جدول Xtream غير موجود في قاعدة CINARO. يجب تطبيق ملف الترحيل أولاً.",
+      db_accounts_unavailable:"تعذّر قراءة حسابات Xtream من قاعدة البيانات. تحقق من عنوان ومفتاح Supabase على Railway.",
       invalid_name_or_https_url:"تأكد من اسم الحساب وعنوان HTTPS.",
       invalid_public_host:"تعذّر تأكيد عنوان الخادم العام.",
       account_not_found:"هذا الحساب لم يعد موجوداً.",
       credentials_required:"اسم المستخدم وكلمة المرور مطلوبان للإضافة.",
       account_limit_reached:"وصلت إلى الحد الأعلى (25 حساباً).",
-      admin_access_denied:"هذه العملية متاحة للمدير الأساسي فقط."
+      admin_access_denied:"تم رفض طلب البوابة. تحقق من اتصال Railway بمشروع Supabase الجديد ومن جلسة المالك."
     };
     throw Error(messages[code]||"فشلت العملية: "+(code||"HTTP "+response.status));
   }
@@ -196,7 +196,7 @@ async function load({gateway,token,fresh=false}={}){
     const url=String(gateway||"").replace(/\/+$/,"")+"/admin/xtream/accounts"+(fresh?"?fresh=true":"");
     if(!url.startsWith("https://"))throw Error("بوابة المراقبة تحتاج اتصال HTTPS.");
     const res=await fetch(url,{headers:{Authorization:"Bearer "+token,Accept:"application/json"},cache:"no-store",signal:controller.signal});
-    if(res.status===401||res.status===403)throw Error("هذا القسم متاح للمدير الأساسي فقط.");
+    if(res.status===401||res.status===403)throw Error("تم رفض جلسة الإدارة لدى بوابة Xtream. تحقق من إعدادات Supabase في Railway ثم سجّل دخولك مجدداً.");
     if(!res.ok)throw Error(res.status===404?"لم يتم نشر خدمة Xtream بعد.":"تعذّر قراءة بيانات المراقبة: HTTP "+res.status);
     const data=await res.json();
     if(data?.ok!==true||!Array.isArray(data.accounts))throw Error("استجابة غير صحيحة من بوابة المراقبة.");
