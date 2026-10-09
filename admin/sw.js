@@ -1,4 +1,4 @@
-const CACHE = "cinaro-admin-v2.9.2-http-consent-20261009-b";
+const CACHE = "cinaro-admin-v2.9.2-xtream-batch100-20261009";
 const SHELL = [
   "./",
   "./index.html",
@@ -6,6 +6,7 @@ const SHELL = [
   "./supabase.js",
   "./app.js",
   "./xtream-monitor.js",
+  "./xtream-import.js",
   "./manifest.webmanifest",
   "./assets/admin-hero.svg",
   "./assets/icons/favicon-32.png",
