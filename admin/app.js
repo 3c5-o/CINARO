@@ -714,6 +714,11 @@
     if (!isAdmin() || !state.firebase?.getAccessToken || !window.CINARO_XTREAM_MONITOR) return;
     const token = await state.firebase.getAccessToken().catch(() => "");
     const gateway = telegramGatewayBase() || "https://gateway-production-7159.up.railway.app";
+    window.CINARO_XTREAM_IMPORT?.configure({
+      gateway, token, tmdbToken: readTmdbToken(), uid: state.authUser?.uid,
+      listContent: () => state.content,
+      save: async (payload) => state.firebase.saveDocument("content", payload.id, payload)
+    });
     await window.CINARO_XTREAM_MONITOR.load({ gateway, token, fresh });
   }
 
@@ -3765,6 +3770,6 @@
   renderDashboard();
   if (window.CINARO_ADMIN_SUPABASE) connectSupabase(window.CINARO_ADMIN_SUPABASE);
   if (!window.CinaroNative && "serviceWorker" in navigator && location.protocol === "https:") {
-    navigator.serviceWorker.register("sw.js?v=2.9.2-http-consent-20261009-b", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
+    navigator.serviceWorker.register("sw.js?v=20261009-xtream-100", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
   }
 })();

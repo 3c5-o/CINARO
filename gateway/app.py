@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from telethon import Button, TelegramClient, events, utils
 from xtream_monitor import attach_monitor
+from xtream_import import attach_xtream_import
 
 API_ID_RAW = os.environ.get("TELEGRAM_API_ID", "").strip()
 API_HASH = os.environ.get("TELEGRAM_API_HASH", "").strip()
@@ -1364,6 +1365,11 @@ app.add_middleware(
 
 
 attach_monitor(
+    app, lambda: http_client, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+    os.environ.get("CINARO_OWNER_EMAIL", "ffkyyr@gmail.com")
+)
+
+attach_xtream_import(
     app, lambda: http_client, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
     os.environ.get("CINARO_OWNER_EMAIL", "ffkyyr@gmail.com")
 )

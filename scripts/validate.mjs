@@ -162,6 +162,18 @@ assert(webSw.includes('cinaro-v2.9.5'), "user PWA cache bumped");
 assert(webSw.includes('"./supabase.js"'), "user PWA caches Supabase client");
 assert(adminSw.includes('cinaro-admin-v2.9.2'), "admin PWA cache bumped");
 assert(adminSw.includes('"./supabase.js"'), "admin PWA caches Supabase client");
+const xtreamImport = read("admin/xtream-import.js");
+const xtreamGatewayImport = read("gateway/xtream_import.py");
+assert(adminHtml.includes('id="xtreamImportStart"'), "Xtream owner UI exposes batch import");
+assert(adminHtml.includes('id="xtreamImportKind"'), "Xtream owner selects movies, series, anime");
+assert(adminHtml.includes('xtream-import.js?v=20261009-100'), "Xtream import UI script versioned");
+assert(adminSw.includes('"./xtream-import.js"'), "Xtream importer gets PWA cached with current release");
+assert(xtreamImport.includes('limit:100'), "Xtream import restricts each batch to 100");
+assert(xtreamImport.includes('await context.save(payload)'), "Xtream importer awaits per-title persistence");
+assert(xtreamImport.includes('await enrichEpisodeMetadata(payload.seasons,info.id)'), "Xtream episodes enriched from TMDb");
+assert(xtreamGatewayImport.includes('get_series_info'), "Xtream gateway requests full series information");
+assert(xtreamGatewayImport.includes('series_episodes_incomplete'), "Xtream gateway rejects truncated series");
+assert(xtreamGatewayImport.includes('_signature'), "Xtream playback URLs are signed");
 
 assert(/\bversionCode\s+25\b/.test(buildGradle), "Android versionCode is 25");
 assert(buildGradle.includes('versionName "2.9.5"'), "Android user version is 2.9.5");
