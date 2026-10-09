@@ -242,6 +242,26 @@
             <p>حالة الاشتراك، انتهاء الصلاحية، الاتصالات وأعداد المكتبة. هذه الصفحة للمراقبة فقط ولا تبدأ أي مزامنة.</p></div>
           <button id="xtreamRefresh" class="admin-button ghost" type="button"><svg><use href="#i-activity"></use></svg> تحديث الفحص</button>
         </div>
+        <div class="panel xtream-manage-panel">
+          <div class="panel-heading"><div><span>الحسابات والمصادر</span><h2>إضافة وإدارة حساب Xtream</h2></div></div>
+          <form id="xtreamAccountForm" class="compact-form">
+            <input type="hidden" id="xtreamEditId">
+            <div class="form-grid two">
+              <label><span>اسم الحساب</span><input id="xtreamAccountName" required maxlength="80" placeholder="المصدر الأول"></label>
+              <label><span>عنوان HTTPS للمزوّد</span><input id="xtreamAccountUrl" type="url" required placeholder="https://provider.example"></label>
+              <label><span>اسم المستخدم</span><input id="xtreamAccountUsername" autocomplete="off" maxlength="256" placeholder="اسم المستخدم (يترك فارغاً عند التعديل دون تغيير)"></label>
+              <label><span>كلمة المرور</span><input id="xtreamAccountPassword" type="password" autocomplete="new-password" maxlength="256" placeholder="كلمة المرور (تترك فارغة عند التعديل دون تغيير)"></label>
+            </div>
+            <label class="check-field"><input type="checkbox" id="xtreamAccountEnabled" checked><span>تفعيل الحساب للمراقبة</span></label>
+            <p class="field-help">تُرسل بيانات الدخول عبر HTTPS إلى بوابة CINARO وتُخزّن مشفّرة على الخادم، ولا تظهر مجدداً هنا. لا تستخدم إلا الحسابات المصرّح بها.</p>
+            <div class="form-actions">
+              <button id="xtreamAccountSave" type="submit" class="admin-button primary">حفظ الحساب</button>
+              <button id="xtreamAccountCancel" type="button" class="admin-button ghost">إلغاء التعديل</button>
+            </div>
+            <p id="xtreamAccountMessage" role="status" class="form-message"></p>
+          </form>
+          <div id="xtreamManagedAccounts" class="xtream-managed-list" aria-live="polite"></div>
+        </div>
         <div class="xtream-stats">
           <article class="stat-card"><div><small>الأفلام</small><strong id="xtreamMovies">—</strong><span>عبر جميع الحسابات</span></div></article>
           <article class="stat-card"><div><small>المسلسلات</small><strong id="xtreamSeries">—</strong><span>عدد العناوين لا الحلقات</span></div></article>
