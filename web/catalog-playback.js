@@ -28,6 +28,9 @@
   function requestPlan(media, native = false) {
     const item = media?.item;
     if (!item || !Array.isArray(media.sources)) return null;
+    // An admin explicitly took control of playback: do not overwrite that
+    // source with the old provider link during every play attempt.
+    if (item.providerSourceMode === "manual") return null;
     // Manual CINARO Storage uploads are not controlled by Media Catalog.
     if (media.sources.some((source) => source?.storageId || source?.storage_id)) return null;
 
