@@ -22,7 +22,7 @@ assert.equal(fn({provider:"media-catalog-anime"},{
   settings:{mediaCatalog:{forceDisabled:false},animeCatalog:{forceDisabled:true}}
 }),true);
 assert.match(app,/\.filter\(\(item\) => !providerForciblyDisabled\(item\)\)/);
-assert.match(app,/route\.name === "watch" && !itemMap\.has/);
+assert.match(app,/state\.route\?\.name === "watch" && !itemMap\.has/);
 console.log("PASS forced API stop hides imported movies/anime and stops active player");
 
 assert.match(admin,/mediaApiForceDisabled/);
