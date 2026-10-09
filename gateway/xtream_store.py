@@ -119,7 +119,9 @@ async def save_account(client, data, identifier=None):
     if not name or len(name) > 80 or not public_https_url(url):
         raise ValueError("invalid_name_or_https_url")
     parsed = urlsplit(url)
-    if not await public_dns(parsed.hostname, parsed.port or 443):
+    # Disabling an existing account must work even if its provider DNS is
+    # currently down. Revalidate DNS only when introducing/changing a host.
+    if (not old or url != old["base_url"]) and not await public_dns(parsed.hostname, parsed.port or 443):
         raise ValueError("invalid_public_host")
     username = data.get("username")
     password = data.get("password")
