@@ -33,12 +33,12 @@ const telegramTeamMigration = read("supabase/migrations/20260926153000_add_teleg
 const workflow = read(".github/workflows/android-apk.yml");
 const packageJson = JSON.parse(read("package.json"));
 
-assert(packageJson.version === "2.9.2", "package version is 2.9.2");
+assert(packageJson.version === "2.9.3", "package version is 2.9.3");
 assert(packageJson.scripts.test.includes("web/supabase.js"), "tests check user Supabase client");
 assert(packageJson.scripts.test.includes("admin/supabase.js"), "tests check admin Supabase client");
 assert(!packageJson.scripts.test.includes("firebase.js"), "test command no longer depends on Firebase");
 
-assert(webHtml.includes('supabase.js?v=2.9.2'), "user shell loads Supabase 2.9.2 client");
+assert(webHtml.includes('supabase.js?v=2.9.3'), "user shell loads Supabase 2.9.3 client");
 assert(adminHtml.includes('supabase.js?v=2.9.0'), "admin shell loads Supabase 2.9.0 client");
 assert(!webHtml.includes('firebase.js'), "user shell does not load Firebase");
 assert(!adminHtml.includes('firebase.js'), "admin shell does not load Firebase");
@@ -55,7 +55,10 @@ const visibleWebText = webHtml
 assert(!/Supabase|Firebase|Firestore/i.test(visibleWebText), "user visible interface exposes no provider names");
 assert(!/Firebase|Firestore/i.test(webData), "user fallback data exposes no legacy provider names");
 
-assert(webApp.includes('const WEB_APP_VERSION = "2.9.2"'), "user runtime version is 2.9.2");
+assert(webApp.includes('const WEB_APP_VERSION = "2.9.3"'), "user runtime version is 2.9.3");
+assert(webHtml.includes('catalog-playback.js?v=2.9.3'), "player loads catalog resolver before main user runtime");
+assert(webSw.includes('./catalog-playback.js'), "catalog resolver cached for offline shell");
+assert(webSupabase.includes('providerEpisodeId:') && webSupabase.includes('providerBaseUrl:'), "catalog provenance preserved for user playback");
 assert(webApp.includes("URL_APP_VERSION"), "user runtime reads APK version from URL");
 assert(webApp.includes("NATIVE_APP_VERSION"), "user runtime can read native version");
 assert(webApp.includes("updateAvailable"), "forced update checks latest version");
@@ -153,21 +156,21 @@ assert(!/\b\d{8,10}:[A-Za-z0-9_-]{25,}\b/.test(telegramGateway), "Telegram gatew
 assert(webStyles.includes("CINARO 2.6 — Aurora Cinema Design"), "Aurora Cinema user design system is present");
 assert(webStyles.includes("CINARO 2.6.3 — Premiere Splash"), "Premiere splash design system is present");
 assert(adminStyles.includes("CINARO Admin 2.6 — Obsidian Control Design"), "Obsidian Control admin design system is present");
-assert(webSw.includes('cinaro-v2.9.2'), "user PWA cache bumped");
+assert(webSw.includes('cinaro-v2.9.3'), "user PWA cache bumped");
 assert(webSw.includes('"./supabase.js"'), "user PWA caches Supabase client");
 assert(adminSw.includes('cinaro-admin-v2.9.0'), "admin PWA cache bumped");
 assert(adminSw.includes('"./supabase.js"'), "admin PWA caches Supabase client");
 
-assert(/\bversionCode\s+22\b/.test(buildGradle), "Android versionCode is 22");
-assert(buildGradle.includes('versionName "2.9.2"'), "Android user version is 2.9.2");
+assert(/\bversionCode\s+22\b/.test(buildGradle), "Android versionCode is 23");
+assert(buildGradle.includes('versionName "2.9.3"'), "Android user version is 2.9.3");
 assert(buildGradle.includes('versionName "2.9.0-admin"'), "Android admin version is 2.9.0-admin");
 assert(buildGradle.includes('versionCode 20') && buildGradle.includes('versionName "2.9.0-admin"'), "Android admin keeps existing versionCode 20");
-assert(buildGradle.includes("?v=2.9.2#home"), "user APK URL carries native release version");
+assert(buildGradle.includes("?v=2.9.3#home"), "user APK URL carries native release version");
 assert(buildGradle.includes("?v=2.9.0#dashboard"), "admin APK URL carries native release version");
 
-assert(workflow.includes("CINARO-User-v2.9.2.apk"), "workflow names user APK 2.9.2");
+assert(workflow.includes("CINARO-User-v2.9.3.apk"), "workflow names user APK 2.9.3");
 assert(workflow.includes("CINARO-Admin-v2.9.0.apk"), "workflow names admin APK 2.9.0");
-assert(workflow.includes('TAG="v2.9.2"'), "workflow publishes v2.9.2");
+assert(workflow.includes('TAG="v2.9.3"'), "workflow publishes v2.9.3");
 assert(workflow.includes("CINARO_KEYSTORE_BASE64"), "stable signing secrets remain configured");
 assert(!/Supabase|Firebase|Firestore/i.test(workflow.match(/NOTES="[^"]+"/)?.[0] || ""), "release notes expose no provider names");
 
@@ -176,4 +179,4 @@ if (process.exitCode) {
   process.exit(process.exitCode);
 }
 
-console.log("\nCINARO user 2.9.2 validation passed.");
+console.log("\nCINARO user 2.9.3 validation passed.");
