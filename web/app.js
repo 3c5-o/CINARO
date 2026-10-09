@@ -1550,8 +1550,15 @@
 
     if (route.name === "watch") {
       document.body.classList.add("player-open");
-      openPlayerForRoute(route);
-      updateNavigation(route);
+      try {
+        openPlayerForRoute(route);
+        updateNavigation(route);
+      } catch (error) {
+        console.error("CINARO player navigation failed", error);
+        document.body.classList.remove("player-open");
+        toast("تعذّر فتح المشغل. جرّب مصدراً آخر أو أرسل بلاغاً.", "error");
+        navigate(route.parts[2] ? "details/" + encodeURIComponent(route.parts[2]) : "home", true);
+      }
       return;
     }
 
