@@ -1,6 +1,6 @@
 "use strict";
 
-const VERSION = "cinaro-v2.9.2";
+const VERSION = "cinaro-v2.9.3";
 const SHELL_CACHE = `${VERSION}-shell`;
 const IMAGE_CACHE = `${VERSION}-images`;
 
@@ -11,6 +11,7 @@ const APP_SHELL = [
   "./data.js",
   "./supabase.js",
   "./app.js",
+  "./catalog-playback.js",
   "./manifest.webmanifest",
   "./offline.html",
   "./assets/icons/favicon-32.png",
