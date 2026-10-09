@@ -91,6 +91,7 @@ async function enrich(item){
   }
   if(!id)return null;
   const d=await tmdbJson("/"+namespace+"/"+id,{language:"ar-IQ"});
+  if(d.adult===true)throw Error("هذا المحتوى مصنّف للبالغين في TMDb وغير متاح للاستيراد.");
   const title=text(d.title||d.name||d.original_title||d.original_name)||item.title;
   return {
     id, title,englishTitle:text(d.original_title||d.original_name),
@@ -199,6 +200,7 @@ async function start(){
         }else{
           status("TMDb وXtream: "+(state.processed+1)+"/"+items.length+" — "+text(item.title));
           const info=await enrich(item);
+          if(!info)throw Error("لا توجد مطابقة موثوقة في TMDb؛ لم يُنشر المحتوى.");
           const matchedKey=info?(item.kind==="movie"?"movie":"series")+":"+info.id:"";
           if(matchedKey&&tmdbKeys.has(matchedKey)){state.duplicates++;}
           else{
