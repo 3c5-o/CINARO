@@ -570,31 +570,29 @@
     const mediaType = inferMediaType(url);
     if (mediaType === "video/x-matroska") {
       return Promise.resolve({
-        input, url,
-        ok: adminNativePlayerAvailable(),
-        reason: adminNativePlayerAvailable() ? "MKV مدعوم عبر Media3 داخل APK." : "MKV يحتاج تطبيق Android."
+        input, url, ok: false,
+        reason: "صيغة MKV تتطلب اختبار تشغيل فعلي داخل تطبيق أندرويد؛ توفر Media3 لا يثبت صلاحية الرابط."
       });
-    }
-    if (mediaType === "video/mp2t" && (window.mpegts?.isSupported?.() || adminNativePlayerAvailable())) {
-      return Promise.resolve({ input, url, ok: true, reason: "TS مدعوم عبر mpegts.js أو Media3." });
     }
     return new Promise((resolve) => {
       const video = document.createElement("video");
-      video.preload = "metadata";
+      video.preload = "auto";
       video.muted = true;
       video.playsInline = true;
       let hls = null;
+      let mpegts = null;
       let settled = false;
       const finish = (ok, reason = "") => {
         if (settled) return;
         settled = true;
         window.clearTimeout(timer);
         try { hls?.destroy?.(); } catch (_) {}
+        try { mpegts?.unload?.(); mpegts?.detachMediaElement?.(); mpegts?.destroy?.(); } catch (_) {}
         video.removeAttribute("src");
         try { video.load(); } catch (_) {}
         resolve({ input, url, ok, reason });
       };
-      const timer = window.setTimeout(() => finish(false, "انتهت مهلة الفحص"), 9000);
+      const timer = window.setTimeout(() => finish(false, "انتهت مهلة انتظار بيانات الفيديو"), 12000);
       video.addEventListener("loadedmetadata", () => finish(true), { once: true });
       video.addEventListener("canplay", () => finish(true), { once: true });
       video.addEventListener("error", () => finish(false, "تعذّر تحميل المصدر"), { once: true });
@@ -602,7 +600,8 @@
       if (inferMediaType(url) === "application/vnd.apple.mpegurl" && window.Hls?.isSupported?.()) {
         try {
           hls = new window.Hls({ enableWorker: true, maxBufferLength: 5 });
-          hls.on(window.Hls.Events.MANIFEST_PARSED, () => finish(true));
+          // A valid playlist alone is insufficient: require video metadata
+          // after the browser receives real media fragments.
           hls.on(window.Hls.Events.ERROR, (_event, data) => { if (data?.fatal) finish(false, "تعذّر قراءة HLS"); });
           hls.attachMedia(video);
           hls.on(window.Hls.Events.MEDIA_ATTACHED, () => hls?.loadSource(url));
@@ -610,6 +609,19 @@
         } catch (_) {}
       }
 
+      if (mediaType === "video/mp2t") {
+        const mpegRuntime = window.mpegts;
+        if (!mpegRuntime?.isSupported?.()) return finish(false, "TS يحتاج مشغل يدعم MPEG-TS.");
+        try {
+          mpegts = mpegRuntime.createPlayer({ type: "mpegts", isLive: false, url });
+          mpegts.on?.(mpegRuntime.Events.ERROR, () => finish(false, "فشل قراءة بيانات TS"));
+          mpegts.attachMediaElement(video);
+          mpegts.load();
+          return;
+        } catch (_) {
+          return finish(false, "تعذّر بدء اختبار TS");
+        }
+      }
       video.src = url;
       try { video.load(); } catch (_) { finish(false, "تعذّر بدء الفحص"); }
     });
@@ -1384,6 +1396,7 @@
       $("contentKind").value = "movie";
       $("contentProvider").value = "media-catalog";
       $("contentProviderId").value = id;
+      if ($("providerSourceMode")) $("providerSourceMode").value = "auto";
       $("contentId").value = state.editingContentId || mediaContentId(id);
       $("contentTmdbId").value = meta.tmdb_id ? String(meta.tmdb_id) : "";
 
@@ -1510,6 +1523,7 @@
       tmdbImportedAt: 0,
       provider: "media-catalog",
       providerId,
+      providerSourceMode: "auto",
       providerImportedAt: now,
       providerBaseUrl: mediaCatalogSettings().baseUrl,
       providerPlayback: {
@@ -2514,6 +2528,12 @@
     const seriesLike = selectedType === "series" || selectedType === "anime";
     $("movieMediaFields")?.classList.toggle("is-hidden", seriesLike);
     $("seriesMediaFields")?.classList.toggle("is-hidden", !seriesLike);
+    const providerName = asString($("contentProvider")?.value);
+    const managedProvider = providerName === "media-catalog" || providerName === "media-catalog-anime";
+    if ($("providerSourceModeField")) {
+      $("providerSourceModeField").hidden = !managedProvider;
+      $("providerSourceModeField").classList.toggle("is-hidden", !managedProvider);
+    }
     if (seriesLike && !state.seasonDraft.length) {
       state.seasonDraft = [newSeason(1)];
       renderSeasonBuilder();
@@ -2533,6 +2553,7 @@
     $("contentTmdbId").value = "";
     $("contentProvider").value = "";
     $("contentProviderId").value = "";
+    if ($("providerSourceMode")) $("providerSourceMode").value = "auto";
     $("tmdbSearchInput").value = "";
     if ($("mediaApiSearchInput")) $("mediaApiSearchInput").value = "";
     if ($("mediaApiSearchResults")) $("mediaApiSearchResults").innerHTML = "";
@@ -2625,6 +2646,7 @@
     $("contentTmdbId").value = item.tmdbId ? String(item.tmdbId) : "";
     $("contentProvider").value = asString(item.provider);
     $("contentProviderId").value = asString(item.providerId);
+    if ($("providerSourceMode")) $("providerSourceMode").value = item.providerSourceMode === "manual" ? "manual" : "auto";
     $("contentKind").value = item.contentType === "anime" ? "anime" : item.kind;
     $("contentTitle").value = item.title || "";
     $("contentEnglishTitle").value = item.englishTitle || "";
@@ -2678,6 +2700,11 @@
     setView("editor");
   }
 
+  function computeProviderSourceMode(provider, selectedMode, sourcesChanged) {
+    const managed = provider === "media-catalog" || provider === "media-catalog-anime";
+    return managed && (selectedMode === "manual" || sourcesChanged === true) ? "manual" : "auto";
+  }
+
   async function saveContent(event) {
     event.preventDefault();
     if (!state.firebase || !state.authUser) return;
@@ -2727,6 +2754,14 @@
       }
       movieSourceCandidates.push(...existingMovieSources.slice(2));
       const sources = kind === "movie" ? normalizeSources(movieSourceCandidates) : [];
+      const providerModeChoice = $("providerSourceMode")?.value === "manual" ? "manual" : "auto";
+      const sourceIdentity = (sourcesList) => toArray(sourcesList)
+        .map((source) => sourceInputValue(source)).join("|");
+      const movieLinksChanged = Boolean(existing && kind === "movie" &&
+        sourceIdentity(sources) !== sourceIdentity(existing.sources));
+      // Preserve a manual override for explicitly chosen links, including
+      // previously imported items. The automatic mode can be restored in editor.
+      const providerSourceMode = computeProviderSourceMode(requestedProvider, providerModeChoice, movieLinksChanged);
 
       const existingMovieSubtitles = kind === "movie" ? toArray(existing?.subtitles) : [];
       const subtitleUrl = asString($("movieSubtitleUrl").value);
@@ -2741,6 +2776,13 @@
       movieSubtitleCandidates.push(...existingMovieSubtitles.slice(1));
       const subtitles = kind === "movie" ? normalizeSubtitles(movieSubtitleCandidates) : [];
       const willPublish = hasPermission("publishContent") ? $("contentPublished").checked : existing?.published === true;
+      if (willPublish && kind === "movie" && requestedProvider === "media-catalog" && providerSourceMode === "manual") {
+        const manualChecks = await Promise.all(sources.slice(0, 2).map((source) => probePlaybackUrl(sourceInputValue(source))));
+        if (!manualChecks.some((check) => check.ok)) {
+          throw new Error("لا يمكن نشر رابط يدوي مستورد قبل نجاح فحص بيانات الفيديو. اختر رابطاً صالحاً أو احفظ الفيلم كمسودة. " +
+            asString(manualChecks[0]?.reason, "لم ينجح أي مصدر."));
+        }
+      }
       const seasons = kind === "series" ? normalizeSeasons(seasonsFromEditor(), willPublish) : [];
       if (willPublish && kind === "movie" && !sources.length) throw new Error("أضف مصدراً واحداً على الأقل للفيلم قبل النشر.");
       if (kind === "series" && !seasons.length) throw new Error("أضف موسماً واحداً على الأقل للمسلسل.");
@@ -2793,6 +2835,7 @@
         tmdbImportedAt: Math.max(0, Math.round(asNumber($("contentTmdbId").value, 0))) ? Date.now() : asNumber(existing?.tmdbImportedAt, 0),
         provider: requestedProvider,
         providerId: requestedProviderId,
+        providerSourceMode,
         providerImportedAt: requestedProvider && requestedProviderId ? Date.now() : asNumber(existing?.providerImportedAt, 0),
         providerBaseUrl: requestedProvider === "media-catalog"
           ? mediaCatalogSettings().baseUrl
@@ -3050,7 +3093,7 @@
     if (!isAdmin()) return;
     const payload = {
       schema: "cinaro-backup-v1",
-      appVersion: "2.9.0",
+      appVersion: "2.9.1",
       exportedAt: new Date().toISOString(),
       content: state.content.map((item) => ({ ...item })),
       sections: state.sections.map((item) => ({ ...item })),
@@ -3516,6 +3559,13 @@
     $("logoutButton")?.addEventListener("click", () => state.firebase?.logout().catch((error) => toast(errorMessage(error), "error")));
     $("menuButton")?.addEventListener("click", () => setMobileNavigation(!$("adminSidebar")?.classList.contains("open")));
     $("newContentButton")?.addEventListener("click", () => openNewContent("movie", "manual"));
+    ["movieSourceUrl", "movieBackupUrl"].forEach((id) => {
+      $(id)?.addEventListener("input", () => {
+        if ($("contentProvider")?.value === "media-catalog" && $("providerSourceMode")) {
+          $("providerSourceMode").value = "manual";
+        }
+      });
+    });
     $("contentKind")?.addEventListener("change", () => {
       toggleKindFields();
       if (state.tmdb.importMode === "tmdb") {

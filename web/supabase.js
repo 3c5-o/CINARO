@@ -4,7 +4,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const SUPABASE_URL = "https://zmkkoggsqvwvwkanlyux.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_yYSX8h3eAkbP3_Xg6ZNpoA_E1CwAvJJ";
-const APP_VERSION = "2.9.3";
+const APP_VERSION = "2.9.4";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
@@ -130,6 +130,7 @@ const normalizeContentRow = (row) => {
     contentType: raw.contentType === "anime" ? "anime" : kind,
     provider: textValue(raw.provider, "", 50),
     providerId: textValue(raw.providerId, "", 150),
+    providerSourceMode: raw.providerSourceMode === "manual" ? "manual" : "auto",
     providerBaseUrl: mediaUrl(raw.providerBaseUrl, ""),
     title,
     englishTitle: textValue(raw.englishTitle, "", 180),
