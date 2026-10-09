@@ -25,7 +25,7 @@ const errors={
   provider_auth_invalid:"المزوّد لم يقبل معلومات هذا الحساب.",
   provider_list_too_large:"قائمة المحتوى تتجاوز حد الفحص الآمن.",
   provider_host_unreachable:"اسم خادم المزوّد غير متاح أو غير عام.",
-  public_https_required:"المزوّد يحتاج عنوان HTTPS عامًا.",
+  invalid_public_provider_url:"عنوان المزوّد يجب أن يكون HTTP أو HTTPS عاماً، وليس عنوان شبكة داخلية.",
   provider_connection_failed:"تعذر الاتصال بخادم المزوّد.",
   provider_invalid_json:"المزوّد لم يرجع بيانات صحيحة."
 };
@@ -89,7 +89,8 @@ async function callApi(endpoint,method="GET",payload){
     try{const body=await response.json();code=String(body.detail||"");}catch{}
     const messages={
       db_accounts_unavailable:"تعذّر قراءة حسابات Xtream من قاعدة البيانات. تحقق من عنوان ومفتاح Supabase على Railway.",
-      invalid_name_or_https_url:"تأكد من اسم الحساب وعنوان HTTPS.",
+      invalid_name_or_public_url:"تحقق من اسم الحساب وعنوان HTTP أو HTTPS العام.",
+      http_requires_consent:"فعّل الموافقة على استخدام HTTP غير المشفّر عند إضافة أو تغيير رابط السيرفر.",
       invalid_public_host:"تعذّر تأكيد عنوان الخادم العام.",
       account_not_found:"هذا الحساب لم يعد موجوداً.",
       credentials_required:"اسم المستخدم وكلمة المرور مطلوبان للإضافة.",
@@ -139,12 +140,17 @@ function bindManagement(){
     const payload={
       name:$("xtreamAccountName")?.value.trim()||"",
       url:$("xtreamAccountUrl")?.value.trim()||"",
-      enabled:$("xtreamAccountEnabled")?.checked===true
+      enabled:$("xtreamAccountEnabled")?.checked===true,
+      allowHttp:$("xtreamAllowHttp")?.checked===true
     };
     const username=$("xtreamAccountUsername")?.value||"";
     const password=$("xtreamAccountPassword")?.value||"";
     if(!id||username)payload.username=username;
     if(!id||password)payload.password=password;
+    if(/^http:\/\//i.test(payload.url)&&!payload.allowHttp && !id){
+      msg("لاستخدام HTTP لازم تفعّل خانة الموافقة على الاتصال غير المشفّر.");
+      return;
+    }
     try{
       if($("xtreamAccountSave"))$("xtreamAccountSave").disabled=true;
       msg("جاري حفظ الحساب بأمان…");
