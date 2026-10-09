@@ -153,11 +153,11 @@ async def fetch_snapshot(client, account):
         if not public_https_url(url):
             raise RuntimeError("public_https_required")
         parsed = urlsplit(url)
-        if not await public_dns(parsed.hostname, parsed.port or 443):
-            raise RuntimeError("provider_host_unreachable")
         snap["host"] = parsed.hostname
         if not account["enabled"]:
             return snap
+        if not await public_dns(parsed.hostname, parsed.port or 443):
+            raise RuntimeError("provider_host_unreachable")
         params = {"username": account["username"], "password": account["password"]}
         auth = await json_get(client, url + "/player_api.php", params)
         if not isinstance(auth, dict) or not isinstance(auth.get("user_info"), dict):
@@ -179,6 +179,10 @@ async def fetch_snapshot(client, account):
         }
         if status.casefold() not in ("active", "enabled"):
             snap["health"] = "inactive"
+            return snap
+        expiry = snap["subscription"]["expiresAt"]
+        if expiry and datetime.fromisoformat(expiry) <= datetime.now(timezone.utc):
+            snap["health"] = "expired"
             return snap
         actions = [
             "get_vod_categories", "get_series_categories",
