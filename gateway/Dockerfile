@@ -9,6 +9,7 @@ COPY gateway/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY gateway/app.py /app/app.py
+COPY gateway/xtream_monitor.py /app/xtream_monitor.py
 
 EXPOSE 10000
 
