@@ -2,7 +2,7 @@
   "use strict";
 
   let DATA = window.CINARO_DATA;
-  const WEB_APP_VERSION = "2.9.1";
+  const WEB_APP_VERSION = "2.9.2";
   const URL_APP_VERSION = new URLSearchParams(location.search).get("v")?.match(/^\d+\.\d+\.\d+$/)?.[0] || "";
   const NATIVE_APP_VERSION = navigator.userAgent.match(/CINARO\/(\d+\.\d+\.\d+)/i)?.[1] || "";
   const APP_VERSION = URL_APP_VERSION || NATIVE_APP_VERSION || WEB_APP_VERSION;
@@ -1550,8 +1550,15 @@
 
     if (route.name === "watch") {
       document.body.classList.add("player-open");
-      openPlayerForRoute(route);
-      updateNavigation(route);
+      try {
+        openPlayerForRoute(route);
+        updateNavigation(route);
+      } catch (error) {
+        console.error("CINARO player navigation failed", error);
+        document.body.classList.remove("player-open");
+        toast("تعذّر فتح المشغل. جرّب مصدراً آخر أو أرسل بلاغاً.", "error");
+        navigate(route.parts[2] ? "details/" + encodeURIComponent(route.parts[2]) : "home", true);
+      }
       return;
     }
 
@@ -1999,15 +2006,19 @@
     }
   }
 
-  function openNativePlayer(sourceUrl) {
+  function openNativePlayer(sourceUrl, source = player.media?.sources[player.sourceIndex]) {
     if (!nativePlayerAvailable()) return false;
     try {
       const title = player.media?.episode
         ? (player.media.title + " — " + player.media.episode.title)
         : (player.media?.title || "CINARO");
-      window.CinaroNative.openNativePlayer(String(sourceUrl), String(title));
+      if (window.CinaroNative?.openNativePlayerV2) {
+        const type = isHlsSource(source, sourceUrl) ? "hls" : "progressive";
+        if (window.CinaroNative.openNativePlayerV2(String(sourceUrl), String(title), type) !== true) return false;
+      } else {
+        window.CinaroNative.openNativePlayer(String(sourceUrl), String(title));
+      }
       player.loading.hidden = true;
-      player.error.hidden = true;
       return true;
     } catch (error) {
       console.warn("CINARO native player open failed", error);
@@ -2015,7 +2026,27 @@
     }
   }
 
+  function stopPlaybackWatchdog() {
+    clearTimeout(player.playbackTimer);
+    player.playbackTimer = 0;
+  }
+
+  function startPlaybackWatchdog() {
+    stopPlaybackWatchdog();
+    const generation = player.sourceGeneration;
+    player.playbackTimer = window.setTimeout(() => {
+      if (player.sourceGeneration !== generation || player.nativePlaybackActive || player.root.hidden || !player.media) return;
+      if (!player.loading.hidden) {
+        console.warn("CINARO video buffering timeout; trying another source");
+        handlePlayerError();
+      }
+    }, 25000);
+  }
+
   function loadPlayerSource(index, restoreTime = 0, shouldPlay = false) {
+    stopPlaybackWatchdog();
+    player.sourceGeneration = (player.sourceGeneration || 0) + 1;
+    player.nativePlaybackActive = false;
     const source = player.media?.sources[index];
     player.sourceIndex = index;
     if (!source) {
@@ -2045,6 +2076,19 @@
     player.video.removeAttribute("src");
     player.video.load();
     player.quality.value = String(index);
+
+    // Prefer Media3 on Android; the WebView decoder can crash on large or unsupported streams.
+    // The V2 bridge exists only in versions with protected native launch and playback errors.
+    if (window.CinaroNative?.openNativePlayerV2 && openNativePlayer(sourceUrl, source)) {
+      player.nativePlaybackActive = true;
+      player.switchingSource = false;
+      player.loading.hidden = true;
+      player.error.hidden = false;
+      player.errorText.textContent = "تم فتح مشغل أندرويد. إذا رجعت، اضغط إعادة المحاولة أو اختر مصدراً آخر.";
+      return;
+    }
+
+    startPlaybackWatchdog();
 
     if (isMatroskaSource(source, sourceUrl)) {
       if (openNativePlayer(sourceUrl)) {
@@ -2150,6 +2194,9 @@
   }
 
   function releasePlayerMedia() {
+    stopPlaybackWatchdog();
+    player.sourceGeneration = (player.sourceGeneration || 0) + 1;
+    player.nativePlaybackActive = false;
     player.video.pause();
     destroyHls();
     destroyMpegTs();
@@ -2381,6 +2428,7 @@
   }
 
   function showPlayerError(customMessage = "") {
+    stopPlaybackWatchdog();
     player.switchingSource = false;
     player.loading.hidden = true;
     player.error.hidden = false;
@@ -2397,6 +2445,8 @@
   }
 
   function handlePlayerError() {
+    stopPlaybackWatchdog();
+    if (player.nativePlaybackActive) return;
     if (!player.media) {
       showPlayerError();
       return;
@@ -2424,6 +2474,7 @@
 
   function bindPlayerEvents() {
     player.video.addEventListener("loadstart", () => {
+      if (player.nativePlaybackActive) return;
       player.loading.hidden = false;
       player.error.hidden = true;
     });
@@ -2443,10 +2494,17 @@
       }
     });
     ["canplay", "playing"].forEach((eventName) => player.video.addEventListener(eventName, () => {
+      if (player.nativePlaybackActive) return;
+      stopPlaybackWatchdog();
       player.loading.hidden = true;
       player.error.hidden = true;
     }));
-    player.video.addEventListener("waiting", () => { if (!player.video.paused) player.loading.hidden = false; });
+    player.video.addEventListener("waiting", () => {
+      if (!player.video.paused && !player.nativePlaybackActive) {
+        player.loading.hidden = false;
+        startPlaybackWatchdog();
+      }
+    });
     player.video.addEventListener("playing", () => {
       player.switchingSource = false;
       player.requestedPlay = true;

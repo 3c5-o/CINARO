@@ -4,6 +4,8 @@ import vm from "node:vm";
 
 const app = fs.readFileSync(new URL("../web/app.js", import.meta.url), "utf8");
 const backend = fs.readFileSync(new URL("../web/supabase.js", import.meta.url), "utf8");
+const mainActivity = fs.readFileSync(new URL("../android-app/app/src/main/java/com/cinaro/app/MainActivity.java", import.meta.url), "utf8");
+const nativePlayer = fs.readFileSync(new URL("../android-app/app/src/main/java/com/cinaro/app/NativePlayerActivity.java", import.meta.url), "utf8");
 
 function extract(source, signature) {
   const start = source.indexOf("  " + signature);
@@ -43,6 +45,7 @@ console.log("PASS user navigation handles valid and malformed deep links");
     sourcePlaybackUrl: (source) => source.storageId ? "https://media.example/stream/" + source.storageId : source.url || "",
     toast: () => {},
     state: { firebase: null },
+    stopPlaybackWatchdog: () => {},
     loadPlayerSource: (...args) => { changedSource = args; },
     showPlayerError: (error) => { throw new Error(error || "Unexpected player error"); }
   });
@@ -51,6 +54,45 @@ console.log("PASS user navigation handles valid and malformed deep links");
   assert.equal(changedSource[1], 34, "source failover should resume at current time");
   console.log("PASS user player fails over to a Telegram Storage source");
 }
+
+{
+  const player = {
+    sourceGeneration: 5,
+    nativePlaybackActive: false,
+    root: { hidden: false },
+    media: { item: { id: "test" } },
+    loading: { hidden: false },
+    playbackTimer: 0
+  };
+  let timerCallback = null;
+  let timeoutTriggered = 0;
+  const watchdog = evaluateFunction(app, "function startPlaybackWatchdog() {", {
+    player,
+    stopPlaybackWatchdog: () => {},
+    window: { setTimeout(callback, delay) {
+      assert.equal(delay, 25000);
+      timerCallback = callback;
+      return 1;
+    } },
+    handlePlayerError: () => { timeoutTriggered += 1; },
+    console
+  });
+  watchdog();
+  assert.equal(typeof timerCallback, "function");
+  timerCallback();
+  assert.equal(timeoutTriggered, 1, "stuck loading should fail over after the timeout");
+  player.loading.hidden = true;
+  timerCallback();
+  assert.equal(timeoutTriggered, 1, "successful playback should not trigger failure");
+  console.log("PASS loading timeout detects stalled video without interrupting ready streams");
+}
+
+assert.ok(mainActivity.includes("openNativePlayerV2(String url, String title, String type)"));
+assert.ok(mainActivity.includes('catch (RuntimeException error)') && mainActivity.includes('Unable to open native player'));
+assert.ok(nativePlayer.includes('itemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)'));
+assert.ok(nativePlayer.includes("scheduleStallTimeout()") && nativePlayer.includes("showPlaybackError("));
+assert.ok(app.includes('CinaroNative?.openNativePlayerV2 && openNativePlayer(sourceUrl, source)'));
+console.log("PASS native playback bridge, HLS MIME and error handling are present");
 
 {
   const registration = vm.runInNewContext("({ " + extract(backend, "async register(details) {") + " }).register", {

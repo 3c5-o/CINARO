@@ -14,6 +14,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Rational;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -298,22 +299,39 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void openNativePlayer(String url, String title) {
+            launchNativePlayer(url, title, "");
+        }
+
+        @JavascriptInterface
+        public boolean openNativePlayerV2(String url, String title, String type) {
+            return launchNativePlayer(url, title, type);
+        }
+
+        private boolean launchNativePlayer(String url, String title, String type) {
             String safeUrl = url == null ? "" : url.trim();
-            if (safeUrl.isEmpty()) return;
             Uri uri;
             try {
                 uri = Uri.parse(safeUrl);
-            } catch (Exception error) {
-                return;
+            } catch (RuntimeException error) {
+                return false;
             }
-            if (!"https".equalsIgnoreCase(uri.getScheme())) return;
+            if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null) return false;
             String safeTitle = title == null ? "CINARO" : title.trim();
+            String safeType = "hls".equalsIgnoreCase(type) ? "hls" : "progressive";
             runOnUiThread(() -> {
-                Intent intent = new Intent(MainActivity.this, NativePlayerActivity.class);
-                intent.putExtra(NativePlayerActivity.EXTRA_URL, safeUrl);
-                intent.putExtra(NativePlayerActivity.EXTRA_TITLE, safeTitle);
-                startActivity(intent);
+                try {
+                    Intent intent = new Intent(MainActivity.this, NativePlayerActivity.class);
+                    intent.putExtra(NativePlayerActivity.EXTRA_URL, safeUrl);
+                    intent.putExtra(NativePlayerActivity.EXTRA_TITLE, safeTitle);
+                    intent.putExtra(NativePlayerActivity.EXTRA_TYPE, safeType);
+                    startActivity(intent);
+                } catch (RuntimeException error) {
+                    Log.e("CINARO_PLAYER", "Unable to open native player", error);
+                    Toast.makeText(MainActivity.this,
+                            "تعذّر فتح المشغل. ارجع واختر مصدراً آخر.", Toast.LENGTH_LONG).show();
+                }
             });
+            return true;
         }
 
         @JavascriptInterface
