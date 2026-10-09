@@ -264,6 +264,24 @@
           </form>
           <div id="xtreamManagedAccounts" class="xtream-managed-list" aria-live="polite"></div>
         </div>
+        <div class="panel xtream-manage-panel" id="xtreamImportPanel">
+          <div class="panel-heading"><div><span>XTREAM BULK IMPORT</span><h2>إضافة 100 فيلم أو مسلسل أو أنمي</h2></div></div>
+          <p class="field-help">يُستورد كل مسلسل بمواسمه وحلقاته كاملة قبل الانتقال للعنوان التالي. المعلومات من TMDb، والاستيراد بدون تكرار. يحتاج TMDb Token داخل إعدادات الإدارة.</p>
+          <div class="form-grid two">
+            <label><span>حساب Xtream</span><select id="xtreamImportAccount"><option value="">اختر حساباً</option></select></label>
+            <label><span>نوع المحتوى</span><select id="xtreamImportKind"><option value="all">الأفلام والمسلسلات والأنمي معاً</option><option value="movie">أفلام</option><option value="series">مسلسلات</option><option value="anime">أنمي</option></select></label>
+          </div>
+          <div class="form-actions">
+            <button class="admin-button primary" id="xtreamImportStart" type="button">إضافة 100 في هذه الدفعة</button>
+            <button class="admin-button danger" id="xtreamImportCancel" type="button" hidden>إيقاف بعد العنصر الحالي</button>
+            <button class="admin-button ghost" id="xtreamImportReset" type="button">إعادة فحص الكتالوج</button>
+          </div>
+          <progress id="xtreamImportProgress" max="100" value="0" style="width:100%;height:12px"></progress>
+          <p id="xtreamImportStats" class="field-help" aria-live="polite">بانتظار بدء الاستيراد.</p>
+          <p id="xtreamImportMessage" class="form-message" role="status" aria-live="polite"></p>
+          <pre id="xtreamImportFailures" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px"></pre>
+          <p class="field-help">لا يتم استيراد البث المباشر. الواجهة تبقى مفتوحة أثناء معالجة الدفعة؛ التوقف يحفظ المؤشر على هذا الجهاز. لم يُختبر تشغيل المصادر المستوردة مع كل خادم Xtream.</p>
+        </div>
         <div class="xtream-stats">
           <article class="stat-card"><div><small>الأفلام</small><strong id="xtreamMovies">—</strong><span>عبر جميع الحسابات</span></div></article>
           <article class="stat-card"><div><small>المسلسلات</small><strong id="xtreamSeries">—</strong><span>عدد العناوين لا الحلقات</span></div></article>
@@ -414,6 +432,7 @@
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.8.2/dist/mpegts.min.js" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="xtream-monitor.js?v=2.9.2-http-consent-20261009-b" defer></script>
-  <script src="app.js?v=2.9.2-http-consent-20261009-b" defer></script>
+  <script src="xtream-import.js?v=20261009-100" defer></script>
+  <script src="app.js?v=20261009-100" defer></script>
 </body>
 </html>
