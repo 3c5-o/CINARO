@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/serve.mjs",
-    "test": "node --check web/data.js && node --check web/supabase.js && node --check web/catalog-playback.js && node --check web/app.js && node --check web/sw.js && node --check admin/supabase.js && node --check admin/app.js && node --check admin/sw.js && node scripts/validate.mjs && node scripts/user-regression.mjs && node scripts/catalog-integration.test.mjs"
+    "test": "node --check web/data.js && node --check web/supabase.js && node --check web/catalog-playback.js && node --check web/app.js && node --check web/sw.js && node --check admin/supabase.js && node --check admin/app.js && node --check admin/sw.js && node scripts/validate.mjs && node scripts/user-regression.mjs && node scripts/catalog-integration.test.mjs && node scripts/source-override.test.mjs"
   },
   "engines": {
     "node": ">=20"
