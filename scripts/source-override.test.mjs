@@ -35,7 +35,7 @@ const movie={kind:"movie",item:{provider:"media-catalog",providerId:"movie_abc",
 assert.equal(resolver.requestPlan(movie)?.type,"movie");
 movie.item.providerSourceMode="manual";
 assert.equal(resolver.requestPlan(movie),null,"Manual override must bypass automatic resolver");
-assert.equal((await resolver.resolve(movie())).status,"skip","Never contact original provider for manual video");
+assert.equal((await resolver.resolve(movie)).status,"skip","Never contact original provider for manual video");
 movie.item.providerSourceMode="auto";
 assert.equal(resolver.requestPlan(movie)?.id,"movie_abc","Switching back to automatic restores provider");
 const anime={kind:"series",item:{provider:"media-catalog-anime",providerSourceMode:"manual"},episode:{providerEpisodeId:"episode_abc"},sources:[{url:"https://cdn.example/episode.mp4"}]};
