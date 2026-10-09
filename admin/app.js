@@ -2530,7 +2530,10 @@
     $("seriesMediaFields")?.classList.toggle("is-hidden", !seriesLike);
     const providerName = asString($("contentProvider")?.value);
     const managedProvider = providerName === "media-catalog" || providerName === "media-catalog-anime";
-    if ($("providerSourceModeField")) $("providerSourceModeField").hidden = !managedProvider;
+    if ($("providerSourceModeField")) {
+      $("providerSourceModeField").hidden = !managedProvider;
+      $("providerSourceModeField").classList.toggle("is-hidden", !managedProvider);
+    }
     if (seriesLike && !state.seasonDraft.length) {
       state.seasonDraft = [newSeason(1)];
       renderSeasonBuilder();
