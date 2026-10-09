@@ -40,10 +40,11 @@ def private_headers():
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
     if not key:
         raise RuntimeError("db_unavailable")
-    return {
-        "apikey": key, "Authorization": "Bearer " + key,
-        "Content-Type": "application/json"
-    }
+    headers = {"apikey": key, "Content-Type": "application/json"}
+    # Secret API keys are not JWTs; legacy service_role JWTs still need Bearer.
+    if not key.startswith("sb_secret_"):
+        headers["Authorization"] = "Bearer " + key
+    return headers
 
 
 def rest_url():
