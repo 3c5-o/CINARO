@@ -1,4 +1,4 @@
-const CACHE = "cinaro-admin-v2.9.2-supabase-202610";
+const CACHE = "cinaro-admin-v2.9.2-http-consent-20261009-b";
 const SHELL = [
   "./",
   "./index.html",
@@ -20,7 +20,7 @@ self.addEventListener("install", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))).then(() => self.clients.claim()));
+  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key.startsWith('cinaro-admin-') && key !== CACHE).map((key) => caches.delete(key)))).then(() => self.clients.claim()));
 });
 
 self.addEventListener("fetch", (event) => {

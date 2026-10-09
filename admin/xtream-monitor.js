@@ -132,6 +132,31 @@ async function changeAccount(method,id,payload){
   await refreshManaged();
   if(credentials.token)await load({...credentials,fresh:true});
 }
+// Recover a mismatched cached HTML shell without relying on a hard reload.
+// An updated JS file can reach mobile browsers before the old PWA page is replaced.
+function ensureHttpConsentControl(){
+  const input=$("xtreamAccountUrl"), form=$("xtreamAccountForm");
+  if(!input||!form)return;
+  const label=input.closest("label");
+  const title=label?.querySelector("span");
+  if(title && /HTTPS/.test(title.textContent||"") && !/HTTP/.test((title.textContent||"").replace("HTTPS","")))
+    title.textContent="عنوان سيرفر Xtream (HTTPS أو HTTP)";
+  if($("xtreamAllowHttp"))return;
+  const approval=document.createElement("label");
+  approval.className="check-field";
+  const checkbox=document.createElement("input");
+  checkbox.type="checkbox";
+  checkbox.id="xtreamAllowHttp";
+  const caption=document.createElement("span");
+  caption.textContent="أوافق على استخدام HTTP غير المشفّر لهذا المصدر";
+  approval.append(checkbox,caption);
+  const warning=document.createElement("p");
+  warning.className="field-help";
+  warning.textContent="عند استخدام HTTP تكون بيانات دخول Xtream غير مشفّرة بين بوابة CINARO والمزوّد. يفضّل HTTPS.";
+  const enabled=$("xtreamAccountEnabled")?.closest("label");
+  if(enabled){enabled.insertAdjacentElement("afterend",approval);approval.insertAdjacentElement("afterend",warning);}
+  else {form.append(approval,warning);}
+}
 function bindManagement(){
   $("xtreamAccountCancel")?.addEventListener("click",resetAccountForm);
   $("xtreamAccountForm")?.addEventListener("submit",async(event)=>{
@@ -229,6 +254,7 @@ async function load({gateway,token,fresh=false}={}){
     if(refresh)refresh.disabled=false;
   }
 }
+ensureHttpConsentControl();
 bindManagement();
 window.CINARO_XTREAM_MONITOR={load,resetAccountForm};
 })();

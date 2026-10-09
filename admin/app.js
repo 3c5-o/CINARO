@@ -3765,6 +3765,6 @@
   renderDashboard();
   if (window.CINARO_ADMIN_SUPABASE) connectSupabase(window.CINARO_ADMIN_SUPABASE);
   if (!window.CinaroNative && "serviceWorker" in navigator && location.protocol === "https:") {
-    navigator.serviceWorker.register("sw.js?v=2.7.0", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
+    navigator.serviceWorker.register("sw.js?v=2.9.2-http-consent-20261009-b", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
   }
 })();
