@@ -68,8 +68,122 @@ function accountCard(a){
   if(a.error)holder.append(n("p","xtream-account-error",errors[a.error]||"تعذر إكمال الفحص."));
   return holder;
 }
+let credentials={gateway:"",token:""};
+let managed=[];
+const msg=(text)=>{if($("xtreamAccountMessage"))$("xtreamAccountMessage").textContent=text;};
+function resetAccountForm(){
+  if($("xtreamAccountForm"))$("xtreamAccountForm").reset();
+  if($("xtreamEditId"))$("xtreamEditId").value="";
+  if($("xtreamAccountEnabled"))$("xtreamAccountEnabled").checked=true;
+  msg("");
+}
+async function callApi(endpoint,method="GET",payload){
+  if(!credentials.token || !/^https:\/\//.test(credentials.gateway))throw Error("يجب الدخول كمدير أساسي لتعديل الحسابات.");
+  const response=await fetch(credentials.gateway.replace(/\/+$/,"")+"/admin/xtream/"+endpoint,{
+    method,cache:"no-store",
+    headers:{Authorization:"Bearer "+credentials.token,Accept:"application/json",...(payload?{"Content-Type":"application/json"}:{})},
+    ...(payload?{body:JSON.stringify(payload)}:{})
+  });
+  if(!response.ok){
+    let code="";
+    try{const body=await response.json();code=String(body.detail||"");}catch{}
+    const messages={
+      db_accounts_unavailable:"جدول Xtream غير موجود في قاعدة CINARO. يجب تطبيق ملف الترحيل أولاً.",
+      invalid_name_or_https_url:"تأكد من اسم الحساب وعنوان HTTPS.",
+      invalid_public_host:"تعذّر تأكيد عنوان الخادم العام.",
+      account_not_found:"هذا الحساب لم يعد موجوداً.",
+      credentials_required:"اسم المستخدم وكلمة المرور مطلوبان للإضافة.",
+      account_limit_reached:"وصلت إلى الحد الأعلى (25 حساباً).",
+      admin_access_denied:"هذه العملية متاحة للمدير الأساسي فقط."
+    };
+    throw Error(messages[code]||"فشلت العملية: "+(code||"HTTP "+response.status));
+  }
+  return response.json();
+}
+function showManaged(list){
+  managed=Array.isArray(list)?list:[];
+  const root=$("xtreamManagedAccounts");
+  if(!root)return;
+  root.replaceChildren();
+  if(!managed.length){root.append(n("p","xtream-empty","لا توجد حسابات مسجلة. أضف حساباً من النموذج أعلاه."));return;}
+  for(const entry of managed){
+    const row=n("div","xtream-managed-row"),desc=n("div","xtream-managed-description");
+    desc.append(n("b","",entry.name),n("small","",entry.url));
+    const actions=n("div","xtream-managed-actions");
+    const edit=n("button","admin-button ghost","تعديل");
+    edit.type="button";edit.dataset.xtreamAction="edit";edit.dataset.id=entry.id;
+    const toggle=n("button","admin-button ghost",entry.enabled?"إيقاف":"تشغيل");
+    toggle.type="button";toggle.dataset.xtreamAction="toggle";toggle.dataset.id=entry.id;
+    const remove=n("button","admin-button ghost","حذف");
+    remove.type="button";remove.dataset.xtreamAction="delete";remove.dataset.id=entry.id;
+    actions.append(edit,toggle,remove);row.append(desc,actions);root.append(row);
+  }
+}
+async function refreshManaged(){
+  const result=await callApi("manage");
+  if(result.ok!==true||!Array.isArray(result.accounts))throw Error("تعذرت قراءة الحسابات.");
+  showManaged(result.accounts);
+}
+async function changeAccount(method,id,payload){
+  const endpoint="manage"+(id?"/"+encodeURIComponent(id):"");
+  await callApi(endpoint,method,payload);
+  resetAccountForm();
+  await refreshManaged();
+  if(credentials.token)await load({...credentials,fresh:true});
+}
+function bindManagement(){
+  $("xtreamAccountCancel")?.addEventListener("click",resetAccountForm);
+  $("xtreamAccountForm")?.addEventListener("submit",async(event)=>{
+    event.preventDefault();
+    const form=event.currentTarget,id=$("xtreamEditId")?.value||"";
+    const payload={
+      name:$("xtreamAccountName")?.value.trim()||"",
+      url:$("xtreamAccountUrl")?.value.trim()||"",
+      enabled:$("xtreamAccountEnabled")?.checked===true
+    };
+    const username=$("xtreamAccountUsername")?.value||"";
+    const password=$("xtreamAccountPassword")?.value||"";
+    if(!id||username)payload.username=username;
+    if(!id||password)payload.password=password;
+    try{
+      if($("xtreamAccountSave"))$("xtreamAccountSave").disabled=true;
+      msg("جاري حفظ الحساب بأمان…");
+      await changeAccount(id?"PATCH":"POST",id,payload);
+      msg("تم حفظ الحساب. يمكنك الآن متابعته.");
+    }catch(e){msg(e.message||"تعذّر حفظ الحساب.");}
+    finally{if($("xtreamAccountSave"))$("xtreamAccountSave").disabled=false;}
+  });
+  $("xtreamManagedAccounts")?.addEventListener("click",async(event)=>{
+    const btn=event.target.closest("[data-xtream-action]");
+    if(!btn)return;
+    const entry=managed.find(item=>item.id===btn.dataset.id);
+    if(!entry)return;
+    const action=btn.dataset.xtreamAction;
+    if(action==="edit"){
+      $("xtreamEditId").value=entry.id;
+      $("xtreamAccountName").value=entry.name||"";
+      $("xtreamAccountUrl").value=entry.url||"";
+      $("xtreamAccountUsername").value="";
+      $("xtreamAccountPassword").value="";
+      $("xtreamAccountEnabled").checked=entry.enabled===true;
+      msg("تعديل "+entry.name+": اترك بيانات الدخول فارغة إذا ما تريد تغييرها.");
+      $("xtreamAccountName").focus();
+      return;
+    }
+    if(action==="delete"&&!confirm("حذف حساب "+entry.name+" نهائياً من المراقبة؟"))return;
+    btn.disabled=true;
+    try{
+      if(action==="toggle")await changeAccount("PATCH",entry.id,{name:entry.name,url:entry.url,enabled:!entry.enabled});
+      if(action==="delete")await changeAccount("DELETE",entry.id);
+      msg(action==="delete"?"تم حذف الحساب.":"تم تغيير حالة الحساب.");
+    }catch(e){msg(e.message||"تعذّرت العملية.");}
+    finally{btn.disabled=false;}
+  });
+}
+
 let working=false;
 async function load({gateway,token,fresh=false}={}){
+  credentials={gateway,token};
   if(working)return;
   working=true;
   const refresh=$("xtreamRefresh");
@@ -78,6 +192,7 @@ async function load({gateway,token,fresh=false}={}){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),65000);
   try{
     if(!token)throw Error("انتهت جلسة الإدارة. سجّل دخولك من جديد.");
+    await refreshManaged();
     const url=String(gateway||"").replace(/\/+$/,"")+"/admin/xtream/accounts"+(fresh?"?fresh=true":"");
     if(!url.startsWith("https://"))throw Error("بوابة المراقبة تحتاج اتصال HTTPS.");
     const res=await fetch(url,{headers:{Authorization:"Bearer "+token,Accept:"application/json"},cache:"no-store",signal:controller.signal});
@@ -98,7 +213,7 @@ async function load({gateway,token,fresh=false}={}){
     if(root){
       root.replaceChildren();
       if(accounts.length)accounts.forEach((a)=>root.append(accountCard(a)));
-      else root.append(n("div","panel xtream-empty","لم تُضف حسابات Xtream على الخادم بعد. اضبط XTREAM_MONITOR_ACCOUNTS_JSON ثم اضغط تحديث الفحص."));
+      else root.append(n("div","panel xtream-empty","ماكو حسابات مسجلة بعد. أضف حساباً من النموذج داخل الإدارة."));
     }
   }catch(e){
     if($("xtreamNotice"))$("xtreamNotice").textContent=e?.name==="AbortError"?"انتهت مهلة الفحص. حاول مجدداً.":e.message||"تعذر الاتصال.";
@@ -108,5 +223,6 @@ async function load({gateway,token,fresh=false}={}){
     if(refresh)refresh.disabled=false;
   }
 }
-window.CINARO_XTREAM_MONITOR={load};
+bindManagement();
+window.CINARO_XTREAM_MONITOR={load,resetAccountForm};
 })();

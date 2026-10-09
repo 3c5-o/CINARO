@@ -317,7 +317,7 @@ public class MainActivity extends Activity {
             }
             if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null) return false;
             String safeTitle = title == null ? "CINARO" : title.trim();
-            String safeType = "hls".equalsIgnoreCase(type) ? "hls" : "progressive";
+            String safeType = ("hls".equalsIgnoreCase(type) || "dash".equalsIgnoreCase(type) || "ts".equalsIgnoreCase(type) || "mkv".equalsIgnoreCase(type)) ? type.toLowerCase(java.util.Locale.ROOT) : "progressive";
             runOnUiThread(() -> {
                 try {
                     Intent intent = new Intent(MainActivity.this, NativePlayerActivity.class);

@@ -949,7 +949,8 @@
     return {
       baseUrl: normalizeMediaApiRoot(saved.baseUrl) || MEDIA_CATALOG_DEFAULT_API_ROOT,
       enabled: saved.enabled !== false,
-      syncEnabled: saved.syncEnabled === true
+      syncEnabled: saved.syncEnabled === true,
+      forceDisabled: saved.forceDisabled === true
     };
   }
 
@@ -968,7 +969,8 @@
     return {
       baseUrl: normalizeAnimeApiUrl(saved.baseUrl) || ANIME_API_DEFAULT_URL,
       enabled: saved.enabled !== false,
-      syncEnabled: saved.syncEnabled === true
+      syncEnabled: saved.syncEnabled === true,
+      forceDisabled: saved.forceDisabled === true
     };
   }
 
@@ -977,6 +979,7 @@
     if ($("animeApiBaseUrl")) $("animeApiBaseUrl").value = settings.baseUrl;
     if ($("animeApiEnabled")) $("animeApiEnabled").checked = settings.enabled;
     if ($("animeApiSyncEnabled")) $("animeApiSyncEnabled").checked = settings.syncEnabled;
+    if ($("animeApiForceDisabled")) $("animeApiForceDisabled").checked = settings.forceDisabled;
     if ($("animeApiSettingsMessage")) {
       setMessage("animeApiSettingsMessage",
         settings.enabled
@@ -995,6 +998,7 @@
     if ($("mediaApiBaseUrl")) $("mediaApiBaseUrl").value = settings.baseUrl;
     if ($("mediaApiEnabled")) $("mediaApiEnabled").checked = settings.enabled;
     if ($("mediaApiSyncEnabled")) $("mediaApiSyncEnabled").checked = settings.syncEnabled;
+    if ($("mediaApiForceDisabled")) $("mediaApiForceDisabled").checked = settings.forceDisabled;
     if ($("mediaApiSettingsMessage")) {
       setMessage("mediaApiSettingsMessage",
         settings.enabled
@@ -2078,7 +2082,8 @@
       const config = {
         baseUrl,
         enabled: $("animeApiEnabled")?.checked === true,
-        syncEnabled: $("animeApiSyncEnabled")?.checked === true,
+        syncEnabled: $("animeApiSyncEnabled")?.checked === true && $("animeApiForceDisabled")?.checked !== true,
+        forceDisabled: $("animeApiForceDisabled")?.checked === true,
         updatedAt: new Date().toISOString(),
         updatedBy: state.authUser.uid
       };
@@ -2133,7 +2138,8 @@
       const config = {
         baseUrl,
         enabled: $("mediaApiEnabled")?.checked === true,
-        syncEnabled: $("mediaApiSyncEnabled")?.checked === true,
+        syncEnabled: $("mediaApiSyncEnabled")?.checked === true && $("mediaApiForceDisabled")?.checked !== true,
+        forceDisabled: $("mediaApiForceDisabled")?.checked === true,
         updatedAt: new Date().toISOString(),
         updatedBy: state.authUser.uid
       };
@@ -3101,7 +3107,7 @@
     if (!isAdmin()) return;
     const payload = {
       schema: "cinaro-backup-v1",
-      appVersion: "2.9.1",
+      appVersion: "2.9.2",
       exportedAt: new Date().toISOString(),
       content: state.content.map((item) => ({ ...item })),
       sections: state.sections.map((item) => ({ ...item })),
@@ -3567,6 +3573,19 @@
     $("logoutButton")?.addEventListener("click", () => state.firebase?.logout().catch((error) => toast(errorMessage(error), "error")));
     $("menuButton")?.addEventListener("click", () => setMobileNavigation(!$("adminSidebar")?.classList.contains("open")));
     $("newContentButton")?.addEventListener("click", () => openNewContent("movie", "manual"));
+    for (const [prefix,form] of [["mediaApi","mediaApiSettingsForm"],["animeApi","animeApiSettingsForm"]]) {
+      $(prefix+"ForceStop")?.addEventListener("click", () => {
+        $(prefix+"ForceDisabled").checked = true;
+        $(prefix+"Enabled").checked = false;
+        $(prefix+"SyncEnabled").checked = false;
+        $(form)?.requestSubmit();
+      });
+      $(prefix+"ForceStart")?.addEventListener("click", () => {
+        $(prefix+"ForceDisabled").checked = false;
+        $(prefix+"Enabled").checked = true;
+        $(form)?.requestSubmit();
+      });
+    }
     $("xtreamRefresh")?.addEventListener("click", () => refreshXtreamAccounts(true));
     ["movieSourceUrl", "movieBackupUrl"].forEach((id) => {
       $(id)?.addEventListener("input", () => {

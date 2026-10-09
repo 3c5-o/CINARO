@@ -2,7 +2,7 @@
   "use strict";
 
   let DATA = window.CINARO_DATA;
-  const WEB_APP_VERSION = "2.9.4";
+  const WEB_APP_VERSION = "2.9.5";
   const URL_APP_VERSION = new URLSearchParams(location.search).get("v")?.match(/^\d+\.\d+\.\d+$/)?.[0] || "";
   const NATIVE_APP_VERSION = navigator.userAgent.match(/CINARO\/(\d+\.\d+\.\d+)/i)?.[1] || "";
   const APP_VERSION = URL_APP_VERSION || NATIVE_APP_VERSION || WEB_APP_VERSION;
@@ -639,6 +639,15 @@
     window.location.href = url;
   }
 
+  function providerForciblyDisabled(item, cfg = state.remoteConfig) {
+    const policies = cfg?.settings || {};
+    if (item?.provider === "media-catalog")
+      return policies.mediaCatalog?.forceDisabled === true;
+    if (item?.provider === "media-catalog-anime")
+      return policies.animeCatalog?.forceDisabled === true;
+    return false;
+  }
+
   function replaceCatalog(payload) {
     state.remoteConfig = payload?.config && typeof payload.config === "object" ? payload.config : {};
     state.sections = Array.isArray(payload?.sections) ? payload.sections : [];
@@ -661,7 +670,10 @@
     updateServiceGate();
     updateUpdateControl();
     if (state.remoteConfig.maintenance) setSupabaseStatus("connected", "وضع الصيانة مفعل من الإدارة");
-    const incomingItems = Array.isArray(payload?.items) ? payload.items : [];
+    // A forced provider shutdown hides all imported titles immediately on
+    // clients receiving app_config, rather than only stopping new imports.
+    const incomingItems = (Array.isArray(payload?.items) ? payload.items : [])
+      .filter((item) => !providerForciblyDisabled(item));
     DATA = {
       ...DATA,
       items: incomingItems,
@@ -674,6 +686,12 @@
     anime = DATA.items.filter((item) => item.kind === "series" && item.contentType === "anime");
     series = DATA.items.filter((item) => item.kind === "series" && item.contentType !== "anime");
     state.heroIndex = 0;
+    // Stop an already-open player when its provider is disabled remotely.
+    if (state.route?.name === "watch" && !itemMap.has(state.route.parts[2])) {
+      navigate("home", true);
+      toast("تم إيقاف المزوّد قسرياً من لوحة الإدارة.", "error");
+      return;
+    }
     if (!DATA.items.length) {
       setSupabaseStatus("connected", state.remoteConfig.maintenance ? "وضع الصيانة مفعل من الإدارة" : "الخدمة جاهزة — لم يُنشر محتوى بعد");
       if (state.route?.name !== "watch") refreshCurrentView();
@@ -1549,6 +1567,12 @@
     });
 
     if (route.name === "watch") {
+      const requestedItem = itemMap.get(route.parts[2]);
+      if (!requestedItem || providerForciblyDisabled(requestedItem)) {
+        navigate("home", true);
+        toast("هذا المصدر متوقف بأمر الإدارة.", "error");
+        return;
+      }
       document.body.classList.add("player-open");
       try {
         openPlayerForRoute(route);
@@ -2017,6 +2041,12 @@
     player.hlsRecoveryAttempts = 0;
   }
 
+  function destroyDash() {
+    if (!player.dash) return;
+    try { player.dash.reset(); } catch (_) {}
+    player.dash = null;
+  }
+
   function destroyMpegTs() {
     if (!player.mpegts) return;
     try { player.mpegts.pause(); } catch (_) {}
@@ -2039,6 +2069,11 @@
   function isHlsSource(source, sourceUrl) {
     const type = String(source?.type || "").toLowerCase();
     return type.includes("mpegurl") || type.includes("hls") || sourceExtension(sourceUrl) === "m3u8";
+  }
+
+  function isDashSource(source, sourceUrl) {
+    const type = String(source?.type || "").toLowerCase();
+    return type.includes("dash+xml") || type.includes("application/dash") || sourceExtension(sourceUrl) === "mpd";
   }
 
   function isTsSource(source, sourceUrl) {
@@ -2066,7 +2101,7 @@
         ? (player.media.title + " — " + player.media.episode.title)
         : (player.media?.title || "CINARO");
       if (window.CinaroNative?.openNativePlayerV2) {
-        const type = isHlsSource(source, sourceUrl) ? "hls" : "progressive";
+        const type = isHlsSource(source, sourceUrl) ? "hls" : isDashSource(source, sourceUrl) ? "dash" : isTsSource(source, sourceUrl) ? "ts" : isMatroskaSource(source, sourceUrl) ? "mkv" : "progressive";
         if (window.CinaroNative.openNativePlayerV2(String(sourceUrl), String(title), type) !== true) return false;
       } else {
         window.CinaroNative.openNativePlayer(String(sourceUrl), String(title));
@@ -2126,6 +2161,7 @@
     player.video.pause();
     destroyHls();
     destroyMpegTs();
+    destroyDash();
     player.video.removeAttribute("src");
     player.video.load();
     player.quality.value = String(index);
@@ -2142,6 +2178,30 @@
     }
 
     startPlaybackWatchdog();
+
+    if (isDashSource(source, sourceUrl)) {
+      const dashRuntime = window.dashjs?.MediaPlayer;
+      if (!dashRuntime) {
+        showPlayerError("بث MPEG-DASH يحتاج مشغل يدعمه. جرّب تطبيق CINARO Android.");
+        return;
+      }
+      try {
+        const dash = dashRuntime().create();
+        player.dash = dash;
+        dash.on(window.dashjs.MediaPlayer.events.ERROR, () => {
+          if (player.dash !== dash) return;
+          destroyDash();
+          handlePlayerError();
+        });
+        dash.initialize(player.video, sourceUrl, Boolean(shouldPlay));
+        return;
+      } catch (error) {
+        console.warn("CINARO DASH player initialization failed", error);
+        destroyDash();
+        handlePlayerError();
+        return;
+      }
+    }
 
     if (isMatroskaSource(source, sourceUrl)) {
       if (openNativePlayer(sourceUrl)) {
@@ -2255,6 +2315,7 @@
     player.video.pause();
     destroyHls();
     destroyMpegTs();
+    destroyDash();
     player.requestedPlay = false;
     player.restorePlaying = false;
     player.switchingSource = false;

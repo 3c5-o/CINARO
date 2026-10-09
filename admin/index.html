@@ -7,10 +7,10 @@
   <meta name="description" content="لوحة إدارة CINARO للمحتوى والمستخدمين والمشرفين">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; connect-src 'self' https: wss:; frame-src 'self' https://zmkkoggsqvwvwkanlyux.supabase.co; style-src 'self' 'unsafe-inline'; script-src 'self' https://cdn.jsdelivr.net; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>CINARO Admin</title>
-  <link rel="manifest" href="manifest.webmanifest?v=2.9.1">
+  <link rel="manifest" href="manifest.webmanifest?v=2.9.2">
   <link rel="icon" type="image/png" href="assets/icons/favicon-32.png">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=2.9.1-xtream">
+  <link rel="stylesheet" href="styles.css?v=2.9.2">
 </head>
 <body class="admin-booting">
   <div id="loginView" class="admin-login-view">
@@ -66,7 +66,7 @@
       <section id="view-dashboard" class="admin-view active" data-title="نظرة عامة">
         <div class="dashboard-hero">
           <div class="dashboard-hero-copy">
-            <span>CINARO CONTROL / 2.9.1</span>
+            <span>CINARO CONTROL / 2.9.2</span>
             <h2>كل المنصة تحت سيطرتك من شاشة واحدة</h2>
             <p>محتوى، طلبات، بلاغات، مستخدمون وإصدارات بتصميم أسرع ومهيأ للموبايل.</p>
             <div class="dashboard-quick-actions">
@@ -242,6 +242,26 @@
             <p>حالة الاشتراك، انتهاء الصلاحية، الاتصالات وأعداد المكتبة. هذه الصفحة للمراقبة فقط ولا تبدأ أي مزامنة.</p></div>
           <button id="xtreamRefresh" class="admin-button ghost" type="button"><svg><use href="#i-activity"></use></svg> تحديث الفحص</button>
         </div>
+        <div class="panel xtream-manage-panel">
+          <div class="panel-heading"><div><span>الحسابات والمصادر</span><h2>إضافة وإدارة حساب Xtream</h2></div></div>
+          <form id="xtreamAccountForm" class="compact-form">
+            <input type="hidden" id="xtreamEditId">
+            <div class="form-grid two">
+              <label><span>اسم الحساب</span><input id="xtreamAccountName" required maxlength="80" placeholder="المصدر الأول"></label>
+              <label><span>عنوان HTTPS للمزوّد</span><input id="xtreamAccountUrl" type="url" required placeholder="https://provider.example"></label>
+              <label><span>اسم المستخدم</span><input id="xtreamAccountUsername" autocomplete="off" maxlength="256" placeholder="اسم المستخدم (يترك فارغاً عند التعديل دون تغيير)"></label>
+              <label><span>كلمة المرور</span><input id="xtreamAccountPassword" type="password" autocomplete="new-password" maxlength="256" placeholder="كلمة المرور (تترك فارغة عند التعديل دون تغيير)"></label>
+            </div>
+            <label class="check-field"><input type="checkbox" id="xtreamAccountEnabled" checked><span>تفعيل الحساب للمراقبة</span></label>
+            <p class="field-help">تُرسل بيانات الدخول عبر HTTPS إلى بوابة CINARO وتُخزّن مشفّرة على الخادم، ولا تظهر مجدداً هنا. لا تستخدم إلا الحسابات المصرّح بها.</p>
+            <div class="form-actions">
+              <button id="xtreamAccountSave" type="submit" class="admin-button primary">حفظ الحساب</button>
+              <button id="xtreamAccountCancel" type="button" class="admin-button ghost">إلغاء التعديل</button>
+            </div>
+            <p id="xtreamAccountMessage" role="status" class="form-message"></p>
+          </form>
+          <div id="xtreamManagedAccounts" class="xtream-managed-list" aria-live="polite"></div>
+        </div>
         <div class="xtream-stats">
           <article class="stat-card"><div><small>الأفلام</small><strong id="xtreamMovies">—</strong><span>عبر جميع الحسابات</span></div></article>
           <article class="stat-card"><div><small>المسلسلات</small><strong id="xtreamSeries">—</strong><span>عدد العناوين لا الحلقات</span></div></article>
@@ -282,9 +302,12 @@
             <div class="form-grid two">
               <label class="check-field"><input id="mediaApiEnabled" type="checkbox" checked><span>تشغيل Media Catalog داخل الإدارة</span></label>
               <label class="check-field"><input id="mediaApiSyncEnabled" type="checkbox"><span>تفعيل المزامنة عبر API</span></label>
+              <label class="check-field"><input id="mediaApiForceDisabled" type="checkbox"><span>حظر قسري: إخفاء الأفلام المستوردة ومنع تشغيلها في تطبيق المستخدم</span></label>
             </div>
             <p class="field-help">إيقاف المزود يمنع استيراد الأفلام. المزامنة تتحكم بزر إضافة جميع الأفلام وتحديثها.</p>
             <div class="tmdb-token-actions">
+              <button id="mediaApiForceStop" class="admin-button ghost" type="button">إيقاف قسري الآن</button>
+              <button id="mediaApiForceStart" class="admin-button ghost" type="button">تشغيل المزوّد</button>
               <button id="mediaApiTestButton" class="admin-button ghost" type="button"><svg><use href="#i-check"></use></svg> اختبار الاتصال</button>
               <button class="admin-button primary" type="submit"><svg><use href="#i-save"></use></svg> حفظ إعدادات API</button>
             </div>
@@ -296,13 +319,21 @@
             <div class="form-grid two">
               <label class="check-field"><input id="animeApiEnabled" type="checkbox" checked><span>تشغيل Anime API</span></label>
               <label class="check-field"><input id="animeApiSyncEnabled" type="checkbox"><span>تفعيل إضافة/مزامنة جميع الأنميات</span></label>
+              <label class="check-field"><input id="animeApiForceDisabled" type="checkbox"><span>حظر قسري: إخفاء الأنمي المستورد ومنع تشغيله في تطبيق المستخدم</span></label>
             </div>
             <div class="tmdb-token-actions">
+              <button id="animeApiForceStop" class="admin-button ghost" type="button">إيقاف قسري الآن</button>
+              <button id="animeApiForceStart" class="admin-button ghost" type="button">تشغيل المزوّد</button>
               <button id="animeApiTestButton" class="admin-button ghost" type="button"><svg><use href="#i-check"></use></svg> اختبار Anime API</button>
               <button class="admin-button primary" type="submit"><svg><use href="#i-save"></use></svg> حفظ إعدادات الأنمي</button>
             </div>
             <p id="animeApiSettingsMessage" class="form-message" role="status"></p>
           </form>
+          <div class="panel compact-form settings-form" data-admin-only>
+            <div class="panel-heading"><div><span>حسابات IPTV</span><h2>حسابات Xtream والمراقبة</h2></div></div>
+            <p>إضافة الحسابات وحذفها وتفعيلها وتحديث معلومات الاشتراك مباشرة من لوحة الإدارة، دون إدخال كلمات المرور على Railway.</p>
+            <button class="admin-button primary" type="button" data-view="xtream">فتح إدارة حسابات Xtream</button>
+          </div>
           <form id="tmdbSettingsForm" class="panel compact-form settings-form">
             <div class="panel-heading"><div><span>مصدر البيانات</span><h2>إعدادات TMDb</h2></div></div>
             <label><span>API Read Access Token</span><input id="tmdbTokenInput" type="password" autocomplete="off" spellcheck="false" placeholder="الصق Bearer Token هنا"><small>يُحفظ محلياً داخل تطبيق الإدارة ويمكن تغييره أو حذفه بأي وقت.</small></label>
@@ -377,10 +408,10 @@
     <symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
   </svg>
 
-  <script src="supabase.js?v=2.9.1" type="module"></script>
+  <script src="supabase.js?v=2.9.2" type="module"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.8.2/dist/mpegts.min.js" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="xtream-monitor.js?v=2.9.1-xtream" defer></script>
-  <script src="app.js?v=2.9.1-xtream" defer></script>
+  <script src="xtream-monitor.js?v=2.9.2" defer></script>
+  <script src="app.js?v=2.9.2" defer></script>
 </body>
 </html>
