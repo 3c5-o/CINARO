@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.webmanifest?v=2.9.1">
   <link rel="icon" type="image/png" href="assets/icons/favicon-32.png">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=2.9.1">
+  <link rel="stylesheet" href="styles.css?v=2.9.1-xtream">
 </head>
 <body class="admin-booting">
   <div id="loginView" class="admin-login-view">
@@ -43,6 +43,7 @@
         <button class="nav-item" type="button" data-view="users" data-admin-only><svg><use href="#i-users"></use></svg><span>المستخدمون</span><em id="navUsersCount">0</em></button>
         <button class="nav-item" type="button" data-view="supervisors" data-admin-only><svg><use href="#i-user-star"></use></svg><span>المشرفون</span></button>
         <button class="nav-item" type="button" data-view="sections" data-admin-only><svg><use href="#i-layers"></use></svg><span>الأقسام</span></button>
+        <button class="nav-item" type="button" data-view="xtream" data-admin-only><svg><use href="#i-layers"></use></svg><span>متابعة حسابات Xtream</span></button>
         <button class="nav-item" type="button" data-view="settings" data-admin-only><svg><use href="#i-settings"></use></svg><span>إعدادات التطبيق</span></button>
         <button class="nav-item" type="button" data-view="activity" data-admin-only><svg><use href="#i-activity"></use></svg><span>سجل العمليات</span></button>
       </nav>
@@ -235,6 +236,28 @@
 
       <section id="view-sections" class="admin-view" data-title="إدارة الأقسام"><div class="section-toolbar"><div><span>تنظيم المكتبة</span><h2>الأقسام والتصنيفات</h2><p>أنشئ أقساماً حقيقية ثم اربط المحتوى والمشرفين بها.</p></div></div><div class="two-column-layout"><form id="sectionForm" class="panel compact-form"><div class="panel-heading"><div><span>إضافة أو تعديل</span><h2 id="sectionFormTitle">قسم جديد</h2></div></div><input id="sectionOriginalId" type="hidden"><label><span>المعرّف</span><input id="sectionId" required pattern="[a-z0-9-]+" placeholder="action"></label><label><span>اسم القسم</span><input id="sectionName" required placeholder="أكشن"></label><label><span>الوصف</span><textarea id="sectionDescription" rows="4"></textarea></label><div class="form-actions"><button id="resetSectionButton" class="admin-button ghost" type="button">تفريغ</button><button class="admin-button primary" type="submit"><svg><use href="#i-save"></use></svg> حفظ القسم</button></div><p id="sectionMessage" class="form-message"></p></form><div class="panel table-panel"><div class="panel-heading"><div><span>الأقسام المتاحة</span><h2>كل الأقسام</h2></div></div><div id="sectionsTable" class="data-table-wrap"></div></div></div></section>
 
+      <section id="view-xtream" class="admin-view" data-title="متابعة حسابات Xtream" data-admin-only>
+        <div class="section-toolbar">
+          <div><span>XTREAM MONITOR</span><h2>متابعة حسابات Xtream</h2>
+            <p>حالة الاشتراك، انتهاء الصلاحية، الاتصالات وأعداد المكتبة. هذه الصفحة للمراقبة فقط ولا تبدأ أي مزامنة.</p></div>
+          <button id="xtreamRefresh" class="admin-button ghost" type="button"><svg><use href="#i-activity"></use></svg> تحديث الفحص</button>
+        </div>
+        <div class="xtream-stats">
+          <article class="stat-card"><div><small>الأفلام</small><strong id="xtreamMovies">—</strong><span>عبر جميع الحسابات</span></div></article>
+          <article class="stat-card"><div><small>المسلسلات</small><strong id="xtreamSeries">—</strong><span>عدد العناوين لا الحلقات</span></div></article>
+          <article class="stat-card"><div><small>الأنمي</small><strong id="xtreamAnime">—</strong><span>تقديري من التصنيفات</span></div></article>
+          <article class="stat-card"><div><small>البث المباشر</small><strong id="xtreamLive">—</strong><span>العدد فقط — دون قسم تشغيل</span></div></article>
+        </div>
+        <div class="panel xtream-summary">
+          <div><b id="xtreamAccountTotal">0 حسابات</b><small id="xtreamLastCheck">لم يبدأ الفحص بعد</small></div>
+          <p id="xtreamNotice" class="form-message" role="status">يتم جلب الحالة من بوابة CINARO الآمنة دون كشف كلمات المرور.</p>
+        </div>
+        <div id="xtreamAccounts" class="xtream-accounts" aria-live="polite">
+          <div class="panel xtream-empty">افتح هذه الصفحة لفحص الحسابات المهيأة على الخادم.</div>
+        </div>
+        <p class="xtream-footnote">ملاحظة: يُقدّر الأنمي من تصنيفات مزود Xtream؛ قد يختلف العدد إذا لم يفصل المزوّد الأنمي عن بقية المحتوى. مجموع الحسابات قد يتضمن عناوين مكررة بين المصادر.</p>
+      </section>
+
       <section id="view-settings" class="admin-view" data-title="إعدادات التطبيق">
         <div class="section-toolbar"><div><span>التحكم العام</span><h2>إعدادات CINARO</h2><p>هذه الإعدادات تؤثر على النسخة المنشورة للمستخدمين.</p></div></div>
         <div class="settings-stack">
@@ -357,6 +380,7 @@
   <script src="supabase.js?v=2.9.1" type="module"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.8.2/dist/mpegts.min.js" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="app.js?v=2.9.1" defer></script>
+  <script src="xtream-monitor.js?v=2.9.1-xtream" defer></script>
+  <script src="app.js?v=2.9.1-xtream" defer></script>
 </body>
 </html>

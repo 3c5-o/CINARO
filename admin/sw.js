@@ -1,10 +1,11 @@
-const CACHE = "cinaro-admin-v2.9.1";
+const CACHE = "cinaro-admin-v2.9.1-xtream";
 const SHELL = [
   "./",
   "./index.html",
   "./styles.css",
   "./supabase.js",
   "./app.js",
+  "./xtream-monitor.js",
   "./manifest.webmanifest",
   "./assets/admin-hero.svg",
   "./assets/icons/favicon-32.png",

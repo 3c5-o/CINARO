@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from telethon import Button, TelegramClient, events, utils
+from xtream_monitor import attach_monitor
 
 API_ID_RAW = os.environ.get("TELEGRAM_API_ID", "").strip()
 API_HASH = os.environ.get("TELEGRAM_API_HASH", "").strip()
@@ -1354,8 +1355,14 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["GET", "HEAD", "OPTIONS"],
-    allow_headers=["Range", "Content-Type", "Accept"],
+    allow_headers=["Range", "Content-Type", "Accept", "Authorization"],
     expose_headers=["Content-Length", "Content-Range", "Accept-Ranges", "Content-Type", "X-CINARO-Storage"],
+)
+
+
+attach_monitor(
+    app, lambda: http_client, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+    os.environ.get("CINARO_OWNER_EMAIL", "ffkyyr@gmail.com")
 )
 
 

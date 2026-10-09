@@ -41,7 +41,7 @@
 
   const $ = (id) => document.getElementById(id);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
-  const views = ["dashboard", "content", "editor", "reports", "requests", "notifications", "users", "supervisors", "sections", "settings", "activity"];
+  const views = ["dashboard", "content", "editor", "xtream", "reports", "requests", "notifications", "users", "supervisors", "sections", "settings", "activity"];
 
   function escapeHTML(value) {
     return String(value == null ? "" : value).replace(/[&<>'"]/g, (character) => ({
@@ -700,6 +700,7 @@
     $("viewTitle").textContent = activeView?.dataset.title || "نظرة عامة";
     setMobileNavigation(false);
     if (next === "content") renderContent();
+    if (next === "xtream") refreshXtreamAccounts();
     if (next === "reports") renderReports();
     if (next === "requests") renderRequests();
     if (next === "notifications") renderNotifications();
@@ -707,6 +708,13 @@
     if (next === "supervisors") renderSupervisors();
     if (next === "sections") renderSections();
     if (next === "activity") renderActivity();
+  }
+
+  async function refreshXtreamAccounts(fresh = false) {
+    if (!isAdmin() || !state.firebase?.getAccessToken || !window.CINARO_XTREAM_MONITOR) return;
+    const token = await state.firebase.getAccessToken().catch(() => "");
+    const gateway = telegramGatewayBase() || "https://gateway-production-7159.up.railway.app";
+    await window.CINARO_XTREAM_MONITOR.load({ gateway, token, fresh });
   }
 
   function renderDashboard() {
@@ -3559,6 +3567,7 @@
     $("logoutButton")?.addEventListener("click", () => state.firebase?.logout().catch((error) => toast(errorMessage(error), "error")));
     $("menuButton")?.addEventListener("click", () => setMobileNavigation(!$("adminSidebar")?.classList.contains("open")));
     $("newContentButton")?.addEventListener("click", () => openNewContent("movie", "manual"));
+    $("xtreamRefresh")?.addEventListener("click", () => refreshXtreamAccounts(true));
     ["movieSourceUrl", "movieBackupUrl"].forEach((id) => {
       $(id)?.addEventListener("input", () => {
         if ($("contentProvider")?.value === "media-catalog" && $("providerSourceMode")) {
