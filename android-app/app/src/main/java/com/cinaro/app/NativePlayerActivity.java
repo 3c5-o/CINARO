@@ -86,8 +86,14 @@ public class NativePlayerActivity extends Activity {
                     .setUri(Uri.parse(url))
                     .setMediaId("cinaro-stream");
             String type = getIntent().getStringExtra(EXTRA_TYPE);
-            if ("hls".equalsIgnoreCase(type)) {
+            if ("hls".equalsIgnoreCase(type) || url.toLowerCase(java.util.Locale.ROOT).matches(".*\\.m3u8(?:\\?.*)?$")) {
                 itemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8);
+            } else if ("dash".equalsIgnoreCase(type) || url.toLowerCase(java.util.Locale.ROOT).matches(".*\\.mpd(?:\\?.*)?$")) {
+                itemBuilder.setMimeType(MimeTypes.APPLICATION_MPD);
+            } else if ("ts".equalsIgnoreCase(type)) {
+                itemBuilder.setMimeType("video/mp2t");
+            } else if ("mkv".equalsIgnoreCase(type)) {
+                itemBuilder.setMimeType("video/x-matroska");
             }
             player.setMediaItem(itemBuilder.build());
             player.prepare();
