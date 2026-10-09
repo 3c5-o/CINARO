@@ -1872,3 +1872,28 @@ textarea:focus {
   .anime-import-hero{align-items:flex-start}
   .tmdb-sync-summary{grid-template-columns:1fr 1fr}
 }
+
+
+/* Xtream monitoring: admin-only, display-only; no live-TV navigation. */
+.xtream-stats {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}
+.xtream-summary {display:flex;justify-content:space-between;align-items:center;gap:16px;padding:18px;margin-bottom:18px;flex-wrap:wrap}
+.xtream-summary > div {display:flex;flex-direction:column;gap:5px}
+.xtream-summary small,.xtream-account small {color:var(--muted)}
+.xtream-summary .form-message {margin:0}
+.xtream-accounts {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.xtream-account {min-width:0;padding:20px}
+.xtream-account-head {display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:18px}
+.xtream-account-head h3 {margin:0 0 6px;font-size:1.12rem;overflow-wrap:anywhere}
+.xtream-account-counts {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:15px}
+.xtream-account-counts > div {display:flex;flex-direction:column;gap:8px;min-width:0;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:12px 8px}
+.xtream-account-counts span {font-size:.75rem;color:var(--muted)}
+.xtream-account-counts b {font-size:1.2rem;font-variant-numeric:tabular-nums}
+.xtream-details {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;margin:0}
+.xtream-details > div {display:flex;flex-direction:column;gap:4px;padding:11px 3px;border-bottom:1px solid var(--line);min-width:0}
+.xtream-details dt {color:var(--muted);font-size:.8rem}
+.xtream-details dd {margin:0;font-size:.9rem;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.xtream-account-error {color:var(--red);border:1px solid rgba(255,54,87,.2);border-radius:10px;background:rgba(255,54,87,.06);padding:12px;margin:14px 0 0;font-size:.86rem}
+.xtream-empty {padding:22px;color:var(--muted);grid-column:1/-1}
+.xtream-footnote {color:var(--muted);font-size:.84rem;line-height:1.7;margin:15px 0}
+@media(max-width:1050px) {.xtream-accounts{grid-template-columns:1fr}.xtream-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:510px) {.xtream-account{padding:14px}.xtream-account-counts{grid-template-columns:repeat(2,minmax(0,1fr))}.xtream-details{grid-template-columns:1fr}.xtream-stats{gap:8px}}
