@@ -102,6 +102,29 @@ async function enrich(item){
     backdrop:d.backdrop_path?"https://image.tmdb.org/t/p/w1280"+d.backdrop_path:""
   };
 }
+async function enrichEpisodeMetadata(seasons,tmdbId){
+  if(!tmdbId||!Array.isArray(seasons))return seasons;
+  for(const season of seasons){
+    try{
+      const tmdb=await tmdbJson("/tv/"+tmdbId+"/season/"+season.number,{language:"ar-IQ"});
+      const byNumber=new Map((Array.isArray(tmdb.episodes)?tmdb.episodes:[])
+        .map(episode=>[Number(episode.episode_number),episode]));
+      for(const episode of season.episodes){
+        const data=byNumber.get(Number(episode.number));
+        if(!data)continue;
+        if(text(data.name))episode.title=text(data.name).slice(0,150);
+        if(asNumber(data.runtime)>0)episode.duration=asNumber(data.runtime);
+        if(data.still_path)episode.thumbnail="https://image.tmdb.org/t/p/w780"+data.still_path;
+      }
+      if(text(tmdb.name))season.title=text(tmdb.name).slice(0,120);
+    }catch(error){
+      // Episode list remains complete from Xtream even when TMDb lacks
+      // episode artwork/translations for a particular season.
+      if(String(error.message||"").includes("429"))throw error;
+    }
+  }
+  return seasons;
+}
 function fallbackPoster(row){
   const raw=text(row.poster);
   if(/^https:\/\//i.test(raw))return raw;
@@ -181,6 +204,7 @@ async function start(){
           else{
             const detail=await api("detail",{account:item.accountId,kind:item.kind,media_id:item.id,extension:item.extension||"mp4"});
             const payload=buildPayload(item,info,detail);
+            if(item.kind==="series"&&info?.id)await enrichEpisodeMetadata(payload.seasons,info.id);
             // Atomic per-title upsert: all episodes are in one Supabase record.
             await context.save(payload);
             providerSet.add(providerId);ids.add(payload.id);
