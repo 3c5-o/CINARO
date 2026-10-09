@@ -92,6 +92,7 @@ const normalizeSeason = (season, index, poster) => {
   const episodes = (Array.isArray(season?.episodes) ? season.episodes : [])
     .map((episode, episodeIndex) => ({
       number: Math.max(1, Math.round(numberValue(episode?.number, episodeIndex + 1, 1, 10000))),
+      providerEpisodeId: textValue(episode?.providerEpisodeId || episode?.id, "", 100),
       title: textValue(episode?.title, "الحلقة " + (episodeIndex + 1), 180),
       description: textValue(episode?.description, "", 1200),
       duration: Math.max(0, Math.round(numberValue(episode?.duration, 0, 0, 10000))),
@@ -127,6 +128,9 @@ const normalizeContentRow = (row) => {
     id,
     kind,
     contentType: raw.contentType === "anime" ? "anime" : kind,
+    provider: textValue(raw.provider, "", 50),
+    providerId: textValue(raw.providerId, "", 150),
+    providerBaseUrl: mediaUrl(raw.providerBaseUrl, ""),
     title,
     englishTitle: textValue(raw.englishTitle, "", 180),
     year: Math.round(numberValue(raw.year, new Date().getFullYear(), 1888, 2200)),
