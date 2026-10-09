@@ -416,6 +416,12 @@ const client = {
   provider: "supabase",
   adminEmail: OWNER_EMAIL,
 
+  async getAccessToken() {
+    const { data, error } = await supabase.auth.getSession();
+    throwIf(error);
+    return data?.session?.access_token || "";
+  },
+
   onAuth(callback) {
     let active = true;
     const publish = async (user) => {
