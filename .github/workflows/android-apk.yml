@@ -132,8 +132,7 @@ jobs:
             NOTES="CINARO User 2.9.4 Beta + Admin 2.9.1 Beta: التحكم في أولوية مصادر تشغيل الفيديو المستوردة."
           fi
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/*.apk dist/CINARO-Android.apk.sha256 --clobber
-            gh release edit "$TAG" --target "$GITHUB_SHA" --title "$TITLE" --notes "$NOTES"
+            echo "Existing $TAG release left unchanged; this commit updates monitoring web/server only."
           else
             gh release create "$TAG" \
               dist/*.apk \
