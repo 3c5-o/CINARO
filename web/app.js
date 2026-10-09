@@ -1866,6 +1866,8 @@
     const resolver = window.CINARO_CATALOG_PLAYBACK;
     const catalogPlan = resolver?.requestPlan?.(media, nativePlayerAvailable());
     if (!media || (!media.sources.length && !catalogPlan)) {
+      player.resolveSerial = (player.resolveSerial || 0) + 1;
+      player.resolvingCatalog = false;
       destroyHls();
       clearInterval(player.endedTimer);
       player.endedTimer = 0;
@@ -1921,6 +1923,14 @@
     populateQualityOptions(media.sources);
     populateSubtitleTracks(media.subtitles);
     if (catalogPlan) {
+      // Do not leave the old title playing during the network validation.
+      player.resolvingCatalog = true;
+      player.switchingSource = true;
+      player.video.pause();
+      destroyHls();
+      destroyMpegTs();
+      player.video.removeAttribute("src");
+      player.video.load();
       resolveCatalogPlayerSources(media, player.resolveSerial);
     } else {
       loadPlayerSource(0, player.restoreTime, true);
@@ -2519,11 +2529,12 @@
 
   function bindPlayerEvents() {
     player.video.addEventListener("loadstart", () => {
-      if (player.nativePlaybackActive) return;
+      if (player.nativePlaybackActive || player.resolvingCatalog) return;
       player.loading.hidden = false;
       player.error.hidden = true;
     });
     player.video.addEventListener("loadedmetadata", () => {
+      if (player.resolvingCatalog) return;
       player.switchingSource = false;
       const resumeTime = Math.min(player.restoreTime || 0, Math.max(0, player.video.duration - 2));
       if (resumeTime > 3) {
@@ -2539,13 +2550,13 @@
       }
     });
     ["canplay", "playing"].forEach((eventName) => player.video.addEventListener(eventName, () => {
-      if (player.nativePlaybackActive) return;
+      if (player.nativePlaybackActive || player.resolvingCatalog) return;
       stopPlaybackWatchdog();
       player.loading.hidden = true;
       player.error.hidden = true;
     }));
     player.video.addEventListener("waiting", () => {
-      if (!player.video.paused && !player.nativePlaybackActive) {
+      if (!player.video.paused && !player.nativePlaybackActive && !player.resolvingCatalog) {
         player.loading.hidden = false;
         startPlaybackWatchdog();
       }
@@ -2577,7 +2588,9 @@
     player.video.addEventListener("durationchange", updateTimeline);
     player.video.addEventListener("ratechange", updatePlayerInfo);
     player.video.addEventListener("ended", handleVideoEnded);
-    player.video.addEventListener("error", handlePlayerError);
+    player.video.addEventListener("error", () => {
+      if (!player.resolvingCatalog) handlePlayerError();
+    });
 
     player.centerPlay.addEventListener("click", (event) => { event.stopPropagation(); togglePlayback(); });
     player.playPause.addEventListener("click", togglePlayback);
