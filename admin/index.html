@@ -248,11 +248,13 @@
             <input type="hidden" id="xtreamEditId">
             <div class="form-grid two">
               <label><span>اسم الحساب</span><input id="xtreamAccountName" required maxlength="80" placeholder="المصدر الأول"></label>
-              <label><span>عنوان HTTPS للمزوّد</span><input id="xtreamAccountUrl" type="url" required placeholder="https://provider.example"></label>
+              <label><span>عنوان سيرفر Xtream (HTTPS أو HTTP)</span><input id="xtreamAccountUrl" type="url" required placeholder="http://provider.example:8080"></label>
               <label><span>اسم المستخدم</span><input id="xtreamAccountUsername" autocomplete="off" maxlength="256" placeholder="اسم المستخدم (يترك فارغاً عند التعديل دون تغيير)"></label>
               <label><span>كلمة المرور</span><input id="xtreamAccountPassword" type="password" autocomplete="new-password" maxlength="256" placeholder="كلمة المرور (تترك فارغة عند التعديل دون تغيير)"></label>
             </div>
             <label class="check-field"><input type="checkbox" id="xtreamAccountEnabled" checked><span>تفعيل الحساب للمراقبة</span></label>
+            <label class="check-field"><input type="checkbox" id="xtreamAllowHttp"><span>أوافق على استخدام HTTP غير المشفّر لهذا المصدر إذا لم يدعم HTTPS</span></label>
+            <p class="field-help">يفضّل HTTPS. عند اختيار HTTP يبقى موقع الإدارة والاتصال ببوابة CINARO عبر HTTPS، لكن سيرفر Xtream يستقبل اسم المستخدم وكلمة المرور بدون تشفير. لا تستخدم HTTP إلا مع مزوّد موثوق وحساب مخصّص.</p>
             <p class="field-help">تُرسل بيانات الدخول عبر HTTPS إلى بوابة CINARO وتُخزّن مشفّرة على الخادم، ولا تظهر مجدداً هنا. لا تستخدم إلا الحسابات المصرّح بها.</p>
             <div class="form-actions">
               <button id="xtreamAccountSave" type="submit" class="admin-button primary">حفظ الحساب</button>

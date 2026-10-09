@@ -3,7 +3,8 @@
 Configuration: XTREAM_MONITOR_ACCOUNTS_JSON (Railway secret), JSON array of
 {"id":"main","name":"المصدر الأول","url":"https://provider.example:443",
  "username":"...","password":"...","enabled":true}.
-Requires HTTPS and public DNS hosts. Does not import or play any media.
+Supports HTTPS and explicitly approved HTTP on publicly routable provider hosts.
+Does not import or play any media.
 """
 import asyncio
 import ipaddress
@@ -58,23 +59,31 @@ def configured_accounts():
     return results
 
 
-def public_https_url(raw):
+def public_provider_url(raw, allow_http=False):
+    """Allow explicit HTTP for public Xtream providers, never private/internal hosts."""
     try:
         value = urlsplit(raw)
-        if value.scheme != "https" or not value.hostname or value.username or value.password:
+        if value.scheme not in (("https", "http") if allow_http else ("https",)):
+            return False
+        if not value.hostname or value.username or value.password:
             return False
         if value.path not in ("", "/") or value.query or value.fragment:
             return False
+        _ = value.port  # reject malformed ports rather than accepting partial URLs
         host = value.hostname.lower()
         if host == "localhost" or host.endswith((".local", ".internal", ".localhost")):
             return False
         try:
-            ipaddress.ip_address(host)
-            return False  # require a DNS name, not arbitrary private/public IP literals
+            return ipaddress.ip_address(host).is_global
         except ValueError:
-            return "." in host
+            return "." in host and not host.endswith(".")
     except (ValueError, TypeError):
         return False
+
+
+def public_https_url(raw):
+    """Backward-compatible HTTPS-only validator for existing clients/tests."""
+    return public_provider_url(raw)
 
 
 async def public_dns(host, port):
@@ -150,13 +159,13 @@ async def fetch_snapshot(client, account):
     }
     try:
         url = account["url"]
-        if not public_https_url(url):
-            raise RuntimeError("public_https_required")
+        if not public_provider_url(url, allow_http=True):
+            raise RuntimeError("invalid_public_provider_url")
         parsed = urlsplit(url)
         snap["host"] = parsed.hostname
         if not account["enabled"]:
             return snap
-        if not await public_dns(parsed.hostname, parsed.port or 443):
+        if not await public_dns(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80)):
             raise RuntimeError("provider_host_unreachable")
         params = {"username": account["username"], "password": account["password"]}
         auth = await json_get(client, url + "/player_api.php", params)
@@ -202,7 +211,7 @@ async def fetch_snapshot(client, account):
         snap["health"] = "error"
         code = str(exc)
         snap["error"] = code if code in (
-            "public_https_required", "provider_host_unreachable", "provider_auth_invalid",
+            "invalid_public_provider_url", "provider_host_unreachable", "provider_auth_invalid",
             "provider_catalog_incomplete", "provider_invalid_json", "provider_list_too_large"
         ) or code.startswith("provider_http_") else "provider_connection_failed"
     except Exception:
