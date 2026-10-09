@@ -2,8 +2,8 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 "use strict";
 
-const SUPABASE_URL = "https://zmkkoggsqvwvwkanlyux.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_yYSX8h3eAkbP3_Xg6ZNpoA_E1CwAvJJ";
+const SUPABASE_URL = "https://kcpwhmkmyqgbzzhtxwiz.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_leK6goZKQXo1sBBFOIY__A_1hAIFhW9";
 const OWNER_EMAIL = "ffkyyr@gmail.com";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
@@ -11,7 +11,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    storageKey: "cinaro:admin:supabase:auth:v1"
+    storageKey: "cinaro:admin:supabase:auth:new-202610"
   },
   realtime: { params: { eventsPerSecond: 8 } }
 });
@@ -412,7 +412,7 @@ async function deleteDocument(name, id) {
 }
 
 const client = {
-  projectId: "zmkkoggsqvwvwkanlyux",
+  projectId: "kcpwhmkmyqgbzzhtxwiz",
   provider: "supabase",
   adminEmail: OWNER_EMAIL,
 
