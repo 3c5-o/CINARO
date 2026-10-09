@@ -18,7 +18,7 @@ const remain=(v)=>{
 const statuses={
   online:["متصل","published"],partial:["بيانات جزئية","draft"],
   disabled:["معطّل","draft"],inactive:["غير نشط","draft"],
-  error:["خطأ اتصال","draft"]
+  error:["خطأ اتصال","draft"],expired:["اشتراك منتهي","draft"]
 };
 const errors={
   provider_catalog_incomplete:"لم تصل جميع قوائم الأفلام والمسلسلات والقنوات.",
