@@ -161,7 +161,7 @@ assert(webSw.includes('"./supabase.js"'), "user PWA caches Supabase client");
 assert(adminSw.includes('cinaro-admin-v2.9.0'), "admin PWA cache bumped");
 assert(adminSw.includes('"./supabase.js"'), "admin PWA caches Supabase client");
 
-assert(/\bversionCode\s+22\b/.test(buildGradle), "Android versionCode is 23");
+assert(/\bversionCode\s+23\b/.test(buildGradle), "Android versionCode is 23");
 assert(buildGradle.includes('versionName "2.9.3"'), "Android user version is 2.9.3");
 assert(buildGradle.includes('versionName "2.9.0-admin"'), "Android admin version is 2.9.0-admin");
 assert(buildGradle.includes('versionCode 20') && buildGradle.includes('versionName "2.9.0-admin"'), "Android admin keeps existing versionCode 20");
