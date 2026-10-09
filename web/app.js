@@ -1804,7 +1804,9 @@
     viewRecorded: false,
     hls: null,
     hlsRecoveryAttempts: 0,
-    mpegts: null
+    mpegts: null,
+    resolveSerial: 0,
+    resolvingCatalog: false
   };
 
   function playerMediaFromRoute(route) {
@@ -1861,7 +1863,9 @@
 
   function openPlayerForRoute(route) {
     const media = playerMediaFromRoute(route);
-    if (!media || !media.sources.length) {
+    const resolver = window.CINARO_CATALOG_PLAYBACK;
+    const catalogPlan = resolver?.requestPlan?.(media, nativePlayerAvailable());
+    if (!media || (!media.sources.length && !catalogPlan)) {
       destroyHls();
       clearInterval(player.endedTimer);
       player.endedTimer = 0;
@@ -1885,13 +1889,15 @@
     }
 
     player.root.hidden = false;
-    if (player.media?.key === media.key && player.video.src) {
+    if (player.media?.key === media.key && (player.video.src || player.nativePlaybackActive || player.resolvingCatalog)) {
       showPlayerControls();
       return;
     }
 
     clearInterval(player.endedTimer);
     player.endedTimer = 0;
+    player.resolveSerial = (player.resolveSerial || 0) + 1;
+    player.resolvingCatalog = false;
     player.media = media;
     player.sourceIndex = 0;
     player.failedSources.clear();
@@ -1914,7 +1920,11 @@
 
     populateQualityOptions(media.sources);
     populateSubtitleTracks(media.subtitles);
-    loadPlayerSource(0, player.restoreTime, true);
+    if (catalogPlan) {
+      resolveCatalogPlayerSources(media, player.resolveSerial);
+    } else {
+      loadPlayerSource(0, player.restoreTime, true);
+    }
     state.firebase?.log("select_content", {
       content_type: media.kind,
       item_id: media.item.id
@@ -1930,6 +1940,39 @@
           artwork: [{ src: safeMediaUrl(media.item.poster), sizes: "512x768" }]
         });
       } catch (_) {}
+    }
+  }
+
+  async function resolveCatalogPlayerSources(media, serial) {
+    const resolver = window.CINARO_CATALOG_PLAYBACK;
+    if (!resolver?.resolve) {
+      showPlayerError("تعذّر تجهيز أداة فحص الفيديو. أعد تحميل التطبيق.");
+      return;
+    }
+    player.resolvingCatalog = true;
+    player.loading.hidden = false;
+    player.error.hidden = true;
+    try {
+      const result = await resolver.resolve(media, { native: nativePlayerAvailable() });
+      if (player.resolveSerial !== serial || player.media !== media || player.root.hidden) return;
+      player.resolvingCatalog = false;
+      if (result.status === "ready" && result.sources?.length) {
+        // Play only the checked source. Never fall back automatically to known
+        // broken HLS or incompatible container URLs from an old import.
+        media.sources = result.sources;
+        player.failedSources.clear();
+        populateQualityOptions(media.sources);
+        loadPlayerSource(0, player.restoreTime, player.requestedPlay);
+      } else if (result.status === "skip" && media.sources.length) {
+        loadPlayerSource(0, player.restoreTime, player.requestedPlay);
+      } else {
+        showPlayerError("مصادر هذا المحتوى في Media Catalog لم تجتز فحص التشغيل للمتصفح. جرّب لاحقاً أو اطلب تحديث الرابط من الإدارة.");
+      }
+    } catch (error) {
+      if (player.resolveSerial !== serial || player.media !== media || player.root.hidden) return;
+      console.warn("CINARO catalog playback resolution failed", String(error?.message || error));
+      player.resolvingCatalog = false;
+      showPlayerError("تعذّر التحقق من مصدر الفيديو حالياً. تأكد من الاتصال واضغط إعادة المحاولة.");
     }
   }
 
@@ -2194,6 +2237,8 @@
   }
 
   function releasePlayerMedia() {
+    player.resolveSerial = (player.resolveSerial || 0) + 1;
+    player.resolvingCatalog = false;
     stopPlaybackWatchdog();
     player.sourceGeneration = (player.sourceGeneration || 0) + 1;
     player.nativePlaybackActive = false;
@@ -2540,8 +2585,15 @@
     byId("forwardTenButton").addEventListener("click", () => seekBy(10));
     byId("closePlayerButton").addEventListener("click", closePlayer);
     byId("retryVideoButton").addEventListener("click", () => {
+      if (!player.media || player.resolvingCatalog) return;
       player.failedSources.clear();
-      loadPlayerSource(player.sourceIndex, player.video.currentTime || player.restoreTime, true);
+      const resolver = window.CINARO_CATALOG_PLAYBACK;
+      if (resolver?.requestPlan?.(player.media, nativePlayerAvailable())) {
+        const serial = player.resolveSerial = (player.resolveSerial || 0) + 1;
+        resolveCatalogPlayerSources(player.media, serial);
+      } else {
+        loadPlayerSource(player.sourceIndex, player.video.currentTime || player.restoreTime, true);
+      }
     });
     player.previous.addEventListener("click", goToPreviousEpisode);
     player.next.addEventListener("click", goToNextEpisode);
