@@ -1,6 +1,6 @@
 {
   "name": "cinaro",
-  "version": "2.9.4",
+  "version": "2.9.5",
   "private": true,
   "description": "CINARO Arabic movies, series and anime progressive web app",
   "type": "module",
