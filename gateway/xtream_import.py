@@ -171,6 +171,19 @@ def _episodes(account_id, payload):
         seasons.append({"number": int(season_key), "title": f"الموسم {int(season_key)}", "episodes": episodes})
     if not seasons or not total:
         raise ValueError("series_episodes_missing")
+    # Xtream's series_info may include authoritative counts; reject partial
+    # responses rather than silently publishing a one-episode "full" series.
+    expected_seasons = payload.get("seasons") if isinstance(payload, dict) else None
+    if isinstance(expected_seasons, list):
+        actual = {season["number"]: len(season["episodes"]) for season in seasons}
+        for season in expected_seasons:
+            if not isinstance(season, dict):
+                continue
+            num = season.get("season_number", season.get("number"))
+            expected = season.get("episode_count", season.get("episodes_count"))
+            if str(num).isdigit() and str(expected).isdigit() and int(num) >= 1:
+                if actual.get(int(num), 0) < int(expected):
+                    raise ValueError("series_episodes_incomplete")
     return seasons, total
 
 
