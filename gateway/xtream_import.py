@@ -212,8 +212,11 @@ def attach_xtream_import(app, client_provider, supabase_url, service_key, owner_
     @router.get("/admin/xtream/detail")
     async def detail(authorization: str = Header(default=""),
                      account: str = Query(...), kind: str = Query(...),
-                     media_id: str = Query(...)):
+                     media_id: str = Query(...),
+                     extension: str = Query("mp4")):
         if kind not in ("movie", "series") or not _STREAM_ID.fullmatch(media_id):
+            raise HTTPException(400, "invalid_media_id")
+        if extension not in _EXT:
             raise HTTPException(400, "invalid_media_id")
         client = await owner_client(authorization)
         item = await _account(client, account)
@@ -221,8 +224,8 @@ def attach_xtream_import(app, client_provider, supabase_url, service_key, owner_
             # Playback is always a gateway capability URL, never an Xtream credential URL.
             return {"ok": True, "sources": [{
                 "label": "Xtream",
-                "path": _source_path(account, "movie", media_id, "mp4"),
-                "type": "video/mp4"
+                "path": _source_path(account, "movie", media_id, extension),
+                "type": _MIME[extension]
             }]}
         try:
             raw = await json_get(client, item["url"] + "/player_api.php", {
