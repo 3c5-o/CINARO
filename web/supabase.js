@@ -130,6 +130,7 @@ const normalizeContentRow = (row) => {
     contentType: raw.contentType === "anime" ? "anime" : kind,
     provider: textValue(raw.provider, "", 50),
     providerId: textValue(raw.providerId, "", 150),
+    providerSourceMode: raw.providerSourceMode === "manual" ? "manual" : "auto",
     providerBaseUrl: mediaUrl(raw.providerBaseUrl, ""),
     title,
     englishTitle: textValue(raw.englishTitle, "", 180),
