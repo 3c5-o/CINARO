@@ -1369,6 +1369,11 @@ attach_monitor(
     os.environ.get("CINARO_OWNER_EMAIL", "ffkyyr@gmail.com")
 )
 
+attach_xtream_import(
+    app, lambda: http_client, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+    os.environ.get("CINARO_OWNER_EMAIL", "ffkyyr@gmail.com")
+)
+
 
 @app.get("/")
 async def root() -> dict[str, Any]:
