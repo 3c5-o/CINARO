@@ -1,6 +1,7 @@
 package com.cinaro.app;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.PictureInPictureParams;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
@@ -8,6 +9,9 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 import android.util.Rational;
 import android.view.View;
 import android.view.WindowInsets;
@@ -16,6 +20,7 @@ import android.view.WindowManager;
 import android.widget.Toast;
 
 import androidx.media3.common.MediaItem;
+import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
@@ -26,9 +31,13 @@ import androidx.media3.ui.PlayerView;
 public class NativePlayerActivity extends Activity {
     public static final String EXTRA_URL = "cinaro_player_url";
     public static final String EXTRA_TITLE = "cinaro_player_title";
+    public static final String EXTRA_TYPE = "cinaro_player_type";
 
     private ExoPlayer player;
     private PlayerView playerView;
+    private final Handler stallHandler = new Handler(Looper.getMainLooper());
+    private final Runnable stallTimeout = () -> showPlaybackError("انتهت مهلة تحميل الفيديو. تحقق من الاتصال أو جرّب مصدرًا آخر.");
+    private boolean errorDialogVisible = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,30 +55,80 @@ public class NativePlayerActivity extends Activity {
             return;
         }
 
-        playerView = new PlayerView(this);
-        playerView.setUseController(true);
-        playerView.setControllerAutoShow(true);
-        playerView.setKeepScreenOn(true);
-        playerView.setBackgroundColor(Color.BLACK);
-        setContentView(playerView);
+        try {
+            playerView = new PlayerView(this);
+            playerView.setUseController(true);
+            playerView.setControllerAutoShow(true);
+            playerView.setKeepScreenOn(true);
+            playerView.setBackgroundColor(Color.BLACK);
+            setContentView(playerView);
 
-        player = new ExoPlayer.Builder(this).build();
-        playerView.setPlayer(player);
-        player.addListener(new Player.Listener() {
-            @Override
-            public void onPlayerError(PlaybackException error) {
-                Toast.makeText(NativePlayerActivity.this,
-                        "تعذّر تشغيل المصدر بهذه الصيغة", Toast.LENGTH_SHORT).show();
+            player = new ExoPlayer.Builder(this).build();
+            playerView.setPlayer(player);
+            player.addListener(new Player.Listener() {
+                @Override
+                public void onPlaybackStateChanged(int state) {
+                    if (state == Player.STATE_BUFFERING) {
+                        scheduleStallTimeout();
+                    } else {
+                        stallHandler.removeCallbacks(stallTimeout);
+                    }
+                }
+
+                @Override
+                public void onPlayerError(PlaybackException error) {
+                    Log.e("CINARO_PLAYER", "Playback error code: " + error.errorCode, error);
+                    showPlaybackError("تعذّر تشغيل الفيديو. قد يكون الرابط غير متاح أو الترميز غير مدعوم.");
+                }
+            });
+
+            MediaItem.Builder itemBuilder = new MediaItem.Builder()
+                    .setUri(Uri.parse(url))
+                    .setMediaId("cinaro-stream");
+            String type = getIntent().getStringExtra(EXTRA_TYPE);
+            if ("hls".equalsIgnoreCase(type)) {
+                itemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8);
             }
-        });
+            player.setMediaItem(itemBuilder.build());
+            player.prepare();
+            player.setPlayWhenReady(true);
+        } catch (RuntimeException error) {
+            Log.e("CINARO_PLAYER", "Native player initialization failed", error);
+            showPlaybackError("تعذّر بدء مشغل الفيديو على هذا الجهاز.");
+        }
+    }
 
-        MediaItem mediaItem = new MediaItem.Builder()
-                .setUri(Uri.parse(url))
-                .setMediaId(url)
-                .build();
-        player.setMediaItem(mediaItem);
-        player.prepare();
-        player.setPlayWhenReady(true);
+    private void scheduleStallTimeout() {
+        stallHandler.removeCallbacks(stallTimeout);
+        if (!isFinishing()) stallHandler.postDelayed(stallTimeout, 25000L);
+    }
+
+    private void showPlaybackError(String message) {
+        stallHandler.removeCallbacks(stallTimeout);
+        if (isFinishing() || isDestroyed() || errorDialogVisible) return;
+        errorDialogVisible = true;
+        if (player != null) player.pause();
+        new AlertDialog.Builder(this)
+                .setTitle("مشكلة في تشغيل الفيديو")
+                .setMessage(message)
+                .setCancelable(false)
+                .setPositiveButton("إعادة المحاولة", (dialog, which) -> {
+                    errorDialogVisible = false;
+                    if (player == null) {
+                        finish();
+                        return;
+                    }
+                    try {
+                        player.seekToDefaultPosition();
+                        player.prepare();
+                        player.play();
+                    } catch (RuntimeException error) {
+                        Log.e("CINARO_PLAYER", "Playback retry failed", error);
+                        finish();
+                    }
+                })
+                .setNegativeButton("العودة إلى CINARO", (dialog, which) -> finish())
+                .show();
     }
 
     private boolean isSafeMediaUrl(String value) {
@@ -134,6 +193,7 @@ public class NativePlayerActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        stallHandler.removeCallbacks(stallTimeout);
         if (playerView != null) playerView.setPlayer(null);
         if (player != null) {
             player.release();
