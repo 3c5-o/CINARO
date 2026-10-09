@@ -3107,7 +3107,7 @@
     if (!isAdmin()) return;
     const payload = {
       schema: "cinaro-backup-v1",
-      appVersion: "2.9.1",
+      appVersion: "2.9.2",
       exportedAt: new Date().toISOString(),
       content: state.content.map((item) => ({ ...item })),
       sections: state.sections.map((item) => ({ ...item })),
