@@ -103,6 +103,9 @@ assert(webSupabase.includes('from("user_states")'), "favorites/history use Supab
 assert(webSupabase.includes('signInWithPassword'), "user login uses Supabase Auth");
 assert(webSupabase.includes('signUp'), "user registration uses Supabase Auth");
 assert(webSupabase.includes('.eq("published", true)'), "user catalog only requests published content");
+const anonymousCatalogPolicy = read("supabase/migrations/20261009210000_fix_public_catalog_anon_read.sql");
+assert(anonymousCatalogPolicy.includes("ALTER POLICY cinaro_content_read ON public.content TO authenticated"), "staff membership checks excluded for anonymous clients");
+assert(anonymousCatalogPolicy.includes("FOR SELECT") && anonymousCatalogPolicy.includes("TO anon") && anonymousCatalogPolicy.includes("USING (published = true)"), "anonymous catalog can read published titles without admin membership lookup");
 assert(webSupabase.includes("retryAttempt"), "user catalog retries transient load failures");
 assert(webSupabase.includes('const PAGE_SIZE = 500'), "user catalog paginates long listings");
 assert(webSupabase.includes('.range(offset, offset + PAGE_SIZE - 1)'), "user catalog loads consecutive pages");
