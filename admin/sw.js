@@ -1,4 +1,4 @@
-const CACHE = "cinaro-admin-v2.9.2";
+const CACHE = "cinaro-admin-v2.9.2-supabase-202610";
 const SHELL = [
   "./",
   "./index.html",

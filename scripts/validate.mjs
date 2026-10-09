@@ -94,7 +94,7 @@ for (const [name, source] of [["user", webSupabase], ["admin", adminSupabase]]) 
   assert(source.includes("@supabase/supabase-js@2.117.2"), name + " client pins Supabase JS");
   assert(source.includes("sb_publishable_"), name + " client uses publishable key");
   assert(!/service_role|sb_secret_/i.test(source), name + " client contains no service-role or secret key");
-  assert(source.includes("zmkkoggsqvwvwkanlyux.supabase.co"), name + " client targets CINARO Supabase project");
+  assert(source.includes("kcpwhmkmyqgbzzhtxwiz.supabase.co"), name + " client targets CINARO Supabase project");
 }
 
 assert(webSupabase.includes('from("content_requests")'), "user requests use Supabase");
