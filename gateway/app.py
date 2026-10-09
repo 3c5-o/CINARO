@@ -181,11 +181,14 @@ def team_menu(member: dict[str, Any]) -> list[list[Button]]:
 
 
 def db_headers() -> dict[str, str]:
-    return {
+    # Modern sb_secret keys go in apikey only; they are not JWT bearer tokens.
+    headers = {
         "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
         "Content-Type": "application/json",
     }
+    if not SUPABASE_SERVICE_ROLE_KEY.startswith("sb_secret_"):
+        headers["Authorization"] = f"Bearer {SUPABASE_SERVICE_ROLE_KEY}"
+    return headers
 
 
 async def db_request(
