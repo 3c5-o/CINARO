@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 import httpx
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 
 router = APIRouter(prefix="/admin/xtream", tags=["xtream-monitor"])
 _CACHE = {}
@@ -243,27 +243,35 @@ async def require_owner(token, client, supabase_url, service_key, owner_email):
 
 
 def attach_monitor(app, client_provider, supabase_url, service_key, owner_email):
+    from xtream_store import accounts_for_probe, all_rows, safe_record, save_account, delete_account
+    from fastapi.responses import JSONResponse
+    from fastapi import Body
+    from fastapi import status as status_codes
+
+    async def owner_client(header):
+        client = client_provider()
+        if not client:
+            raise HTTPException(503, "gateway_unavailable")
+        token = header.removeprefix("Bearer ").strip() if header.startswith("Bearer ") else ""
+        await require_owner(token, client, supabase_url, service_key, owner_email)
+        return client
+
     @router.get("/accounts")
     async def monitor_accounts(
         authorization: str = Header(default=""),
         fresh: bool = Query(False)
     ):
-        client = client_provider()
-        if not client:
-            raise HTTPException(503, "gateway_unavailable")
-        token = authorization.removeprefix("Bearer ").strip() if authorization.startswith("Bearer ") else ""
-        await require_owner(token, client, supabase_url, service_key, owner_email)
+        client = await owner_client(authorization)
         try:
-            accounts = configured_accounts()
-        except ValueError:
-            raise HTTPException(503, "xtream_server_configuration_invalid") from None
+            accounts = await accounts_for_probe(client)
+        except RuntimeError as error:
+            raise HTTPException(503, str(error)) from None
         async with _LOCK:
-            current = time.monotonic()
-            # A requested refresh bypasses the five-minute cache, but no more
-            # than once per 20 seconds for a shared gateway instance.
-            key = "snapshots"
-            state = _CACHE.get(key)
-            if state and (current-state["time"] < (20 if fresh else _CACHE_TTL)):
+            now = time.monotonic()
+            state = _CACHE.get("snapshots")
+            # Never reuse results from before a CRUD mutation or a different
+            # set of accounts. The whole cache is invalidated on every write.
+            if state and now - state["time"] < (20 if fresh else _CACHE_TTL):
                 return {"ok": True, "accounts": state["data"], "cached": True,
                         "configured": len(state["data"]), "syncEnabled": False}
             sem = asyncio.Semaphore(2)
@@ -271,8 +279,59 @@ def attach_monitor(app, client_provider, supabase_url, service_key, owner_email)
                 async with sem:
                     return await fetch_snapshot(client, account)
             data = await asyncio.gather(*(one(account) for account in accounts))
-            _CACHE[key] = {"time": time.monotonic(), "data": data}
+            _CACHE["snapshots"] = {"time": time.monotonic(), "data": data}
             return {"ok": True, "accounts": data, "cached": False,
                     "configured": len(data), "syncEnabled": False}
+
+    @router.get("/manage")
+    async def list_managed_accounts(authorization: str = Header(default="")):
+        client = await owner_client(authorization)
+        try:
+            rows = await all_rows(client)
+        except RuntimeError as error:
+            raise HTTPException(503, str(error)) from None
+        return {"ok": True, "accounts": [safe_record(row) for row in rows]}
+
+    @router.post("/manage", status_code=status_codes.HTTP_201_CREATED)
+    async def create_managed_account(request: Request, authorization: str = Header(default="")):
+        client = await owner_client(authorization)
+        try:
+            body = await request.json()
+            record = await save_account(client, body)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from None
+        except RuntimeError as error:
+            raise HTTPException(503, str(error)) from None
+        _CACHE.clear()
+        return {"ok": True, "account": record}
+
+    @router.patch("/manage/{identifier}")
+    async def edit_managed_account(identifier: str, request: Request, authorization: str = Header(default="")):
+        client = await owner_client(authorization)
+        if not _ACCOUNT_ID.fullmatch(identifier):
+            raise HTTPException(400, "invalid_account_id")
+        try:
+            body = await request.json()
+            record = await save_account(client, body, identifier)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from None
+        except RuntimeError as error:
+            raise HTTPException(503, str(error)) from None
+        _CACHE.clear()
+        return {"ok": True, "account": record}
+
+    @router.delete("/manage/{identifier}")
+    async def delete_managed_account(identifier: str, authorization: str = Header(default="")):
+        client = await owner_client(authorization)
+        if not _ACCOUNT_ID.fullmatch(identifier):
+            raise HTTPException(400, "invalid_account_id")
+        try:
+            await delete_account(client, identifier)
+        except ValueError as error:
+            raise HTTPException(404, str(error)) from None
+        except RuntimeError as error:
+            raise HTTPException(503, str(error)) from None
+        _CACHE.clear()
+        return {"ok": True, "deleted": True}
 
     app.include_router(router)
