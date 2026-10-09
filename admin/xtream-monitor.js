@@ -124,6 +124,7 @@ async function refreshManaged(){
   const result=await callApi("manage");
   if(result.ok!==true||!Array.isArray(result.accounts))throw Error("تعذرت قراءة الحسابات.");
   showManaged(result.accounts);
+  window.CINARO_XTREAM_IMPORT?.accountsChanged(result.accounts);
 }
 async function changeAccount(method,id,payload){
   const endpoint="manage"+(id?"/"+encodeURIComponent(id):"");
