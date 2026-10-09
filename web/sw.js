@@ -1,6 +1,6 @@
 "use strict";
 
-const VERSION = "cinaro-v2.9.5";
+const VERSION = "cinaro-v2.9.5-supabase-202610";
 const SHELL_CACHE = `${VERSION}-shell`;
 const IMAGE_CACHE = `${VERSION}-images`;
 
