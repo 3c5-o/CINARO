@@ -302,9 +302,12 @@
             <div class="form-grid two">
               <label class="check-field"><input id="mediaApiEnabled" type="checkbox" checked><span>تشغيل Media Catalog داخل الإدارة</span></label>
               <label class="check-field"><input id="mediaApiSyncEnabled" type="checkbox"><span>تفعيل المزامنة عبر API</span></label>
+              <label class="check-field"><input id="mediaApiForceDisabled" type="checkbox"><span>حظر قسري: إخفاء الأفلام المستوردة ومنع تشغيلها في تطبيق المستخدم</span></label>
             </div>
             <p class="field-help">إيقاف المزود يمنع استيراد الأفلام. المزامنة تتحكم بزر إضافة جميع الأفلام وتحديثها.</p>
             <div class="tmdb-token-actions">
+              <button id="mediaApiForceStop" class="admin-button ghost" type="button">إيقاف قسري الآن</button>
+              <button id="mediaApiForceStart" class="admin-button ghost" type="button">تشغيل المزوّد</button>
               <button id="mediaApiTestButton" class="admin-button ghost" type="button"><svg><use href="#i-check"></use></svg> اختبار الاتصال</button>
               <button class="admin-button primary" type="submit"><svg><use href="#i-save"></use></svg> حفظ إعدادات API</button>
             </div>
@@ -316,8 +319,11 @@
             <div class="form-grid two">
               <label class="check-field"><input id="animeApiEnabled" type="checkbox" checked><span>تشغيل Anime API</span></label>
               <label class="check-field"><input id="animeApiSyncEnabled" type="checkbox"><span>تفعيل إضافة/مزامنة جميع الأنميات</span></label>
+              <label class="check-field"><input id="animeApiForceDisabled" type="checkbox"><span>حظر قسري: إخفاء الأنمي المستورد ومنع تشغيله في تطبيق المستخدم</span></label>
             </div>
             <div class="tmdb-token-actions">
+              <button id="animeApiForceStop" class="admin-button ghost" type="button">إيقاف قسري الآن</button>
+              <button id="animeApiForceStart" class="admin-button ghost" type="button">تشغيل المزوّد</button>
               <button id="animeApiTestButton" class="admin-button ghost" type="button"><svg><use href="#i-check"></use></svg> اختبار Anime API</button>
               <button class="admin-button primary" type="submit"><svg><use href="#i-save"></use></svg> حفظ إعدادات الأنمي</button>
             </div>
