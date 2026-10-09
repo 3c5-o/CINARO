@@ -104,7 +104,7 @@ async def accounts_for_probe(client):
 
 
 async def save_account(client, data, identifier=None):
-    from xtream_monitor import public_https_url, public_dns
+    from xtream_monitor import public_provider_url, public_dns
     if not isinstance(data, dict):
         raise ValueError("invalid_payload")
     old = None
@@ -117,12 +117,18 @@ async def save_account(client, data, identifier=None):
         raise ValueError("account_limit_reached")
     name = str(data.get("name", old["name"] if old else "")).strip()
     url = str(data.get("url", old["base_url"] if old else "")).strip().rstrip("/")
-    if not name or len(name) > 80 or not public_https_url(url):
-        raise ValueError("invalid_name_or_https_url")
+    if not name or len(name) > 80 or not public_provider_url(url, allow_http=True):
+        raise ValueError("invalid_name_or_public_url")
     parsed = urlsplit(url)
+    # HTTP account credentials travel in cleartext between this server and
+    # the Xtream provider; require owner acknowledgement on first use/change.
+    if parsed.scheme == "http" and not data.get("allowHttp") is True and not (
+        old and old["base_url"] == url
+    ):
+        raise ValueError("http_requires_consent")
     # Disabling an existing account must work even if its provider DNS is
     # currently down. Revalidate DNS only when introducing/changing a host.
-    if (not old or url != old["base_url"]) and not await public_dns(parsed.hostname, parsed.port or 443):
+    if (not old or url != old["base_url"]) and not await public_dns(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80)):
         raise ValueError("invalid_public_host")
     username = data.get("username")
     password = data.get("password")
