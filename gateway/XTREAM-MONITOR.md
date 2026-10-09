@@ -1,33 +1,56 @@
-# CINARO — Xtream account monitoring
+# CINARO Xtream — management and account monitoring
 
-هذه الإضافة تعرض حالة حسابات Xtream والأعداد، دون بث مباشر أو مزامنة.
+## Full account management inside the admin app
 
-## إعدادات Railway السرية
+Open CINARO Admin → Settings → Xtream Accounts (or the Xtream sidebar section).
+Add the HTTPS base URL, username, password, display name, and enabled flag.
+Edit, disable/re-enable, remove accounts, or refresh their status without touching Railway Variables.
+Only the verified CINARO primary owner account may access this gateway API.
 
-في Railway → مشروع بوابة CINARO → Variables أضف XTREAM_MONITOR_ACCOUNTS_JSON.
-JSON مثال توضيحي؛ لا تنشر بيانات الدخول في GitHub:
+## Mandatory one-time database migration
 
-    [{"id":"source-1","name":"المصدر الأول","url":"https://provider.example","username":"USER","password":"SECRET","enabled":true},
-     {"id":"source-2","name":"المصدر الثاني","url":"https://provider2.example","username":"USER","password":"SECRET","enabled":true}]
+On the CINARO Supabase project referenced by admin/supabase.js, apply:
 
-يجب إدخال الحسابات في متغير Railway سري وليس في JavaScript أو app_config العامة.
-الحد الأقصى 25 حساباً. HTTPS وأسماء مضيف عامة فقط. لا تُرسل كلمات المرور ولا روابط البث إلى المتصفح.
+supabase/migrations/20261009130000_add_xtream_accounts_vault.sql
 
-## الصفحة الجديدة
+The current connected Supabase plugin does not expose the CINARO project, so the migration has NOT yet been applied in production.
+Until it is applied, account management returns db_accounts_unavailable; do not claim it is fully operational.
 
-الإدارة → متابعة حسابات Xtream → تحديث الفحص.
-تعرض: حالة الاتصال والاشتراك، تاريخ الإنشاء والانتهاء، الأيام المتبقية، اتصالات المستخدمين الحالية والحد الأقصى، الحساب التجريبي، صيغ الإخراج، توقيت الخادم، وقت الفحص واستغراقه.
-أعداد الأفلام والمسلسلات والأنمي والقنوات المباشرة. البث المباشر رقم فقط، بلا قسم أو روابط تشغيل.
-الأنمي تصنيف تقديري من أسماء فئات مزود Xtream، وقد يكون صفرًا رغم وجود محتوى غير مصنف. مجموع الحسابات قد يحوي تكرارات.
+## Credential security
 
-## الحماية
+Credentials are submitted via HTTPS with a Supabase bearer token to the Railway gateway.
+The gateway encrypts them with AES-256-GCM and persists ciphertext in a table restricted to service_role.
+Passwords and usernames are never included in listing, monitoring responses, client storage, or audit logs.
+Gateway derives encryption key from XTREAM_ENCRYPTION_KEY if set; otherwise derives it from SUPABASE_SERVICE_ROLE_KEY.
+Use a long independent XTREAM_ENCRYPTION_KEY on Railway if possible; back up the secret securely, as rotating it without re-encryption makes existing stored credentials unreadable.
+Use only accounts and content you have authorization to access.
 
-GET /admin/xtream/accounts
-GET /admin/xtream/accounts?fresh=true
+## Metrics and limitations
 
-تتطلب هذه المسارات JWT صالحاً من Supabase Auth وبريد المدير الأساسي الموثق. يمكن تغيير CINARO_OWNER_EMAIL من Variables.
-لا تحفظ SUPABASE_SERVICE_ROLE_KEY في الواجهة. البوابة وحدها تستخدمه للتحقق من المستخدم.
-الفحص يقرأ الحسابات المهيأة فقط؛ 5 دقائق تخزين مؤقت و20 ثانية حد أدنى لإعادة الفحص، مع حد لحجم البيانات ومهلة الطلب.
+Shows account status, expiry date/days remaining, account creation date, active and max connections, trial status, supported formats, timezone, latency, and separate movie/series/anime/live counts.
+Live channels are COUNT-ONLY. No live-TV page, stream extraction, or streaming endpoint is added.
+Anime categorization is estimated from provider category names and can miss titles. Totals across accounts can include duplicates.
+IPTV account monitoring is not equivalent to importing VOD and series into CINARO or verifying playback of an entire film.
+Monitoring runs against public HTTPS hosts only; 25 accounts maximum, short request timeouts and caching.
 
-إضافة وإزالة حسابات المصدر تتم من Railway Variables في هذه المرحلة. لم يُنفّذ استيراد محتوى أو بث مباشر.
-يجب استخدام حسابات يملك المدير حق الوصول إليها.
+## Endpoints (owner-only)
+
+GET /admin/xtream/manage — listing without any credentials
+POST /admin/xtream/manage — create account
+PATCH /admin/xtream/manage/{id} — rename/change credentials/enable
+DELETE /admin/xtream/manage/{id} — remove
+GET /admin/xtream/accounts[?fresh=true] — provider status and counts
+
+Owner is checked server-side using Supabase Auth /auth/v1/user, not by trusting a client flag.
+
+## Forced provider shutdown
+
+Admin Settings → Media Catalog API or Anime API → إيقاف قسري الآن / تشغيل المزوّد.
+Force shutdown blocks new imports and hides matching imported items from clients receiving the updated app_config.
+The new user player also blocks manually entered deep links for those items. Older app releases and raw media source URLs are not remotely revocable by this UI alone.
+
+## Playback compatibility
+
+Android Media3 supports MP4, HLS, MPEG-DASH, TS, and MKV demuxing, subject to device codec/DRM/server behavior.
+Web player supports MP4 and compatible browser formats, hls.js, mpegts.js, dash.js; MKV usually needs Android native player.
+Neither backend nor client can repair nonexistent segments, invalid credentials or incompatible codecs.
