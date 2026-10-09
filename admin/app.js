@@ -1384,6 +1384,7 @@
       $("contentKind").value = "movie";
       $("contentProvider").value = "media-catalog";
       $("contentProviderId").value = id;
+      if ($("providerSourceMode")) $("providerSourceMode").value = "auto";
       $("contentId").value = state.editingContentId || mediaContentId(id);
       $("contentTmdbId").value = meta.tmdb_id ? String(meta.tmdb_id) : "";
 
@@ -1510,6 +1511,7 @@
       tmdbImportedAt: 0,
       provider: "media-catalog",
       providerId,
+      providerSourceMode: "auto",
       providerImportedAt: now,
       providerBaseUrl: mediaCatalogSettings().baseUrl,
       providerPlayback: {
@@ -2514,6 +2516,9 @@
     const seriesLike = selectedType === "series" || selectedType === "anime";
     $("movieMediaFields")?.classList.toggle("is-hidden", seriesLike);
     $("seriesMediaFields")?.classList.toggle("is-hidden", !seriesLike);
+    const providerName = asString($("contentProvider")?.value);
+    const managedProvider = providerName === "media-catalog" || providerName === "media-catalog-anime";
+    if ($("providerSourceModeField")) $("providerSourceModeField").hidden = !managedProvider;
     if (seriesLike && !state.seasonDraft.length) {
       state.seasonDraft = [newSeason(1)];
       renderSeasonBuilder();
@@ -2533,6 +2538,7 @@
     $("contentTmdbId").value = "";
     $("contentProvider").value = "";
     $("contentProviderId").value = "";
+    if ($("providerSourceMode")) $("providerSourceMode").value = "auto";
     $("tmdbSearchInput").value = "";
     if ($("mediaApiSearchInput")) $("mediaApiSearchInput").value = "";
     if ($("mediaApiSearchResults")) $("mediaApiSearchResults").innerHTML = "";
@@ -2625,6 +2631,7 @@
     $("contentTmdbId").value = item.tmdbId ? String(item.tmdbId) : "";
     $("contentProvider").value = asString(item.provider);
     $("contentProviderId").value = asString(item.providerId);
+    if ($("providerSourceMode")) $("providerSourceMode").value = item.providerSourceMode === "manual" ? "manual" : "auto";
     $("contentKind").value = item.contentType === "anime" ? "anime" : item.kind;
     $("contentTitle").value = item.title || "";
     $("contentEnglishTitle").value = item.englishTitle || "";
@@ -2727,6 +2734,16 @@
       }
       movieSourceCandidates.push(...existingMovieSources.slice(2));
       const sources = kind === "movie" ? normalizeSources(movieSourceCandidates) : [];
+      const providerModeChoice = $("providerSourceMode")?.value === "manual" ? "manual" : "auto";
+      const sourceIdentity = (sourcesList) => toArray(sourcesList)
+        .map((source) => sourceInputValue(source)).join("|");
+      const movieLinksChanged = Boolean(existing && kind === "movie" &&
+        sourceIdentity(sources) !== sourceIdentity(existing.sources));
+      // Preserve a manual override for explicitly chosen links, including
+      // previously imported items. The automatic mode can be restored in editor.
+      const providerSourceMode = requestedProvider === "media-catalog" || requestedProvider === "media-catalog-anime"
+        ? (providerModeChoice === "manual" || movieLinksChanged ? "manual" : "auto")
+        : "auto";
 
       const existingMovieSubtitles = kind === "movie" ? toArray(existing?.subtitles) : [];
       const subtitleUrl = asString($("movieSubtitleUrl").value);
@@ -2793,6 +2810,7 @@
         tmdbImportedAt: Math.max(0, Math.round(asNumber($("contentTmdbId").value, 0))) ? Date.now() : asNumber(existing?.tmdbImportedAt, 0),
         provider: requestedProvider,
         providerId: requestedProviderId,
+        providerSourceMode,
         providerImportedAt: requestedProvider && requestedProviderId ? Date.now() : asNumber(existing?.providerImportedAt, 0),
         providerBaseUrl: requestedProvider === "media-catalog"
           ? mediaCatalogSettings().baseUrl
