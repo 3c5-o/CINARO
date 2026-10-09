@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from telethon import Button, TelegramClient, events, utils
 from xtream_monitor import attach_monitor
+from xtream_import import attach_xtream_import
 
 API_ID_RAW = os.environ.get("TELEGRAM_API_ID", "").strip()
 API_HASH = os.environ.get("TELEGRAM_API_HASH", "").strip()
