@@ -1354,7 +1354,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
-    allow_methods=["GET", "HEAD", "OPTIONS"],
+    allow_methods=["GET", "HEAD", "OPTIONS", "POST", "PATCH", "DELETE"],
     allow_headers=["Range", "Content-Type", "Accept", "Authorization"],
     expose_headers=["Content-Length", "Content-Range", "Accept-Ranges", "Content-Type", "X-CINARO-Storage"],
 )
