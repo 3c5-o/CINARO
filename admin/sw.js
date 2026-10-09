@@ -5,6 +5,7 @@ const SHELL = [
   "./styles.css",
   "./supabase.js",
   "./app.js",
+  "./xtream-monitor.js",
   "./manifest.webmanifest",
   "./assets/admin-hero.svg",
   "./assets/icons/favicon-32.png",
