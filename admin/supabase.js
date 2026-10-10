@@ -4,7 +4,6 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const SUPABASE_URL = "https://kcpwhmkmyqgbzzhtxwiz.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_leK6goZKQXo1sBBFOIY__A_1hAIFhW9";
-const OWNER_EMAIL = "ffkyyr@gmail.com";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
@@ -414,7 +413,6 @@ async function deleteDocument(name, id) {
 const client = {
   projectId: "kcpwhmkmyqgbzzhtxwiz",
   provider: "supabase",
-  adminEmail: OWNER_EMAIL,
 
   async getAccessToken() {
     const { data, error } = await supabase.auth.getSession();
