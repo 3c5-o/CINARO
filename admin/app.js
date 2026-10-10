@@ -733,6 +733,21 @@
     $("statSupervisors").textContent = formatNumber(state.supervisors.filter((item) => item.active !== false).length);
     if ($("statRequests")) $("statRequests").textContent = formatNumber(state.requests.filter((item) => ["new", "reviewing"].includes(item.status)).length);
     if ($("statReports")) $("statReports").textContent = formatNumber(state.reports.filter((item) => ["open", "reviewing"].includes(item.status)).length);
+    if ($("healthXtreamTitles")) {
+      const providerTitles = state.content.filter((item) => item.provider === "xtream");
+      const hasSource = (sources) => Array.isArray(sources) && sources.some((source) =>
+        Boolean(source && (source.url || source.storageId || source.storage_id)));
+      const withoutMedia = state.content.filter((item) => {
+        if (item.kind === "series") return !Array.isArray(item.seasons) ||
+          !item.seasons.some((season) => Array.isArray(season.episodes) &&
+            season.episodes.some((episode) => hasSource(episode.sources)));
+        return !hasSource(item.sources);
+      });
+      $("healthXtreamTitles").textContent = formatNumber(providerTitles.length);
+      $("healthMissingSources").textContent = formatNumber(withoutMedia.length);
+      $("healthDraftTitles").textContent = formatNumber(state.content.filter((item) => item.published !== true).length);
+      $("healthXtreamUnverified").textContent = formatNumber(providerTitles.filter((item) => !item.playbackVerifiedAt).length);
+    }
     $("navContentCount").textContent = formatNumber(state.content.length);
     $("navUsersCount").textContent = formatNumber(state.users.length);
     if ($("navReportsCount")) $("navReportsCount").textContent = formatNumber(state.reports.filter((item) => ["open", "reviewing"].includes(item.status)).length);
