@@ -323,6 +323,49 @@ def attach_xtream_import(app, client_provider, supabase_url, service_key, owner_
             raise HTTPException(502, "series_info_unavailable") from None
         return {"ok": True, "seasons": seasons, "episodeCount": count}
 
+    @router.get("/admin/xtream/playback-check")
+    async def playback_check(authorization: str = Header(default=""),
+                             account: str = Query(...),
+                             kind: str = Query("movie"),
+                             media_id: str = Query(...),
+                             extension: str = Query("mp4")):
+        """Read at most a few kilobytes to diagnose one owned catalog entry."""
+        client = await owner_client(authorization)
+        if kind not in ("movie", "series") or not _STREAM_ID.fullmatch(media_id) or extension not in _EXT:
+            raise HTTPException(400, "invalid_media_id")
+        entry = await _account(client, account)
+        report = {"ok": False, "upstreamStatus": None, "redirects": 0,
+                  "contentType": "", "detectedFormat": "unknown",
+                  "reason": "not_checked"}
+        try:
+            upstream, hops = await _open_media(client,
+                _stream_url(entry, kind, media_id, extension),
+                {"Range": "bytes=0-4095"})
+        except HTTPException as exc:
+            report["reason"] = str(exc.detail)
+            return report
+        try:
+            report["upstreamStatus"] = upstream.status_code
+            report["redirects"] = hops
+            report["contentType"] = upstream.headers.get("content-type", "")[:100]
+            if upstream.status_code not in (200, 206):
+                report["reason"] = "provider_media_http_" + str(upstream.status_code)
+                return report
+            sample = bytearray()
+            async for data in upstream.aiter_raw(chunk_size=512):
+                sample.extend(data[:max(0, 4096 - len(sample))])
+                if len(sample) >= 512:
+                    break
+            report["detectedFormat"] = _detect_container(bytes(sample))
+            report["ok"] = report["detectedFormat"] in ("mp4", "mkv", "ts", "hls")
+            report["reason"] = "media_bytes_received" if report["ok"] else "media_bytes_unrecognized"
+            return report
+        except Exception:
+            report["reason"] = "provider_media_probe_failed"
+            return report
+        finally:
+            await upstream.aclose()
+
     @router.api_route("/xtream/play/{account}/{kind}/{media_id}.{ext}", methods=["GET", "HEAD"])
     async def play(request: Request, account: str, kind: str, media_id: str,
                    ext: str, sig: str = Query("")):
