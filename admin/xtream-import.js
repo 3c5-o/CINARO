@@ -238,6 +238,44 @@ async function start(){
     if($("xtreamImportCancel"))$("xtreamImportCancel").hidden=true;
   }
 }
+async function diagnosePlayback(){
+  const result=$("xtreamPlaybackResult");
+  const button=$("xtreamPlaybackCheck");
+  const account=$("xtreamImportAccount")?.value||"";
+  const media_id=$("xtreamPlaybackMediaId")?.value.trim()||"";
+  const kind=$("xtreamPlaybackKind")?.value||"movie";
+  const extension=$("xtreamPlaybackExtension")?.value||"mp4";
+  if(!account||!/^[0-9]{1,15}$/.test(media_id)){
+    if(result)result.textContent="اختر حساب Xtream واكتب معرّف فيديو رقمي صحيح.";
+    return;
+  }
+  if(button)button.disabled=true;
+  if(result)result.textContent="جاري فحص استجابة السيرفر وعينة الفيديو بدون تنزيل الملف الكامل...";
+  try{
+    const report=await api("playback-check",{account,kind,media_id,extension});
+    const reasons={
+      media_bytes_received:"الخادم يرجع بيانات فيديو بهذا الامتداد. يلزم اختبار المتصفح والتشفير أيضاً.",
+      media_bytes_unrecognized:"المزوّد رجّع بيانات غير معروفة؛ قد تكون صفحة خطأ أو حاوية غير متوافقة.",
+      provider_media_probe_failed:"تعذّر فحص عينة الفيديو.",
+      provider_stream_unreachable_destination:"تعذّر التأكد من أن خادم البث عام ومتاح.",
+      provider_stream_invalid_destination:"تم رفض تحويل إلى وجهة غير آمنة.",
+      provider_stream_redirect_failed:"أعاد المزود سلسلة تحويلات غير صالحة.",
+      provider_stream_connect_failed:"فشل اتصال البوابة بسيرفر الفيديو."
+    };
+    const reason=reasons[report.reason]||(/provider_media_http_\d+/.test(String(report.reason))?
+      "سيرفر الفيديو رفض الطلب برمز "+String(report.upstreamStatus||report.reason.split("_").at(-1)):
+      String(report.reason||"تعذّر تحديد السبب"));
+    const summary=(report.ok?"نجح الفحص الأولي. ":"فشل الفحص. ")+
+      "رمز المزوّد: "+String(report.upstreamStatus??"غير متاح")+
+      " | التحويلات: "+String(report.redirects??0)+
+      " | النوع المعلن: "+text(report.contentType||"غير معروف")+
+      " | الصيغة المكتشفة: "+text(report.detectedFormat||"غير معروف")+
+      ". "+reason;
+    if(result)result.textContent=summary;
+  }catch(error){
+    if(result)result.textContent="تعذّر الفحص: "+text(error?.message||error);
+  }finally{if(button)button.disabled=false;}
+}
 function configure(value){context=value;}
 function accountsChanged(accounts){
   const select=$("xtreamImportAccount");if(!select)return;
@@ -249,6 +287,7 @@ function accountsChanged(accounts){
   });
   if([...select.options].some(o=>o.value===old))select.value=old;
 }
+$("xtreamPlaybackCheck")?.addEventListener("click",diagnosePlayback);
 $("xtreamImportStart")?.addEventListener("click",start);
 $("xtreamImportCancel")?.addEventListener("click",()=>{cancelled=true;status("سيتم الإيقاف بعد حفظ العنصر الحالي...");});
 $("xtreamImportReset")?.addEventListener("click",()=>{
