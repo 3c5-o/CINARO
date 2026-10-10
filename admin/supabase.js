@@ -4,7 +4,6 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const SUPABASE_URL = "https://kcpwhmkmyqgbzzhtxwiz.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_leK6goZKQXo1sBBFOIY__A_1hAIFhW9";
-const OWNER_EMAIL = "ffkyyr@gmail.com";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
@@ -414,7 +413,6 @@ async function deleteDocument(name, id) {
 const client = {
   projectId: "kcpwhmkmyqgbzzhtxwiz",
   provider: "supabase",
-  adminEmail: OWNER_EMAIL,
 
   async getAccessToken() {
     const { data, error } = await supabase.auth.getSession();
@@ -424,21 +422,33 @@ const client = {
 
   onAuth(callback) {
     let active = true;
+    let authRevision = 0;
     const publish = async (user) => {
       if (!active) return;
+      const revision = ++authRevision;
       try {
-        callback(await currentAdminUser(user));
+        const admin = await currentAdminUser(user);
+        if (active && revision === authRevision) callback(admin);
       } catch (error) {
         console.warn("CINARO admin membership lookup failed", error);
-        callback(null);
+        if (active && revision === authRevision) callback(null);
       }
     };
-    supabase.auth.getUser().then(({ data }) => publish(data?.user || null));
+    const initialRevision = authRevision;
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (!active || initialRevision !== authRevision) return;
+      if (error) console.warn("CINARO admin initial session unavailable", error);
+      publish(error ? null : data?.user || null);
+    }).catch((error) => {
+      console.warn("CINARO admin auth restore failed", error);
+      if (active && initialRevision === authRevision) publish(null);
+    });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       window.setTimeout(() => publish(session?.user || null), 0);
     });
     return () => {
       active = false;
+      ++authRevision;
       data?.subscription?.unsubscribe();
     };
   },

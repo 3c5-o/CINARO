@@ -95,7 +95,9 @@ async function callApi(endpoint,method="GET",payload){
       account_not_found:"هذا الحساب لم يعد موجوداً.",
       credentials_required:"اسم المستخدم وكلمة المرور مطلوبان للإضافة.",
       account_limit_reached:"وصلت إلى الحد الأعلى (25 حساباً).",
-      admin_access_denied:"تم رفض طلب البوابة. تحقق من اتصال Railway بمشروع Supabase الجديد ومن جلسة المالك."
+      admin_access_denied:"تم رفض طلب البوابة. تحقق من اتصال Railway بمشروع Supabase الجديد ومن جلسة المالك.",
+      account_has_linked_content:"لا يمكن حذف الحساب لأن محتوى منشوراً أو مسودة مرتبط به. أوقف الحساب بدلاً من حذفه للحفاظ على روابط الأفلام والحلقات.",
+      content_dependency_check_failed:"تعذر التحقق من المحتوى المرتبط، ولذلك أُلغي الحذف لحماية المكتبة."
     };
     throw Error(messages[code]||"فشلت العملية: "+(code||"HTTP "+response.status));
   }
@@ -202,7 +204,7 @@ function bindManagement(){
       $("xtreamAccountName").focus();
       return;
     }
-    if(action==="delete"&&!confirm("حذف حساب "+entry.name+" نهائياً من المراقبة؟"))return;
+    if(action==="delete"&&!confirm("حذف حساب "+entry.name+" نهائياً؟ لن يسمح النظام بحذفه إذا كان مرتبطاً بأفلام أو حلقات. يُفضّل إيقاف الحساب بدلاً من حذفه. متابعة؟"))return;
     btn.disabled=true;
     try{
       if(action==="toggle")await changeAccount("PATCH",entry.id,{name:entry.name,url:entry.url,enabled:!entry.enabled});

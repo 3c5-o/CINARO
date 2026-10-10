@@ -363,6 +363,8 @@ def attach_monitor(app, client_provider, supabase_url, service_key, owner_email)
         try:
             await delete_account(client, identifier)
         except ValueError as error:
+            if str(error) == "account_has_linked_content":
+                raise HTTPException(409, "account_has_linked_content") from None
             raise HTTPException(404, str(error)) from None
         except RuntimeError as error:
             raise HTTPException(503, str(error)) from None

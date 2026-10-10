@@ -1,7 +1,6 @@
 (function () {
   "use strict";
 
-  const ADMIN_EMAIL = "ffkyyr@gmail.com";
   const TMDB_STORAGE_KEY = "cinaro:admin:tmdb-token:v1";
   const TMDB_API_ROOT = "https://api.themoviedb.org/3";
   const MEDIA_CATALOG_DEFAULT_API_ROOT = "https://media-catalog-navy.vercel.app/api/v1";
@@ -669,11 +668,11 @@
 
   function updateUserLabels() {
     const user = state.authUser;
-    const email = user && user.email || ADMIN_EMAIL;
+    const email = user?.email || "";
     const name = user && user.displayName || (isAdmin() ? "مدير CINARO" : "مشرف CINARO");
     $("adminUserName").textContent = name;
     $("adminUserEmail").textContent = email;
-    $("adminEmail").value = email || ADMIN_EMAIL;
+    if (email) $("adminEmail").value = email;
     $("adminUserAvatar").textContent = (name.trim()[0] || "A").toUpperCase();
   }
 
@@ -734,6 +733,21 @@
     $("statSupervisors").textContent = formatNumber(state.supervisors.filter((item) => item.active !== false).length);
     if ($("statRequests")) $("statRequests").textContent = formatNumber(state.requests.filter((item) => ["new", "reviewing"].includes(item.status)).length);
     if ($("statReports")) $("statReports").textContent = formatNumber(state.reports.filter((item) => ["open", "reviewing"].includes(item.status)).length);
+    if ($("healthXtreamTitles")) {
+      const providerTitles = state.content.filter((item) => item.provider === "xtream");
+      const hasSource = (sources) => Array.isArray(sources) && sources.some((source) =>
+        Boolean(source && (source.url || source.storageId || source.storage_id)));
+      const withoutMedia = state.content.filter((item) => {
+        if (item.kind === "series") return !Array.isArray(item.seasons) ||
+          !item.seasons.some((season) => Array.isArray(season.episodes) &&
+            season.episodes.some((episode) => hasSource(episode.sources)));
+        return !hasSource(item.sources);
+      });
+      $("healthXtreamTitles").textContent = formatNumber(providerTitles.length);
+      $("healthMissingSources").textContent = formatNumber(withoutMedia.length);
+      $("healthDraftTitles").textContent = formatNumber(state.content.filter((item) => item.published !== true).length);
+      $("healthXtreamUnverified").textContent = formatNumber(providerTitles.filter((item) => !item.playbackVerifiedAt).length);
+    }
     $("navContentCount").textContent = formatNumber(state.content.length);
     $("navUsersCount").textContent = formatNumber(state.users.length);
     if ($("navReportsCount")) $("navReportsCount").textContent = formatNumber(state.reports.filter((item) => ["open", "reviewing"].includes(item.status)).length);
@@ -2392,19 +2406,6 @@
     }
   }
 
-  function bindCopyProtection() {
-    const isEditable = (target) => Boolean(target?.closest?.("input, textarea, select, [contenteditable='true'], .allow-select"));
-    ["copy", "cut", "contextmenu"].forEach((eventName) => {
-      document.addEventListener(eventName, (event) => {
-        if (isEditable(event.target)) return;
-        event.preventDefault();
-      });
-    });
-    document.addEventListener("dragstart", (event) => {
-      if (event.target instanceof HTMLImageElement) event.preventDefault();
-    });
-  }
-
   function toLocalDateTimeInput(value) {
     if (!value) return "";
     const date = new Date(value);
@@ -3125,7 +3126,10 @@
   }
 
   function csvCell(value) {
-    return `"${String(value == null ? "" : value).replaceAll('"', '""')}"`;
+    let raw = String(value == null ? "" : value);
+    // Spreadsheet apps can execute formula-like fields in CSV audit exports.
+    if (/^\s*[=+\-@\t\r]/.test(raw)) raw = "'" + raw;
+    return `"${raw.replaceAll('"', '""')}"`;
   }
 
   function exportAuditCsv() {
@@ -3764,12 +3768,11 @@
     setMessage("loginMessage", "تعذّر تحميل الخدمة. تحقق من الاتصال وحاول مجددًا.", "error");
     console.error(event.detail || {});
   });
-  bindCopyProtection();
   bindEvents();
   fillSettings();
   renderDashboard();
   if (window.CINARO_ADMIN_SUPABASE) connectSupabase(window.CINARO_ADMIN_SUPABASE);
   if (!window.CinaroNative && "serviceWorker" in navigator && location.protocol === "https:") {
-    navigator.serviceWorker.register("sw.js?v=20261010-playback-probe-v2", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
+    navigator.serviceWorker.register("sw.js?v=20261010-admin-safe", { scope: "./", updateViaCache: "none" }).catch((error) => console.warn("CINARO admin service worker unavailable", error));
   }
 })();
