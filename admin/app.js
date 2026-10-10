@@ -1,7 +1,6 @@
 (function () {
   "use strict";
 
-  const ADMIN_EMAIL = "ffkyyr@gmail.com";
   const TMDB_STORAGE_KEY = "cinaro:admin:tmdb-token:v1";
   const TMDB_API_ROOT = "https://api.themoviedb.org/3";
   const MEDIA_CATALOG_DEFAULT_API_ROOT = "https://media-catalog-navy.vercel.app/api/v1";
@@ -669,11 +668,11 @@
 
   function updateUserLabels() {
     const user = state.authUser;
-    const email = user && user.email || ADMIN_EMAIL;
+    const email = user?.email || "";
     const name = user && user.displayName || (isAdmin() ? "مدير CINARO" : "مشرف CINARO");
     $("adminUserName").textContent = name;
     $("adminUserEmail").textContent = email;
-    $("adminEmail").value = email || ADMIN_EMAIL;
+    if (email) $("adminEmail").value = email;
     $("adminUserAvatar").textContent = (name.trim()[0] || "A").toUpperCase();
   }
 
@@ -2392,19 +2391,6 @@
     }
   }
 
-  function bindCopyProtection() {
-    const isEditable = (target) => Boolean(target?.closest?.("input, textarea, select, [contenteditable='true'], .allow-select"));
-    ["copy", "cut", "contextmenu"].forEach((eventName) => {
-      document.addEventListener(eventName, (event) => {
-        if (isEditable(event.target)) return;
-        event.preventDefault();
-      });
-    });
-    document.addEventListener("dragstart", (event) => {
-      if (event.target instanceof HTMLImageElement) event.preventDefault();
-    });
-  }
-
   function toLocalDateTimeInput(value) {
     if (!value) return "";
     const date = new Date(value);
@@ -3764,7 +3750,6 @@
     setMessage("loginMessage", "تعذّر تحميل الخدمة. تحقق من الاتصال وحاول مجددًا.", "error");
     console.error(event.detail || {});
   });
-  bindCopyProtection();
   bindEvents();
   fillSettings();
   renderDashboard();
