@@ -165,10 +165,50 @@ async def save_account(client, data, identifier=None):
     return safe_record(result.json()[0])
 
 
+async def linked_content_exists(client, identifier):
+    """Fail closed before removing an account used by any CINARO title.
+
+    Inspect a single content ID, not user payloads or media links.
+    """
+    if not isinstance(identifier, str) or not identifier or not all(
+        char.isalnum() or char in "-_" for char in identifier
+    ):
+        raise ValueError("invalid_account_id")
+    base = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    if not base:
+        raise RuntimeError("db_unavailable")
+    response = await client.get(
+        base + "/rest/v1/content",
+        params={"select": "id", "id": "like.xt-" + identifier + "-*", "limit": "1"},
+        headers=private_headers(), timeout=12, follow_redirects=False
+    )
+    if response.status_code != 200:
+        raise RuntimeError("content_dependency_check_failed")
+    rows = response.json()
+    if not isinstance(rows, list):
+        raise RuntimeError("content_dependency_check_failed")
+    if rows:
+        return True
+    # Existing manually named records can also refer to this account.
+    response = await client.get(
+        base + "/rest/v1/content",
+        params={"select": "id", "payload->>providerId": "like." + identifier + ":*", "limit": "1"},
+        headers=private_headers(), timeout=12, follow_redirects=False
+    )
+    if response.status_code != 200:
+        raise RuntimeError("content_dependency_check_failed")
+    rows = response.json()
+    if not isinstance(rows, list):
+        raise RuntimeError("content_dependency_check_failed")
+    return bool(rows)
+
+
 async def delete_account(client, identifier):
     rows = await all_rows(client)
     if not any(row["id"] == identifier for row in rows):
         raise ValueError("account_not_found")
+    if await linked_content_exists(client, identifier):
+        raise ValueError("account_has_linked_content")
     response = await client.delete(
         rest_url(), params={"id": "eq." + identifier},
         headers=private_headers(), timeout=12, follow_redirects=False
