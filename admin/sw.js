@@ -1,4 +1,4 @@
-const CACHE = "cinaro-admin-v2.9.2-xtream-playback-probe-20261010";
+const CACHE = "cinaro-admin-v2.9.2-xtream-playback-probe-v2-20261010";
 const SHELL = [
   "./",
   "./index.html",
