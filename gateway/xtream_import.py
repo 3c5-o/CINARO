@@ -275,7 +275,7 @@ def attach_xtream_import(app, client_provider, supabase_url, service_key, owner_
             raise HTTPException(502, "provider_stream_unavailable") from None
         if upstream.status_code not in (200, 206):
             await upstream.aclose()
-            raise HTTPException(502, "provider_stream_rejected")
+            raise HTTPException(502, "provider_media_http_" + str(upstream.status_code))
         exposed = {"Cache-Control": "no-store", "Accept-Ranges": "bytes"}
         for name in ("Content-Length", "Content-Range"):
             if upstream.headers.get(name):
