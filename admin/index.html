@@ -282,6 +282,17 @@
           <pre id="xtreamImportFailures" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px"></pre>
           <p class="field-help">لا يتم استيراد البث المباشر. الواجهة تبقى مفتوحة أثناء معالجة الدفعة؛ التوقف يحفظ المؤشر على هذا الجهاز. لم يُختبر تشغيل المصادر المستوردة مع كل خادم Xtream.</p>
         </div>
+        <div class="panel xtream-manage-panel" id="xtreamPlaybackDiagnostic">
+          <div class="panel-heading"><div><span>XTREAM VIDEO CHECK</span><h2>فحص تشغيل فيديو Xtream</h2></div></div>
+          <p class="field-help">اختبر معرّف فيلم أو حلقة موجودة في حساب Xtream المختار. الفحص يقرأ عينة صغيرة فقط، ويعرض استجابة المزوّد والصيغة الفعلية دون عرض بيانات الدخول أو رابط المصدر السري.</p>
+          <div class="form-grid two">
+            <label><span>نوع الفيديو</span><select id="xtreamPlaybackKind"><option value="movie">فيلم</option><option value="series">حلقة مسلسل</option></select></label>
+            <label><span>معرّف الفيديو</span><input id="xtreamPlaybackMediaId" inputmode="numeric" maxlength="15" placeholder="معرّف الفيلم من Xtream"></label>
+            <label><span>امتداد رابط المصدر</span><select id="xtreamPlaybackExtension"><option value="mp4">MP4</option><option value="mkv">MKV</option><option value="ts">TS</option><option value="avi">AVI</option></select></label>
+          </div>
+          <div class="form-actions"><button id="xtreamPlaybackCheck" type="button" class="admin-button primary">فحص الفيديو بدون تحميله</button></div>
+          <p id="xtreamPlaybackResult" class="form-message" role="status" aria-live="polite">اختر حساباً من قسم الاستيراد أعلاه، ثم أدخل معرّف الفيديو.</p>
+        </div>
         <div class="xtream-stats">
           <article class="stat-card"><div><small>الأفلام</small><strong id="xtreamMovies">—</strong><span>عبر جميع الحسابات</span></div></article>
           <article class="stat-card"><div><small>المسلسلات</small><strong id="xtreamSeries">—</strong><span>عدد العناوين لا الحلقات</span></div></article>
@@ -432,7 +443,7 @@
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.8.2/dist/mpegts.min.js" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="xtream-monitor.js?v=2.9.2-http-consent-20261009-b" defer></script>
-  <script src="xtream-import.js?v=20261009-100" defer></script>
+  <script src="xtream-import.js?v=20261010-probe-1" defer></script>
   <script src="app.js?v=20261009-100" defer></script>
 </body>
 </html>

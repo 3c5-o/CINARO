@@ -9,7 +9,8 @@ import hashlib
 import hmac
 import re
 import time
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urljoin, quote
+import ipaddress
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -134,6 +135,76 @@ async def _catalog(client, account):
     return data
 
 
+def _stream_url(account, kind, media_id, extension):
+    # Xtream credentials never appear in public CINARO source records.
+    username = quote(str(account["username"]), safe="")
+    password = quote(str(account["password"]), safe="")
+    return f'{account["url"]}/{kind}/{username}/{password}/{media_id}.{extension}'
+
+
+def _public_media_target(target):
+    """Accept only publicly addressable HTTP(S) media locations, including paths."""
+    try:
+        parsed = urlsplit(target)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        if not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
+            return False
+        _ = parsed.port
+        host = parsed.hostname.lower()
+        if host == "localhost" or host.endswith((".local", ".localhost", ".internal")):
+            return False
+        try:
+            return ipaddress.ip_address(host).is_global
+        except ValueError:
+            return "." in host and not host.endswith(".")
+    except (ValueError, TypeError):
+        return False
+
+
+async def _open_media(client, start_url, headers):
+    """Follow bounded redirects only after validating DNS at every location.
+
+    Do not expose credential-bearing Xtream or CDN URLs to any client or log.
+    """
+    current = start_url
+    for redirects in range(4):
+        if not _public_media_target(current):
+            raise HTTPException(502, "provider_stream_invalid_destination")
+        parsed = urlsplit(current)
+        if not await public_dns(parsed.hostname, parsed.port or
+                                (443 if parsed.scheme == "https" else 80)):
+            raise HTTPException(502, "provider_stream_unreachable_destination")
+        try:
+            request = client.build_request("GET", current, headers=headers, timeout=30)
+            upstream = await client.send(request, stream=True, follow_redirects=False)
+        except Exception:
+            raise HTTPException(502, "provider_stream_connect_failed") from None
+        if upstream.status_code not in (301, 302, 303, 307, 308):
+            return upstream, redirects
+        location = upstream.headers.get("location", "")
+        await upstream.aclose()
+        if not location or redirects >= 3:
+            raise HTTPException(502, "provider_stream_redirect_failed")
+        current = urljoin(current, location)
+    raise HTTPException(502, "provider_stream_redirect_failed")
+
+
+def _detect_container(chunk):
+    """Small, read-only probe: do not download a full film."""
+    if len(chunk) >= 12 and chunk[4:8] == b"ftyp":
+        return "mp4"
+    if chunk.startswith(bytes.fromhex("1a45dfa3")):
+        return "mkv"
+    if len(chunk) >= 189 and chunk[0] == 0x47 and chunk[188] == 0x47:
+        return "ts"
+    if chunk.lstrip().startswith(b"#EXTM3U"):
+        return "hls"
+    if chunk.lstrip().lower().startswith((b"<html", b"<!doctype html", b"<?xml")):
+        return "html_or_error"
+    return "unknown"
+
+
 def _episodes(account_id, payload):
     raw = payload.get("episodes") if isinstance(payload, dict) else None
     if not isinstance(raw, dict) or not raw:
@@ -252,6 +323,49 @@ def attach_xtream_import(app, client_provider, supabase_url, service_key, owner_
             raise HTTPException(502, "series_info_unavailable") from None
         return {"ok": True, "seasons": seasons, "episodeCount": count}
 
+    @router.get("/admin/xtream/playback-check")
+    async def playback_check(authorization: str = Header(default=""),
+                             account: str = Query(...),
+                             kind: str = Query("movie"),
+                             media_id: str = Query(...),
+                             extension: str = Query("mp4")):
+        """Read at most a few kilobytes to diagnose one owned catalog entry."""
+        client = await owner_client(authorization)
+        if kind not in ("movie", "series") or not _STREAM_ID.fullmatch(media_id) or extension not in _EXT:
+            raise HTTPException(400, "invalid_media_id")
+        entry = await _account(client, account)
+        report = {"ok": False, "upstreamStatus": None, "redirects": 0,
+                  "contentType": "", "detectedFormat": "unknown",
+                  "reason": "not_checked"}
+        try:
+            upstream, hops = await _open_media(client,
+                _stream_url(entry, kind, media_id, extension),
+                {"Range": "bytes=0-4095"})
+        except HTTPException as exc:
+            report["reason"] = str(exc.detail)
+            return report
+        try:
+            report["upstreamStatus"] = upstream.status_code
+            report["redirects"] = hops
+            report["contentType"] = upstream.headers.get("content-type", "")[:100]
+            if upstream.status_code not in (200, 206):
+                report["reason"] = "provider_media_http_" + str(upstream.status_code)
+                return report
+            sample = bytearray()
+            async for data in upstream.aiter_raw(chunk_size=512):
+                sample.extend(data[:max(0, 4096 - len(sample))])
+                if len(sample) >= 512:
+                    break
+            report["detectedFormat"] = _detect_container(bytes(sample))
+            report["ok"] = report["detectedFormat"] in ("mp4", "mkv", "ts", "hls")
+            report["reason"] = "media_bytes_received" if report["ok"] else "media_bytes_unrecognized"
+            return report
+        except Exception:
+            report["reason"] = "provider_media_probe_failed"
+            return report
+        finally:
+            await upstream.aclose()
+
     @router.api_route("/xtream/play/{account}/{kind}/{media_id}.{ext}", methods=["GET", "HEAD"])
     async def play(request: Request, account: str, kind: str, media_id: str,
                    ext: str, sig: str = Query("")):
@@ -263,26 +377,22 @@ def attach_xtream_import(app, client_provider, supabase_url, service_key, owner_
         if client is None:
             raise HTTPException(503, "gateway_unavailable")
         entry = await _account(client, account)
-        url = f"{entry['url']}/{kind}/{entry['username']}/{entry['password']}/{media_id}.{ext}"
+        url = _stream_url(entry, kind, media_id, ext)
         headers = {}
         range_value = request.headers.get("range", "")
         if range_value and re.fullmatch(r"bytes=\d*-(?:\d*)?", range_value):
             headers["Range"] = range_value
-        try:
-            upstream = await client.send(client.build_request("GET", url, headers=headers, timeout=30),
-                                         stream=True, follow_redirects=False)
-        except Exception:
-            raise HTTPException(502, "provider_stream_unavailable") from None
+        upstream, _redirect_count = await _open_media(client, url, headers)
         if upstream.status_code not in (200, 206):
             await upstream.aclose()
-            raise HTTPException(502, "provider_stream_rejected")
+            raise HTTPException(502, "provider_media_http_" + str(upstream.status_code))
         exposed = {"Cache-Control": "no-store", "Accept-Ranges": "bytes"}
         for name in ("Content-Length", "Content-Range"):
             if upstream.headers.get(name):
                 exposed[name] = upstream.headers[name]
         async def chunks():
             try:
-                async for chunk in upstream.aiter_bytes(chunk_size=256 * 1024):
+                async for chunk in upstream.aiter_raw(chunk_size=256 * 1024):
                     if await request.is_disconnected():
                         break
                     yield chunk
