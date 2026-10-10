@@ -1905,3 +1905,44 @@ textarea:focus {
 .xtream-managed-description small{color:var(--muted);overflow-wrap:anywhere}
 .xtream-managed-actions{display:flex;gap:7px;flex-wrap:wrap}
 @media(max-width:520px){.xtream-managed-row{align-items:stretch}.xtream-managed-actions>*{flex:1}}
+
+
+/* CINARO Admin — library integrity monitoring */
+.library-health-panel { margin-bottom: 1.25rem; }
+.library-health-panel .panel-heading { gap: 1rem; flex-wrap: wrap; }
+.library-health-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .85rem;
+  padding: 1rem 0 .5rem;
+}
+.library-health-grid > div {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+.library-health-grid strong {
+  display: block;
+  font-size: clamp(1.25rem, 2.1vw, 1.9rem);
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.library-health-grid span {
+  display: block;
+  margin-top: .3rem;
+  line-height: 1.55;
+  font-size: .75rem;
+  color: var(--muted);
+}
+.library-health-panel > .field-help { display: block; margin: .75rem 0 .3rem; }
+@media (max-width: 920px) {
+  .library-health-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 410px) {
+  .library-health-grid { gap: .5rem; }
+  .library-health-grid > div { padding: .75rem; }
+  .library-health-grid span { font-size: .68rem; }
+}
