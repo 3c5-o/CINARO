@@ -182,6 +182,32 @@ assert(xtreamGatewayImport.includes('get_series_info'), "Xtream gateway requests
 assert(xtreamGatewayImport.includes('series_episodes_incomplete'), "Xtream gateway rejects truncated series");
 assert(xtreamGatewayImport.includes('_signature'), "Xtream playback URLs are signed");
 
+// Administrative security and data integrity must be preserved in every release.
+const xtreamAccountVault = read("gateway/xtream_store.py");
+const xtreamMonitorServer = read("gateway/xtream_monitor.py");
+assert(adminHtml.includes('id="healthMissingSources"') && adminApp.includes('healthXtreamUnverified'),
+  "admin dashboard surfaces library health without declaring unchecked streams playable");
+assert(adminHtml.includes('id="adminEmail" type="email" autocomplete="username"') &&
+       !adminHtml.includes('id="adminEmail" type="email" value='),
+  "admin login does not publicly prefill a privileged account");
+assert(!adminApp.includes("bindCopyProtection"), "admin operators can copy stream IDs and error diagnostics");
+assert(adminSupabase.includes("authRevision") && adminSupabase.includes("revision === authRevision"),
+  "stale membership callbacks cannot restore logged-out admin sessions");
+assert(xtreamAccountVault.includes("linked_content_exists(client, identifier)") &&
+       xtreamAccountVault.includes("account_has_linked_content"),
+  "provider accounts cannot be deleted while content depends on them");
+assert(xtreamMonitorServer.includes('HTTPException(409, "account_has_linked_content")'),
+  "owner receives an explicit linked-account deletion error");
+assert(xtreamImport.includes("ensurePlaybackBeforeImport(item,detail)") &&
+       xtreamImport.includes("preflightFailure") && xtreamImport.includes("error?.preflightStop"),
+  "Xtream bulk importer fails closed before publishing if playback sample fails");
+assert(packageJson.scripts.test.includes("admin-xtream-safety.test.mjs"),
+  "CI exercises admin importer safe failure and cursor persistence");
+assert(adminApp.includes("Spreadsheet apps can execute formula-like fields"),
+  "audit CSV neutralizes spreadsheet formulas");
+assert(adminSw.includes("admin-stability-20261010"),
+  "admin PWA version refreshes cached scripts for the secure release");
+
 assert(/\bversionCode\s+25\b/.test(buildGradle), "Android versionCode is 25");
 assert(buildGradle.includes('versionName "2.9.5"'), "Android user version is 2.9.5");
 assert(buildGradle.includes('versionName "2.9.2-admin"'), "Android admin version is 2.9.0-admin");
