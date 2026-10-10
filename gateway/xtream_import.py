@@ -11,6 +11,7 @@ import re
 import time
 from urllib.parse import urlsplit, urljoin, quote
 import ipaddress
+import httpx
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -162,7 +163,7 @@ def _public_media_target(target):
         return False
 
 
-async def _open_media(client, start_url, headers):
+async def _open_media(client, start_url, headers, timeout=30):
     """Follow bounded redirects only after validating DNS at every location.
 
     Do not expose credential-bearing Xtream or CDN URLs to any client or log.
@@ -176,8 +177,18 @@ async def _open_media(client, start_url, headers):
                                 (443 if parsed.scheme == "https" else 80)):
             raise HTTPException(502, "provider_stream_unreachable_destination")
         try:
-            request = client.build_request("GET", current, headers=headers, timeout=30)
+            request = client.build_request("GET", current, headers=headers, timeout=timeout)
             upstream = await client.send(request, stream=True, follow_redirects=False)
+        except httpx.ConnectTimeout:
+            raise HTTPException(502, "provider_stream_connect_timeout") from None
+        except httpx.ReadTimeout:
+            raise HTTPException(502, "provider_stream_header_timeout") from None
+        except httpx.ConnectError:
+            raise HTTPException(502, "provider_stream_connection_error") from None
+        except httpx.RemoteProtocolError:
+            raise HTTPException(502, "provider_stream_protocol_error") from None
+        except httpx.RequestError:
+            raise HTTPException(502, "provider_stream_transport_error") from None
         except Exception:
             raise HTTPException(502, "provider_stream_connect_failed") from None
         if upstream.status_code not in (301, 302, 303, 307, 308):
@@ -336,14 +347,25 @@ def attach_xtream_import(app, client_provider, supabase_url, service_key, owner_
         entry = await _account(client, account)
         report = {"ok": False, "upstreamStatus": None, "redirects": 0,
                   "contentType": "", "detectedFormat": "unknown",
-                  "reason": "not_checked"}
+                  "reason": "not_checked", "rangeRetry": False,
+                  "firstFailure": ""}
+        target = _stream_url(entry, kind, media_id, extension)
         try:
-            upstream, hops = await _open_media(client,
-                _stream_url(entry, kind, media_id, extension),
-                {"Range": "bytes=0-4095"})
+            upstream, hops = await _open_media(
+                client, target, {"Range": "bytes=0-4095"}, timeout=12)
         except HTTPException as exc:
-            report["reason"] = str(exc.detail)
-            return report
+            report["firstFailure"] = str(exc.detail)
+            if exc.detail not in ("provider_stream_header_timeout", "provider_stream_connect_timeout"):
+                report["reason"] = str(exc.detail)
+                return report
+            # Some Xtream VOD origins hang on byte-range requests. Retry once
+            # as a short, bounded stream that is closed after reading a sample.
+            report["rangeRetry"] = True
+            try:
+                upstream, hops = await _open_media(client, target, {}, timeout=12)
+            except HTTPException as retry_exc:
+                report["reason"] = str(retry_exc.detail)
+                return report
         try:
             report["upstreamStatus"] = upstream.status_code
             report["redirects"] = hops

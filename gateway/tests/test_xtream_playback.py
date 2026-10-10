@@ -67,6 +67,27 @@ class XtreamPlaybackTests(unittest.IsolatedAsyncioTestCase):
                     await _open_media(client, "https://cdn.example.net/video.mp4", {})
         self.assertEqual(caught.exception.detail, "provider_stream_unreachable_destination")
 
+
+    async def test_origin_header_timeout_is_identified_without_leaking_url(self):
+        async def handler(request):
+            raise httpx.ReadTimeout("private credential url should not be surfaced", request=request)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with patch("xtream_import.public_dns", new_callable=AsyncMock, return_value=True):
+                with self.assertRaises(HTTPException) as caught:
+                    await _open_media(client, "http://provider.example:2082/movie/user/pass/42.mp4",
+                                      {"Range": "bytes=0-4095"}, timeout=1)
+        self.assertEqual(caught.exception.detail, "provider_stream_header_timeout")
+        self.assertNotIn("user", str(caught.exception.detail))
+
+    async def test_connection_timeout_is_distinct_from_server_response_timeout(self):
+        async def handler(request):
+            raise httpx.ConnectTimeout("connection unavailable", request=request)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with patch("xtream_import.public_dns", new_callable=AsyncMock, return_value=True):
+                with self.assertRaises(HTTPException) as caught:
+                    await _open_media(client, "https://provider.example/video", {}, timeout=1)
+        self.assertEqual(caught.exception.detail, "provider_stream_connect_timeout")
+
     async def test_format_fingerprints_and_url_encoding(self):
         self.assertEqual(_detect_container(b"\x00\x00\x00\x18ftypisom"), "mp4")
         self.assertEqual(_detect_container(bytes.fromhex("1a45dfa3") + b"\x00"), "mkv")

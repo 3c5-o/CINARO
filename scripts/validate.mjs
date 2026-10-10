@@ -169,7 +169,7 @@ const xtreamImport = read("admin/xtream-import.js");
 const xtreamGatewayImport = read("gateway/xtream_import.py");
 assert(adminHtml.includes('id="xtreamImportStart"'), "Xtream owner UI exposes batch import");
 assert(adminHtml.includes('id="xtreamImportKind"'), "Xtream owner selects movies, series, anime");
-assert(adminHtml.includes('xtream-import.js?v=20261010-probe-1'), "Xtream import and diagnostics UI script versioned");
+assert(adminHtml.includes('xtream-import.js?v=20261010-probe-2'), "Xtream import and diagnostics UI script versioned");
 assert(adminHtml.includes('id="xtreamPlaybackCheck"'), "Owner has Xtream playback diagnostic action");
 assert(xtreamImport.includes('playback-check'), "Admin requests owner-only video sample check");
 assert(xtreamGatewayImport.includes('def _open_media('), "Gateway validates and follows provider media redirects");
