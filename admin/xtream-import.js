@@ -168,6 +168,37 @@ function buildPayload(item,info,detail){
     updatedBy:text(context?.uid)
   };
 }
+function importPreflightError(message){
+  const error=new Error(message);
+  error.preflightStop=true;
+  return error;
+}
+async function ensurePlaybackBeforeImport(item,detail){
+  // Only a small sample is requested from the gateway. A valid catalog and
+  // signed URL alone do not prove video playback works.
+  const source=item.kind==="movie"
+    ?detail?.sources?.[0]
+    :detail?.seasons?.flatMap(season=>season.episodes||[]).flatMap(episode=>episode.sources||[])[0];
+  const path=text(source?.path);
+  const match=path.match(/\/(movie|series)\/([0-9]{1,15})\.(mp4|mkv|ts|avi)\?sig=/i);
+  if(!match||match[1]!==item.kind)
+    throw importPreflightError("لا يوجد معرّف تشغيل صالح لفحص المصدر. تم إيقاف الدفعة دون نشر العنصر.");
+  let report;
+  try{
+    report=await api("playback-check",{
+      account:item.accountId,kind:item.kind,media_id:match[2],extension:match[3]
+    });
+  }catch(error){
+    throw importPreflightError("تعذّر تأكيد وصول فيديو من Xtream: "+text(error?.message||error)+". أُوقفت الدفعة للحماية.");
+  }
+  if(report?.ok!==true){
+    const failure=text(report?.reason||"unknown");
+    const first=text(report?.firstFailure);
+    throw importPreflightError("تم إيقاف استيراد Xtream: فشل فحص الفيديو "+
+      match[2]+" ("+failure+(first?"، الفشل الأول: "+first:"")+
+      "). تأكد من حساب البث أو بوابة Railway قبل محاولة إضافة أفلام أخرى.");
+  }
+}
 async function start(){
   if(active)return;
   if(!context?.save) {status("افتح صفحة Xtream بعد تسجيل الدخول كمالك.",true);return;}
@@ -190,6 +221,7 @@ async function start(){
     const providerSet=new Set(known.filter(p=>p.provider==="xtream").map(p=>text(p.providerId)));
     const ids=new Set(known.map(p=>p.id));
     const tmdbKeys=new Set(known.filter(p=>p.tmdbId).map(p=>(p.kind==="movie"?"movie":"series")+":"+p.tmdbId));
+    let playbackChecked=false,preflightFailure="";
     for(const item of items){
       if(cancelled)break;
       try{
@@ -205,6 +237,11 @@ async function start(){
           if(matchedKey&&tmdbKeys.has(matchedKey)){state.duplicates++;}
           else{
             const detail=await api("detail",{account:item.accountId,kind:item.kind,media_id:item.id,extension:item.extension||"mp4"});
+            if(!playbackChecked){
+              status("جاري فحص بث Xtream قبل نشر هذه الدفعة...");
+              await ensurePlaybackBeforeImport(item,detail);
+              playbackChecked=true;
+            }
             const payload=buildPayload(item,info,detail);
             if(item.kind==="series"&&info?.id)await enrichEpisodeMetadata(payload.seasons,info.id);
             // Atomic per-title upsert: all episodes are in one Supabase record.
@@ -217,6 +254,10 @@ async function start(){
           }
         }
       }catch(error){
+        if(error?.preflightStop){
+          preflightFailure=text(error.message||error);
+          break;
+        }
         state.failed++;
         state.errors.push(text(item.title)+": "+text(error.message||error));
       }
@@ -225,6 +266,10 @@ async function start(){
       progress();
       // Give the browser time to repaint and avoid hammering TMDb.
       await new Promise(resolve=>setTimeout(resolve,140));
+    }
+    if(preflightFailure){
+      status(preflightFailure,true);
+      return;
     }
     status(cancelled?
       "تم إيقاف الدفعة، ويمكن إكمالها من آخر عنصر.":
