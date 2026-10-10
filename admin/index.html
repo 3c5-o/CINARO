@@ -86,6 +86,19 @@
           <article class="stat-card" data-admin-only><span class="stat-icon blue"><svg><use href="#i-film"></use></svg></span><div><small>طلبات المحتوى</small><strong id="statRequests">0</strong><span>جديد أو قيد المراجعة</span></div></article>
           <article class="stat-card" data-admin-only><span class="stat-icon red"><svg><use href="#i-alert"></use></svg></span><div><small>البلاغات</small><strong id="statReports">0</strong><span>بلاغات مفتوحة</span></div></article>
         </div>
+        <article class="panel library-health-panel" data-admin-only>
+          <div class="panel-heading"><div><span>CONTENT HEALTH</span><h2>سلامة مكتبة CINARO</h2>
+            <p>مؤشرات المحتوى تكشف الملفات التي تحتاج مراجعة، ولا تعتبر مزامنة المعلومات دليلاً على نجاح تشغيل الفيديو.</p></div>
+            <button class="text-action" type="button" data-view="xtream">فحص Xtream <svg><use href="#i-arrow-left"></use></svg></button>
+          </div>
+          <div class="library-health-grid">
+            <div><strong id="healthXtreamTitles">0</strong><span>عناوين Xtream</span></div>
+            <div><strong id="healthMissingSources">0</strong><span>محتوى بلا مصدر تشغيل</span></div>
+            <div><strong id="healthDraftTitles">0</strong><span>مسودات غير منشورة</span></div>
+            <div><strong id="healthXtreamUnverified">0</strong><span>Xtream لم يُتحقق من تشغيله</span></div>
+          </div>
+          <p class="field-help">فحص Xtream يُجرى من قسم متابعة الحسابات. الروابط المستوردة قديماً لم تُختبر جميعها، لذلك تظهر كمحتوى غير مؤكد التشغيل.</p>
+        </article>
         <div class="dashboard-columns"><article class="panel"><div class="panel-heading"><div><span>آخر ما أُضيف</span><h2>المحتوى الأخير</h2></div><button class="text-action" type="button" data-view="content">إدارة المحتوى <svg><use href="#i-arrow-left"></use></svg></button></div><div id="recentContent" class="mini-list"></div></article><article class="panel" data-admin-only><div class="panel-heading"><div><span>مراقبة النظام</span><h2>آخر العمليات</h2></div><button class="text-action" type="button" data-view="activity">السجل الكامل <svg><use href="#i-arrow-left"></use></svg></button></div><div id="recentActivity" class="mini-list"></div></article></div>
       </section>
 
