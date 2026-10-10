@@ -260,7 +260,12 @@ async function diagnosePlayback(){
       provider_stream_unreachable_destination:"تعذّر التأكد من أن خادم البث عام ومتاح.",
       provider_stream_invalid_destination:"تم رفض تحويل إلى وجهة غير آمنة.",
       provider_stream_redirect_failed:"أعاد المزود سلسلة تحويلات غير صالحة.",
-      provider_stream_connect_failed:"فشل اتصال البوابة بسيرفر الفيديو."
+      provider_stream_connect_failed:"فشل اتصال البوابة بسيرفر الفيديو.",
+      provider_stream_connect_timeout:"انتهت مهلة إنشاء اتصال مع خادم الفيديو (12 ثانية).",
+      provider_stream_header_timeout:"تم الاتصال بالمزوّد لكن انتهت مهلة انتظار استجابة الفيديو (12 ثانية).",
+      provider_stream_connection_error:"أُغلق اتصال الفيديو أو تعذّر إنشاء الاتصال.",
+      provider_stream_protocol_error:"أعاد المزوّد استجابة HTTP غير صالحة.",
+      provider_stream_transport_error:"حدث خلل نقل بين بوابة CINARO وخادم Xtream."
     };
     const reason=reasons[report.reason]||(/provider_media_http_\d+/.test(String(report.reason))?
       "سيرفر الفيديو رفض الطلب برمز "+String(report.upstreamStatus||report.reason.split("_").at(-1)):
@@ -270,6 +275,8 @@ async function diagnosePlayback(){
       " | التحويلات: "+String(report.redirects??0)+
       " | النوع المعلن: "+text(report.contentType||"غير معروف")+
       " | الصيغة المكتشفة: "+text(report.detectedFormat||"غير معروف")+
+      (report.rangeRetry?" | جُرّب بدون Range: "+(report.ok?"نجح":"لم ينجح"):"")+
+      (report.firstFailure?" | الخطأ الأول: "+text(report.firstFailure):"")+
       ". "+reason;
     if(result)result.textContent=summary;
   }catch(error){
