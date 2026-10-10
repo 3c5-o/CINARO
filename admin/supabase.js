@@ -422,21 +422,33 @@ const client = {
 
   onAuth(callback) {
     let active = true;
+    let authRevision = 0;
     const publish = async (user) => {
       if (!active) return;
+      const revision = ++authRevision;
       try {
-        callback(await currentAdminUser(user));
+        const admin = await currentAdminUser(user);
+        if (active && revision === authRevision) callback(admin);
       } catch (error) {
         console.warn("CINARO admin membership lookup failed", error);
-        callback(null);
+        if (active && revision === authRevision) callback(null);
       }
     };
-    supabase.auth.getUser().then(({ data }) => publish(data?.user || null));
+    const initialRevision = authRevision;
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (!active || initialRevision !== authRevision) return;
+      if (error) console.warn("CINARO admin initial session unavailable", error);
+      publish(error ? null : data?.user || null);
+    }).catch((error) => {
+      console.warn("CINARO admin auth restore failed", error);
+      if (active && initialRevision === authRevision) publish(null);
+    });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       window.setTimeout(() => publish(session?.user || null), 0);
     });
     return () => {
       active = false;
+      ++authRevision;
       data?.subscription?.unsubscribe();
     };
   },
