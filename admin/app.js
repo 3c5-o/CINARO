@@ -3111,7 +3111,10 @@
   }
 
   function csvCell(value) {
-    return `"${String(value == null ? "" : value).replaceAll('"', '""')}"`;
+    let raw = String(value == null ? "" : value);
+    // Spreadsheet apps can execute formula-like fields in CSV audit exports.
+    if (/^\\s*[=+\\-@\\t\\r]/.test(raw)) raw = "'" + raw;
+    return `"${raw.replaceAll('"', '""')}"`;
   }
 
   function exportAuditCsv() {
