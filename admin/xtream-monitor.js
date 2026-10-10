@@ -204,7 +204,7 @@ function bindManagement(){
       $("xtreamAccountName").focus();
       return;
     }
-    if(action==="delete"&&!confirm("حذف حساب "+entry.name+" نهائياً من المراقبة؟"))return;
+    if(action==="delete"&&!confirm("حذف حساب "+entry.name+" نهائياً؟ لن يسمح النظام بحذفه إذا كان مرتبطاً بأفلام أو حلقات. يُفضّل إيقاف الحساب بدلاً من حذفه. متابعة؟"))return;
     btn.disabled=true;
     try{
       if(action==="toggle")await changeAccount("PATCH",entry.id,{name:entry.name,url:entry.url,enabled:!entry.enabled});
